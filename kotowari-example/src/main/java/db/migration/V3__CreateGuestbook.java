@@ -16,7 +16,7 @@ public class V3__CreateGuestbook extends BaseJavaMigration {
                     "(id IDENTITY PRIMARY KEY," +
                     " name VARCHAR(30)," +
                     " message VARCHAR(200)," +
-                    " postedat TIMESTAMP)");
+                    " posted_at TIMESTAMP)");
         }
     }
 }
