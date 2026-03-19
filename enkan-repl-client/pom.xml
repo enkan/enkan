@@ -76,6 +76,7 @@ else
   JAVA_CMD="java"
 fi
 exec "$JAVA_CMD" --enable-native-access=ALL-UNNAMED ${JAVA_OPTS} -jar "$SELF" "$@"
+exit 0
 </echo>
                                 <!-- Concatenate stub + fat jar into a single executable file -->
                                 <concat destfile="${project.build.directory}/enkan-repl"
