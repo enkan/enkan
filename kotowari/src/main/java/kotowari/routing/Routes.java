@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 import static enkan.util.SearchUtils.levenshteinDistance;
 
 /**
- * An immutable compiled set of routes for URL recognition and generation.
+ * A compiled set of routes for URL recognition and generation.
  *
  * <p>Use {@link #define(RoutePatternsDescriptor)} to build a route table,
  * then {@code .compile()} to obtain a {@code Routes} instance.</p>
@@ -75,7 +75,7 @@ public class Routes {
     /**
      * Returns the list of compiled routes.
      *
-     * @return an unmodifiable list of routes
+     * @return the list of routes
      */
     public List<Route> getRouteList() {
         return routeList;
