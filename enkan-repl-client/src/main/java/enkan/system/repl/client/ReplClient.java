@@ -170,7 +170,7 @@ public class ReplClient {
         public void run() {
             while(isAvailable.get()) {
                 try {
-                    String prompt = pendingExit.get() ? "(Press Ctrl+C again to exit) enkan> " : "enkan> ";
+                    String prompt = "enkan> ";
                     String line = reader.readLine(prompt);
                     pendingExit.set(false);
                     if (line == null) continue;
