@@ -4,7 +4,6 @@ import enkan.collection.Parameters;
 import enkan.data.HttpResponse;
 import enkan.data.Session;
 import kotowari.component.TemplateEngine;
-import kotowari.example.model.LoginPrincipal;
 import jakarta.inject.Inject;
 
 import java.io.File;
@@ -32,14 +31,11 @@ public class MiscController {
     }
 
     public HttpResponse counter(Session session) {
-        int count = 0;
-        if (session != null) {
-            count = (Integer) session.get("count");
-            count++;
-        } else {
+        if (session == null) {
             session = new Session();
-            session.put("principal", new LoginPrincipal("test"));
         }
+        Integer count = (Integer) session.get("count");
+        count = (count == null) ? 1 : count + 1;
         session.put("count", count);
         return builder(response(count + "times."))
                 .set(HttpResponse::setContentType, "text/plain")
