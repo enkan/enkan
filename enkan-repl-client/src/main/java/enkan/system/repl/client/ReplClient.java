@@ -253,9 +253,9 @@ public class ReplClient {
             if (!isAvailable.compareAndSet(true, false)) {
                 return; // already closed
             }
-            // Wake up readLine() if it is blocking (called from shutdown hook)
+            // Wake up readLine() by closing the terminal input
             try {
-                reader.getTerminal().raise(Terminal.Signal.INT);
+                reader.getTerminal().close();
             } catch (Exception ignore) {
             }
             closeSockets();
