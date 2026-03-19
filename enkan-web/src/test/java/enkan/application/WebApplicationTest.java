@@ -13,23 +13,16 @@ import java.util.List;
 
 import static enkan.util.BeanBuilder.builder;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class WebApplicationTest {
 
     @Test
-    void emptyMiddlewareStackReturnsNullOnHandle() {
+    void emptyMiddlewareStackThrowsOnHandle() {
         WebApplication app = new WebApplication();
-        // With no middleware registered, handle should not throw but the chain
-        // produces null because there is nothing to execute.
-        try {
-            HttpRequest request = builder(new DefaultHttpRequest()).build();
-            HttpResponse response = app.handle(request);
-            // If it gets here without exception, the stack was empty and returned null
-            assertThat(response).isNull();
-        } catch (java.util.NoSuchElementException e) {
-            // LinkedList.getFirst() throws when the stack is empty; this is expected
-            // since handle() tries to chain into the first middleware.
-        }
+        HttpRequest request = builder(new DefaultHttpRequest()).build();
+        assertThatThrownBy(() -> app.handle(request))
+                .isInstanceOf(java.util.NoSuchElementException.class);
     }
 
     @Test

@@ -101,7 +101,7 @@ public class SessionMiddleware implements WebMiddleware {
      * @return the HTTP response, potentially with an updated session cookie
      */
     @Override
-public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         request = MixinUtils.mixin(request, WebSessionAvailable.class);
         sessionRequest(request);
         HttpResponse response = castToHttpResponse(chain.next(request));

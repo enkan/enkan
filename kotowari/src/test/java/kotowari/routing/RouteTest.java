@@ -1,12 +1,12 @@
 package kotowari.routing;
 
 import enkan.collection.OptionMap;
+import enkan.exception.MisconfigurationException;
 import kotowari.routing.controller.ExampleController;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests for individual Route behavior.
@@ -35,7 +35,7 @@ class RouteTest {
     }
 
     @Test
-    void recognizeReturnsNullForNonMatchingPath() {
+    void recognizeReturnsEmptyForNonMatchingPath() {
         Routes routes = Routes.define(r ->
                 r.get("/hello").to(ExampleController.class, "method1")
         ).compile();
@@ -78,11 +78,11 @@ class RouteTest {
         ).compile();
 
         // generate should fail when controller does not match any route
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        assertThatThrownBy(() ->
                 routes.generate(OptionMap.of(
                         "controller", AnotherController.class,
                         "action", "index"))
-        ).isInstanceOf(Exception.class);
+        ).isInstanceOf(MisconfigurationException.class);
     }
 
     @Test
