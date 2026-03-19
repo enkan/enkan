@@ -5,7 +5,7 @@
 
     <groupId>net.unit8.enkan</groupId>
     <artifactId>enkan-parent</artifactId>
-    <version>0.13.1-SNAPSHOT</version>
+    <version>0.14.0</version>
     <packaging>pom</packaging>
 
     <name>enkan-parent</name>
@@ -16,7 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>25</java.version>
 
-        <enkan.version>0.13.1-SNAPSHOT</enkan.version>
+        <enkan.version>0.14.0</enkan.version>
         <maven.version>3.6.3</maven.version>
 
         <!-- Maven Plugin-->
