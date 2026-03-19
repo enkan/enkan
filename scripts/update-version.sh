@@ -33,5 +33,14 @@ find "$ROOT_DIR/docs/src/content" -name '*.md' -exec \
   sed -i '' "s|<version>[^<]*</version>|<version>$VERSION</version>|g" {} +
 echo "docs/src/content/**/*.md updated -> $VERSION"
 
+# 6. Update version string in CLAUDE.md
+sed -i '' "s|version \`[^']*\`)|version \`$VERSION\`)|g" "$ROOT_DIR/CLAUDE.md"
+echo "CLAUDE.md updated -> $VERSION"
+
+# 7. Update supported version in SECURITY.md (major.minor.x)
+MINOR_VERSION="$(echo "$VERSION" | sed 's/\([0-9]*\.[0-9]*\).*/\1/')"
+sed -i '' "s#[0-9]*\.[0-9]*\.x  | Yes#${MINOR_VERSION}.x  | Yes#g" "$ROOT_DIR/SECURITY.md"
+echo "SECURITY.md updated -> ${MINOR_VERSION}.x"
+
 echo ""
 echo "Done. Verify changes with: git diff"
