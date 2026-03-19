@@ -14,6 +14,11 @@ import java.util.stream.Collectors;
 import static enkan.util.SearchUtils.levenshteinDistance;
 
 /**
+ * An immutable compiled set of routes for URL recognition and generation.
+ *
+ * <p>Use {@link #define(RoutePatternsDescriptor)} to build a route table,
+ * then {@code .compile()} to obtain a {@code Routes} instance.</p>
+ *
  * @author kawasima
  */
 public class Routes {
@@ -25,6 +30,12 @@ public class Routes {
         recognizer = new OptimizedRecognizer();
     }
 
+    /**
+     * Defines routes using the given descriptor.
+     *
+     * @param descriptor the route pattern descriptor
+     * @return a {@link RoutePatterns} builder that can be compiled
+     */
     public static RoutePatterns define(RoutePatternsDescriptor descriptor) {
         return define(null, descriptor);
     }
@@ -39,6 +50,11 @@ public class Routes {
         return patterns;
     }
 
+    /**
+     * Merges routes from another {@code Routes} instance into this one.
+     *
+     * @param another the routes to merge
+     */
     public void concat(Routes another) {
         routeList.addAll(another.routeList);
         recognizer = new OptimizedRecognizer();
@@ -46,10 +62,21 @@ public class Routes {
         recognizer.optimize();
     }
 
+    /**
+     * Recognizes a route from the given request.
+     *
+     * @param request the HTTP request
+     * @return an option map with the matched route parameters, or empty if no match
+     */
     public OptionMap recognizePath(HttpRequest request) {
         return recognizer.recognize(request);
     }
 
+    /**
+     * Returns the list of compiled routes.
+     *
+     * @return an unmodifiable list of routes
+     */
     public List<Route> getRouteList() {
         return routeList;
     }

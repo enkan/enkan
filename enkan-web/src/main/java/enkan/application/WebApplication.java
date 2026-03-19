@@ -29,16 +29,20 @@ public class WebApplication implements Application<HttpRequest, HttpResponse> {
     private final LinkedList<MiddlewareChain<?, ?, ?, ?>> middlewareStack = new LinkedList<>();
     private volatile Supplier<HttpRequest> requestFactory;
 
+    /** Registers a middleware for GET requests matching the given path. */
     public <REQ extends UriAvailable, RES, NREQ, NRES> void get(String path, Middleware<REQ, RES, NREQ, NRES> middleware) {
         use(PathPredicate.GET(path), middleware);
     }
 
+    /** Registers a middleware for POST requests matching the given path. */
     public <REQ extends UriAvailable, RES, NREQ, NRES> void post(String path, Middleware<REQ, RES, NREQ, NRES> middleware) {
         use(PathPredicate.POST(path), middleware);
     }
+    /** Registers a middleware for PUT requests matching the given path. */
     public <REQ extends UriAvailable, RES, NREQ, NRES> void put(String path, Middleware<REQ, RES, NREQ, NRES> middleware) {
         use(PathPredicate.PUT(path), middleware);
     }
+    /** Registers a middleware for DELETE requests matching the given path. */
     public <REQ extends UriAvailable, RES, NREQ, NRES> void delete(String path, Middleware<REQ, RES, NREQ, NRES> middleware) {
         use(PathPredicate.DELETE(path), middleware);
     }

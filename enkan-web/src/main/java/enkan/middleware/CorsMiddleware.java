@@ -40,6 +40,7 @@ public class CorsMiddleware implements WebMiddleware {
         credentials = true;
     }
 
+    /** {@inheritDoc} Applies CORS headers to the response based on the request Origin. */
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         if (credentials && isAnyOriginAllowed() && misconfigurationWarned.compareAndSet(false, true)) {
