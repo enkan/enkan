@@ -75,7 +75,7 @@ public class ReplTestClient implements AutoCloseable {
      */
     public List<String> complete(int completerPort, String input, int cursor) {
         org.zeromq.ZMQ.Socket completerSock = ctx.createSocket(SocketType.DEALER);
-        completerSock.setReceiveTimeOut(5000);
+        completerSock.setReceiveTimeOut(15000);
         completerSock.connect("tcp://localhost:" + completerPort);
         try {
             ZMsg req = new ZMsg();
