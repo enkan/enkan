@@ -48,6 +48,7 @@ public class MultipartCollector {
         long newSize = partSizes.get(mimeIndex) + content.length;
         long limit = isFile.get(mimeIndex) ? maxFileSize : maxFormFieldSize;
         if (limit >= 0 && newSize > limit) {
+            cleanup();
             throw new MisconfigurationException("web.MULTIPART_PART_TOO_LARGE", limit);
         }
         partSizes.set(mimeIndex, newSize);
@@ -56,6 +57,22 @@ public class MultipartCollector {
 
     public void onMimeFinish(int mimeIndex) {
         mimeParts.get(mimeIndex).close();
+    }
+
+    /**
+     * Closes all parts and deletes any temp files created during parsing.
+     * Called on parse failure to prevent resource leaks.
+     */
+    public void cleanup() {
+        for (int i = 0; i < mimeParts.size(); i++) {
+            mimeParts.get(i).close();
+            if (isFile.get(i)) {
+                MimePart part = mimeParts.get(i);
+                if (part instanceof TempfilePart tp) {
+                    tp.deleteTempfile();
+                }
+            }
+        }
     }
 
     public Stream<MimePart> stream() {

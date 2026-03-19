@@ -62,4 +62,13 @@ public class TempfilePart extends MimePart {
             // ignore
         }
     }
+
+    /**
+     * Deletes the underlying temp file. Called during cleanup on parse failure.
+     */
+    void deleteTempfile() {
+        if (tempfile != null) {
+            tempfile.delete();
+        }
+    }
 }
