@@ -8,6 +8,12 @@ import java.util.Date;
 import static enkan.util.CodecUtils.formEncode;
 
 /**
+ * Represents an HTTP cookie (RFC 6265).
+ *
+ * <p>Use {@link #create(String, String)} to build a cookie, configure
+ * optional attributes, then call {@link #toHttpString()} to produce
+ * the {@code Set-Cookie} header value.</p>
+ *
  * @author kawasima
  */
 public class Cookie implements Serializable {
@@ -23,6 +29,13 @@ public class Cookie implements Serializable {
     private boolean httpOnly;
     private String sameSite;
 
+    /**
+     * Creates a cookie with the given name and value.
+     *
+     * @param name  the cookie name
+     * @param value the cookie value
+     * @return a new cookie instance
+     */
     public static Cookie create(String name, String value) {
         Cookie cookie = new Cookie();
         cookie.setName(name);
@@ -102,6 +115,11 @@ public class Cookie implements Serializable {
         this.sameSite = sameSite;
     }
 
+    /**
+     * Serializes this cookie to a {@code Set-Cookie} header value.
+     *
+     * @return the cookie string in RFC 6265 format
+     */
     public String toHttpString() {
         StringBuilder sb = new StringBuilder();
         sb.append(formEncode(getName())).append("=").append(formEncode(getValue()));
