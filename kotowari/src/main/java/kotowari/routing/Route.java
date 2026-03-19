@@ -60,6 +60,12 @@ public class Route {
         return segments;
     }
 
+    /**
+     * Builds a URL query string from the given key-value pairs.
+     *
+     * @param hash the parameter map (empty values are omitted)
+     * @return the query string, or an empty string if no parameters
+     */
     public String buildQueryString(Map<String, String> hash) {
         List<String> elements = new ArrayList<>();
         for(String key : hash.keySet()) {
@@ -71,6 +77,12 @@ public class Route {
         return String.join("&", elements);
     }
 
+    /**
+     * Returns the keys that are significant for this route (segment keys + constraint keys).
+     * Used to determine which parameters belong to the route vs. the query string.
+     *
+     * @return the list of significant keys (lazily computed and cached)
+     */
     public List<String> significantKeys() {
         if (significantKeys != null)
             return significantKeys;
