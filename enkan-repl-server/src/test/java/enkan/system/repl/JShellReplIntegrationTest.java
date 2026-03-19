@@ -38,6 +38,11 @@ class JShellReplIntegrationTest {
 
         int port = repl.getPort(); // blocks until the server is listening
         client = new ReplTestClient(port);
+
+        // Warm up: wait for JShell to finish internal initialization.
+        // The first command may arrive before JShell is ready to evaluate,
+        // causing empty responses on slow CI environments.
+        client.send("/help");
     }
 
     @AfterAll
