@@ -30,7 +30,7 @@ public class TempfilePart extends MimePart {
     @Override
     public Parameters getData() {
         if (filename != null) {
-            String fn = last(filename.split("/\\\\"));
+            String fn = last(filename.split("[/\\\\]"));
             return Parameters.of(name,
                     Parameters.of(
                             "filename", fn,

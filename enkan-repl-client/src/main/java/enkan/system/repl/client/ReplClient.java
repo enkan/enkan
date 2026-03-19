@@ -300,7 +300,6 @@ public class ReplClient {
                 consoleHandler.connect(initialHost, initialPort);
             }
             clientThread.execute(consoleHandler);
-            clientThread.shutdown();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -332,7 +331,6 @@ public class ReplClient {
                 consoleHandler.connect(initialPort);
             }
             clientThread.execute(consoleHandler);
-            clientThread.shutdown();
         } catch (Exception e) {
             e.printStackTrace();
         }

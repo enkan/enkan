@@ -1,5 +1,8 @@
 # enkan
 
+[![Test](https://github.com/enkan/enkan/actions/workflows/test.yml/badge.svg)](https://github.com/enkan/enkan/actions/workflows/test.yml)
+[![License: EPL-2.0](https://img.shields.io/badge/License-EPL--2.0-blue.svg)](https://www.eclipse.org/legal/epl-2.0/)
+
 Enkan(円環) is a microframework implementing a middleware pattern like ring or connect.
 
 ## Concept
@@ -104,7 +107,7 @@ Or generate a blank project from the Maven archetype:
 mvn archetype:generate \
   -DarchetypeGroupId=net.unit8.enkan \
   -DarchetypeArtifactId=kotowari-archetype \
-  -DarchetypeVersion=0.12.0
+  -DarchetypeVersion=0.13.0
 ```
 
 ## Manual
@@ -210,4 +213,4 @@ Routes routes = Routes.define(r -> {
 
 Copyright © 2016-2026 kawasima
 
-Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
+Distributed under the [Eclipse Public License, Version 2.0](https://www.eclipse.org/legal/epl-2.0/).
