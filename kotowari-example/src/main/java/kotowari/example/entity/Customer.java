@@ -80,7 +80,7 @@ public class Customer implements Serializable {
     }
 
     public String toString() {
-        return "Customer(id=" + this.getId() + ", name=" + this.getName() + ", password=" + this.getPassword() + ", email=" + this.getEmail() + ", gender=" + this.getGender() + ", birthday=" + this.getBirthday() + ")";
+        return "Customer(id=" + this.getId() + ", name=" + this.getName() + ", email=" + this.getEmail() + ", gender=" + this.getGender() + ", birthday=" + this.getBirthday() + ")";
     }
 
     public boolean equals(Object o) {

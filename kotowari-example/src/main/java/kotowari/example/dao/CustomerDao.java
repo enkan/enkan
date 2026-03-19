@@ -14,7 +14,7 @@ public interface CustomerDao {
     Customer selectById(Long id);
 
     @Select
-    Customer loginByPassword(String email, String password);
+    Customer selectByEmail(String email);
 
     @Select
     List<Customer> selectAll();
