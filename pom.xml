@@ -41,6 +41,7 @@
         <slf4j.version>2.0.17</slf4j.version>
         <junit.version>5.14.3</junit.version>
         <assertj.version>3.27.7</assertj.version>
+        <micrometer.version>1.15.0</micrometer.version>
     </properties>
 
     <modules>
@@ -65,6 +66,7 @@
         <module>enkan-component-eclipselink</module>
         <module>enkan-component-jackson</module>
         <module>enkan-component-metrics</module>
+        <module>enkan-component-micrometer</module>
         <module>enkan-component-opentelemetry</module>
         <module>kotowari</module>
         <module>kotowari-jpa</module>
