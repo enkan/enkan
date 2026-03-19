@@ -408,5 +408,19 @@ public class ReplClient {
         } else {
             client.start();
         }
+        // Block until the console handler finishes, then shut down the executor
+        // so the JVM can exit. Without this, the non-daemon executor thread
+        // keeps the JVM alive after Ctrl+C because JLine consumes SIGINT
+        // as UserInterruptException and it never reaches the shutdown hook.
+        client.awaitAndShutdown();
+    }
+
+    private void awaitAndShutdown() {
+        clientThread.shutdown();
+        try {
+            clientThread.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
