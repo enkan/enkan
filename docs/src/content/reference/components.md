@@ -36,6 +36,7 @@ Undertow component provides the feature of a web server without depending on Ser
 ## Jetty
 
 Jetty component provides the feature of a web server based on Eclipse Jetty.
+Uses virtual threads by default for high-throughput request handling.
 
 ### Usage
 
@@ -56,6 +57,7 @@ Jetty component provides the feature of a web server based on Eclipse Jetty.
 |sslPort|int|SSL listen port|443|
 |keystorePath|String|Path to keystore file|-|
 |keystorePassword|String|Password for keystore|-|
+|virtualThreads|boolean|Use virtual threads for request handling|true|
 
 ### Dependencies
 
@@ -265,7 +267,47 @@ Jackson component provides a bean converter using Jackson ObjectMapper.
 </dependency>
 ```
 
-## Metrics
+## Micrometer
+
+Micrometer component provides application metrics via the [Micrometer](https://micrometer.io/) facade.
+Supports Prometheus, Datadog, CloudWatch, and other backends via pluggable `MeterRegistry`.
+
+### Usage
+
+```xml
+<dependency>
+  <groupId>net.unit8.enkan</groupId>
+  <artifactId>enkan-component-micrometer</artifactId>
+</dependency>
+```
+
+```java
+// Default (SimpleMeterRegistry — suitable for development and REPL inspection)
+MicrometerComponent micrometer = new MicrometerComponent();
+
+// With Prometheus registry for production
+MicrometerComponent micrometer = new MicrometerComponent(new PrometheusMeterRegistry(...));
+```
+
+### Properties
+
+| Name | Type | Description | Default |
+|:---|:---|:---------|:------|
+| metricPrefix | String | Prefix for all meter names | `enkan` |
+
+### Tracked Metrics
+
+- `{prefix}.http.server.requests` — request duration (Timer)
+- `{prefix}.http.server.errors` — error count (Counter)
+- `{prefix}.http.server.active.requests` — in-flight request count (Gauge)
+
+### Dependencies
+
+- None (standalone component; inject into `MicrometerMiddleware` via the system)
+
+## Metrics (Deprecated)
+
+> **Deprecated:** Use `enkan-component-micrometer` instead. This module will be removed in a future major release.
 
 Metrics component provides the feature of collecting application metrics using Dropwizard Metrics.
 

@@ -12,12 +12,12 @@ title=Getting started | Enkan
 
 ## Add the dependency
 
-Add `enkan-web` and a server component to your `pom.xml`:
+Add `kotowari` (MVC framework) and a server component to your `pom.xml`:
 
 ```xml
 <dependency>
   <groupId>net.unit8.enkan</groupId>
-  <artifactId>enkan-web</artifactId>
+  <artifactId>kotowari</artifactId>
   <version>0.13.0</version>
 </dependency>
 <dependency>
@@ -27,15 +27,21 @@ Add `enkan-web` and a server component to your `pom.xml`:
 </dependency>
 ```
 
+If you only need the middleware core without MVC routing, use `enkan-web` instead of `kotowari`.
+
 ## Hello World
 
-Define your application factory with a middleware stack and a route:
+### 1. Define your application factory
+
+An application factory builds the middleware stack and routing table:
 
 ```java
 import enkan.Application;
 import enkan.application.WebApplication;
-import enkan.middleware.DefaultCharsetMiddleware;
-import kotowari.middleware.ControllerInvokerMiddleware;
+import enkan.config.ApplicationFactory;
+import enkan.middleware.*;
+import enkan.system.EnkanSystem;
+import kotowari.middleware.*;
 import kotowari.routing.Routes;
 
 public class MyAppFactory implements ApplicationFactory {
@@ -48,6 +54,8 @@ public class MyAppFactory implements ApplicationFactory {
         }).compile();
 
         app.use(new DefaultCharsetMiddleware());
+        app.use(new ContentTypeMiddleware());
+        app.use(new ParamsMiddleware());
         app.use(new RoutingMiddleware(routes));
         app.use(new ControllerInvokerMiddleware(system));
         return app;
@@ -55,9 +63,13 @@ public class MyAppFactory implements ApplicationFactory {
 }
 ```
 
-Your controller is a plain Java class — no annotations, no base class:
+### 2. Write a controller
+
+Controllers are plain Java classes — no annotations, no base class:
 
 ```java
+import enkan.data.HttpResponse;
+
 public class HomeController {
     public HttpResponse index() {
         return HttpResponse.of("Hello, World!");
@@ -65,9 +77,13 @@ public class HomeController {
 }
 ```
 
-Wire everything together in a system factory:
+### 3. Wire the system
 
 ```java
+import enkan.system.EnkanSystem;
+import enkan.component.ApplicationComponent;
+import enkan.component.jetty.JettyComponent;
+
 import static enkan.system.EnkanSystem.component;
 
 public class MySystemFactory {
@@ -82,16 +98,24 @@ public class MySystemFactory {
 }
 ```
 
-## Start REPL
+## Start the REPL
 
 ```bash
 % mvn -e compile exec:java
 ```
 
-If you execute the `/start` command, application will start.
+Start the system with the `/start` command:
 
 ```bash
 enkan> /start
 ```
 
-Try to access [`http://localhost:3000/`](http://localhost:3000/) in your browser.
+Access [http://localhost:3000/](http://localhost:3000/) in your browser.
+
+## What's next?
+
+- [Why Enkan?](guide/why-enkan.html) — design philosophy and comparison with other frameworks
+- [EnkanSystem](guide/enkan-system.html) — component lifecycle and dependency wiring
+- [Controllers](guide/controller.html) — parameter injection, form handling, templates
+- [Component Catalog](reference/components.html) — all available components and their configuration
+- [Middleware Reference](reference/middlewares.html) — all available middleware
