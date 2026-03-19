@@ -80,10 +80,14 @@ public class MultipartParser {
     private final MultipartCollector collector;
 
     public MultipartParser(String boundary, int bufferSize) {
+        this(boundary, bufferSize, -1, -1);
+    }
+
+    public MultipartParser(String boundary, int bufferSize, long maxFileSize, long maxFormFieldSize) {
         this.boundary = "--" + boundary;
         buf = ByteBuffer.allocate(bufferSize);
         state = ParseState.FAST_FORWARD;
-        collector = new MultipartCollector(TEMPFILE_FACTORY);
+        collector = new MultipartCollector(TEMPFILE_FACTORY, maxFileSize, maxFormFieldSize);
     }
 
     /**
@@ -173,13 +177,30 @@ public class MultipartParser {
      * @throws IOException if an I/O error occurs while reading the stream
      */
     public static Parameters parse(InputStream in, Long contentLength, String contentType, int bufferSize) throws IOException {
+        return parse(in, contentLength, contentType, bufferSize, -1, -1);
+    }
+
+    /**
+     * Parses a multipart request body with per-part size limits.
+     *
+     * @param in               the request body input stream
+     * @param contentLength    the value of the {@code Content-Length} header, or {@code null} if unknown
+     * @param contentType      the value of the {@code Content-Type} header
+     * @param bufferSize       the read buffer size in bytes; {@code 0} uses the default
+     * @param maxFileSize      maximum bytes per uploaded file; {@code -1} for unlimited
+     * @param maxFormFieldSize maximum bytes per non-file form field; {@code -1} for unlimited
+     * @return a {@link Parameters} map of all parsed multipart parts
+     * @throws IOException if an I/O error occurs while reading the stream
+     */
+    public static Parameters parse(InputStream in, Long contentLength, String contentType, int bufferSize,
+                                   long maxFileSize, long maxFormFieldSize) throws IOException {
         if (contentLength != null && contentLength == 0) return Parameters.empty();
         String boundary = parseBoundary(contentType);
         if (boundary == null) return Parameters.empty();
 
         if (bufferSize == 0) bufferSize = DEFAULT_BUFFER_SIZE;
         byte[] buffer = new byte[bufferSize];
-        MultipartParser parser = new MultipartParser(boundary, bufferSize);
+        MultipartParser parser = new MultipartParser(boundary, bufferSize, maxFileSize, maxFormFieldSize);
         int readed = in.read(buffer);
         parser.onRead(buffer, readed);
 

@@ -6,6 +6,7 @@ import enkan.collection.Parameters;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
+import enkan.exception.MisconfigurationException;
 import enkan.middleware.multipart.MultipartParser;
 import enkan.util.ThreadingUtils;
 
@@ -26,11 +27,20 @@ import static enkan.util.HttpRequestUtils.contentLength;
  * <p>
  * This middleware is not thread-safe.
  *
- * @param <NRES> the type of the response object
+ * <p>Size limits (all in bytes, -1 means unlimited):
+ * <ul>
+ *   <li>{@code maxTotalSize} — maximum total Content-Length (default 10 MB)</li>
+ *   <li>{@code maxFileSize} — maximum size per uploaded file (default 5 MB)</li>
+ *   <li>{@code maxFormFieldSize} — maximum size per non-file form field (default 64 KB)</li>
+ * </ul>
+ *
  * @author kawasima
  */
 @Middleware(name = "multipartParams", dependencies = {"params"})
 public class MultipartParamsMiddleware implements WebMiddleware {
+    private long maxTotalSize = 10L * 1024 * 1024;       // 10 MB
+    private long maxFileSize = 5L * 1024 * 1024;          // 5 MB
+    private long maxFormFieldSize = 64L * 1024;            // 64 KB
     /**
      * Deletes temporary files.
      *
@@ -62,12 +72,29 @@ public class MultipartParamsMiddleware implements WebMiddleware {
      * @return the parameters extracted from the multipart form data
      */
     protected Parameters extractMultipart(HttpRequest request) {
+        Long length = contentLength(request);
+        if (maxTotalSize >= 0 && length != null && length > maxTotalSize) {
+            throw new MisconfigurationException("web.MULTIPART_TOO_LARGE", maxTotalSize);
+        }
         try {
-            return MultipartParser.parse(request.getBody(), contentLength(request),
-                    request.getHeaders().get("content-type"), 16384);
+            return MultipartParser.parse(request.getBody(), length,
+                    request.getHeaders().get("content-type"), 16384,
+                    maxFileSize, maxFormFieldSize);
         } catch (IOException e) {
             throw new FalteringEnvironmentException(e);
         }
+    }
+
+    public void setMaxTotalSize(long maxTotalSize) {
+        this.maxTotalSize = maxTotalSize;
+    }
+
+    public void setMaxFileSize(long maxFileSize) {
+        this.maxFileSize = maxFileSize;
+    }
+
+    public void setMaxFormFieldSize(long maxFormFieldSize) {
+        this.maxFormFieldSize = maxFormFieldSize;
     }
 
     /**
