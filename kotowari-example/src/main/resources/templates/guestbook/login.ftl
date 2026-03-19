@@ -9,7 +9,7 @@
     </div>
     <div class="form-group">
       <label for="name">Password</label>
-      <input id="password" class="form-control" type="text" name="password"/>
+      <input id="password" class="form-control" type="password" name="password"/>
     </div>
     <button type="submit" class="btn btn-primary">Login</button>
 </form>
