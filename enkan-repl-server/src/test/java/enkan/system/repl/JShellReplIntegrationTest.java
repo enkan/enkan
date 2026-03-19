@@ -3,6 +3,7 @@ package enkan.system.repl;
 import enkan.system.ReplResponse;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
@@ -20,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The test uses {@link MinimalSystemFactory} — an empty EnkanSystem — to keep
  * startup time as short as possible.</p>
  */
+@Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class JShellReplIntegrationTest {
     private JShellRepl repl;

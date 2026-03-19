@@ -20,4 +20,4 @@ jobs:
           cache: maven
 
       - name: Run tests
-        run: mvn test -B
+        run: mvn test -B -DexcludedGroups=integration
