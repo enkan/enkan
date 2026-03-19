@@ -14,10 +14,13 @@ import java.util.SortedSet;
 import static com.codahale.metrics.MetricRegistry.name;
 
 /**
- * Metrics component.
+ * Metrics component based on Dropwizard Metrics.
  *
+ * @deprecated Use {@code enkan.component.micrometer.MicrometerComponent} instead.
+ *             This class will be removed in a future major release.
  * @author kawasima
  */
+@Deprecated(forRemoval = true)
 public class MetricsComponent extends SystemComponent<MetricsComponent> {
     private String metricName = "enkan";
 

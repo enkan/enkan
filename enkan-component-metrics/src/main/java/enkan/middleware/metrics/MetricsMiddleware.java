@@ -8,8 +8,11 @@ import enkan.component.metrics.MetricsComponent;
 import jakarta.inject.Inject;
 
 /**
+ * @deprecated Use {@code enkan.middleware.micrometer.MicrometerMiddleware} instead.
+ *             This class will be removed in a future major release.
  * @author kawasima
  */
+@Deprecated(forRemoval = true)
 @enkan.annotation.Middleware(name = "metrics")
 public class MetricsMiddleware<REQ, RES> implements DecoratorMiddleware<REQ, RES> {
     @Inject

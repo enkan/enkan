@@ -14,6 +14,11 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @deprecated Use {@code enkan.system.command.MicrometerCommand} instead.
+ *             This class will be removed in a future major release.
+ */
+@Deprecated(forRemoval = true)
 public class MetricsCommand implements SystemCommand {
     protected Optional<MetricsComponent> findMetrics(EnkanSystem system) {
         return system.getAllComponents().stream()
