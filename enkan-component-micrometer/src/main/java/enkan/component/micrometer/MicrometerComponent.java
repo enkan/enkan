@@ -70,7 +70,6 @@ public class MicrometerComponent extends SystemComponent<MicrometerComponent> {
                 component.requestTimer = null;
                 component.errorCounter = null;
                 component.activeRequestsGauge = null;
-                component.activeRequests.set(0);
             }
         };
     }
