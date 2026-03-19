@@ -3,9 +3,11 @@ package enkan.middleware.micrometer;
 import enkan.DecoratorMiddleware;
 import enkan.MiddlewareChain;
 import enkan.component.micrometer.MicrometerComponent;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
 import jakarta.inject.Inject;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Middleware that records HTTP request metrics via Micrometer.
@@ -21,16 +23,20 @@ public class MicrometerMiddleware<REQ, RES> implements DecoratorMiddleware<REQ, 
 
     @Override
     public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
+        Timer requestTimer = micrometer.getRequestTimer();
+        Counter errorCounter = micrometer.getErrorCounter();
+        AtomicInteger activeRequests = micrometer.getActiveRequests();
+
         Timer.Sample sample = Timer.start(micrometer.getRegistry());
-        micrometer.getActiveRequests().incrementAndGet();
+        activeRequests.incrementAndGet();
         try {
             return chain.next(req);
         } catch (Exception ex) {
-            micrometer.getErrorCounter().increment();
+            errorCounter.increment();
             throw ex;
         } finally {
-            sample.stop(micrometer.getRequestTimer());
-            micrometer.getActiveRequests().decrementAndGet();
+            sample.stop(requestTimer);
+            activeRequests.decrementAndGet();
         }
     }
 }
