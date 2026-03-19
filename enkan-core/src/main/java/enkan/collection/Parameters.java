@@ -47,35 +47,86 @@ public class Parameters implements Map<String, Object>, Serializable {
         }
         return s; // already lowercase
     }
+    /**
+     * Creates an empty {@code Parameters} instance.
+     *
+     * @return a new empty parameters map
+     */
     public static Parameters empty() {
         return new Parameters();
     }
 
-
+    /**
+     * Creates a {@code Parameters} instance containing one key-value pair.
+     *
+     * @param k1 the key
+     * @param v1 the value
+     * @return a new parameters map with the given entry
+     */
     public static Parameters of(String k1, Object v1) {
         Parameters params = empty();
         params.put(k1, v1);
         return params;
     }
 
+    /**
+     * Creates a {@code Parameters} instance containing two key-value pairs.
+     *
+     * @param k1 the first key
+     * @param v1 the first value
+     * @param k2 the second key
+     * @param v2 the second value
+     * @return a new parameters map with the given entries
+     */
     public static Parameters of(String k1, Object v1, String k2, Object v2) {
         Parameters params = Parameters.of(k1, v1);
         params.put(k2, v2);
         return params;
     }
 
+    /**
+     * Creates a {@code Parameters} instance containing three key-value pairs.
+     *
+     * @param k1 the first key
+     * @param v1 the first value
+     * @param k2 the second key
+     * @param v2 the second value
+     * @param k3 the third key
+     * @param v3 the third value
+     * @return a new parameters map with the given entries
+     */
     public static Parameters of(String k1, Object v1, String k2, Object v2, String k3, Object v3) {
         Parameters params = Parameters.of(k1, v1, k2, v2);
         params.put(k3, v3);
         return params;
     }
 
+    /**
+     * Creates a {@code Parameters} instance containing four key-value pairs.
+     *
+     * @param k1 the first key
+     * @param v1 the first value
+     * @param k2 the second key
+     * @param v2 the second value
+     * @param k3 the third key
+     * @param v3 the third value
+     * @param k4 the fourth key
+     * @param v4 the fourth value
+     * @return a new parameters map with the given entries
+     */
     public static Parameters of(String k1, Object v1, String k2, Object v2, String k3, Object v3,  String k4, Object v4) {
         Parameters params = Parameters.of(k1, v1, k2, v2, k3, v3);
         params.put(k4, v4);
         return params;
     }
 
+    /**
+     * Creates a {@code Parameters} instance from a varargs array of alternating keys and values.
+     *
+     * @param init alternating key-value pairs; length must be even
+     * @return a new parameters map with the given entries
+     * @throws MisconfigurationException if the array length is odd
+     */
     public static Parameters of(Object... init) {
         if (init.length % 2 != 0) {
             throw new MisconfigurationException("core.MISSING_KEY_VALUE_PAIR");
@@ -187,6 +238,12 @@ public class Parameters implements Map<String, Object>, Serializable {
         return current;
     }
 
+    /**
+     * Returns the raw (uncoerced) value associated with the given key.
+     *
+     * @param key the key to look up
+     * @return the raw value, or {@code null} if not present
+     */
     public Object getRawType(Object key) {
         if (!caseSensitive && key instanceof String s) {
             key = asciiLowerCase(s);
@@ -195,6 +252,16 @@ public class Parameters implements Map<String, Object>, Serializable {
         return params.get(key.toString());
     }
 
+    /**
+     * Returns the value at the nested key path as a {@link List}.
+     * If the value is a single element, it is wrapped in a new list.
+     * If the value is {@code null}, an empty list is returned.
+     *
+     * @param key  the first key
+     * @param keys the remaining keys for nested lookup
+     * @param <T>  the element type
+     * @return a list of values, never {@code null}
+     */
     @SuppressWarnings("unchecked")
     public <T> List<T> getList(Object key, Object... keys) {
         T value = (T) getIn(key, keys);
@@ -209,6 +276,13 @@ public class Parameters implements Map<String, Object>, Serializable {
         }
     }
 
+    /**
+     * Returns the value at the nested key path parsed as a {@link Long}.
+     *
+     * @param key  the first key
+     * @param keys the remaining keys for nested lookup
+     * @return the parsed long value, or {@code null} if not present or not parseable
+     */
     public Long getLong(Object key, Object... keys) {
         Object value = getIn(key, keys);
         if (value == null) {

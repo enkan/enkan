@@ -62,6 +62,14 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
     private String crossOriginOpenerPolicy = "same-origin";
     private String crossOriginResourcePolicy = "same-origin";
 
+    /**
+     * Passes the request through the chain and applies all enabled security
+     * headers to the response.
+     *
+     * @param request the incoming HTTP request
+     * @param chain   the remaining middleware chain
+     * @return the HTTP response with security headers applied
+     */
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {

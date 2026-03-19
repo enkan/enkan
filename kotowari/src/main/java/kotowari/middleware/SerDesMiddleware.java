@@ -171,6 +171,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
         }
     }
 
+    /** {@inheritDoc} Deserializes the request body and serializes the response body. */
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, NRES, NNREQ, NNRES> chain) {
         request = MixinUtils.mixin(request, BodyDeserializable.class);

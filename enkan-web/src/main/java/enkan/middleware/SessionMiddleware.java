@@ -92,6 +92,14 @@ public class SessionMiddleware implements WebMiddleware {
         }
     }
 
+    /**
+     * Reads the session from the configured store before the downstream chain
+     * and persists any session changes back to the store afterward.
+     *
+     * @param request the incoming HTTP request
+     * @param chain   the remaining middleware chain
+     * @return the HTTP response, potentially with an updated session cookie
+     */
     @Override
 public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         request = MixinUtils.mixin(request, WebSessionAvailable.class);

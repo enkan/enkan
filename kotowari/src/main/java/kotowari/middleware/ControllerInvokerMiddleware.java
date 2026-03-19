@@ -257,6 +257,16 @@ public class ControllerInvokerMiddleware<RES> implements Middleware<HttpRequest,
         return arguments;
     }
 
+    /**
+     * Invokes the controller method resolved by the routing middleware.
+     * Parameter injection is performed using the registered {@link ParameterInjector}s,
+     * and the controller instance is cached for reuse across requests.
+     *
+     * @param request the incoming HTTP request (must implement {@link Routable})
+     * @param next    the remaining middleware chain (unused; this is the terminal middleware)
+     * @return the value returned by the controller method
+     * @throws MisconfigurationException if the request is not {@link Routable} or the controller method is null
+     */
     @SuppressWarnings("unchecked")
     @Override
     public <NNREQ, NNRES> RES handle(HttpRequest request, MiddlewareChain<Void, Void, NNREQ, NNRES> next) {

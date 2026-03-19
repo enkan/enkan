@@ -8,6 +8,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
+ * Case-insensitive HTTP header map (RFC 7230).
+ *
+ * <p>Keys are stored in ASCII lowercase form. The {@link #keySet()} and
+ * {@link #forEachHeader(BiConsumer)} methods return capitalized header names
+ * (e.g. {@code Content-Type}) suitable for writing into HTTP responses.
+ *
  * @author kawasima
  */
 public class Headers extends Parameters {
@@ -42,28 +48,73 @@ public class Headers extends Parameters {
         cachedKeySet = null;
     }
 
+    /**
+     * Creates an empty {@code Headers} instance.
+     *
+     * @return a new empty headers map
+     */
     public static Headers empty() {
         return new Headers();
     }
 
+    /**
+     * Creates a {@code Headers} instance containing one header.
+     *
+     * @param k1 the header name
+     * @param v1 the header value
+     * @return a new headers map with the given entry
+     */
     public static Headers of(String k1, Object v1) {
         Headers headers = empty();
         headers.put(k1, v1);
         return headers;
     }
 
+    /**
+     * Creates a {@code Headers} instance containing two headers.
+     *
+     * @param k1 the first header name
+     * @param v1 the first header value
+     * @param k2 the second header name
+     * @param v2 the second header value
+     * @return a new headers map with the given entries
+     */
     public static Headers of(String k1, Object v1, String k2, Object v2) {
         Headers headers = Headers.of(k1, v1);
         headers.put(k2, v2);
         return headers;
     }
 
+    /**
+     * Creates a {@code Headers} instance containing three headers.
+     *
+     * @param k1 the first header name
+     * @param v1 the first header value
+     * @param k2 the second header name
+     * @param v2 the second header value
+     * @param k3 the third header name
+     * @param v3 the third header value
+     * @return a new headers map with the given entries
+     */
     public static Headers of(String k1, Object v1, String k2, Object v2, String k3, Object v3) {
         Headers headers = Headers.of(k1, v1, k2, v2);
         headers.put(k3, v3);
         return headers;
     }
 
+    /**
+     * Creates a {@code Headers} instance containing four headers.
+     *
+     * @param k1 the first header name
+     * @param v1 the first header value
+     * @param k2 the second header name
+     * @param v2 the second header value
+     * @param k3 the third header name
+     * @param v3 the third header value
+     * @param k4 the fourth header name
+     * @param v4 the fourth header value
+     * @return a new headers map with the given entries
+     */
     public static Headers of(String k1, Object v1, String k2, Object v2, String k3, Object v3,  String k4, Object v4) {
         Headers headers = Headers.of(k1, v1, k2, v2, k3, v3);
         headers.put(k4, v4);
@@ -113,6 +164,12 @@ public class Headers extends Parameters {
         }
     }
 
+    /**
+     * Returns a set of capitalized header names (e.g. {@code Content-Type}).
+     * The returned set is cached and unmodifiable.
+     *
+     * @return an unmodifiable set of capitalized header names
+     */
     @Override
     public Set<String> keySet() {
         Set<String> cached = cachedKeySet;
