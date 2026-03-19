@@ -1,6 +1,7 @@
 package enkan.middleware.multipart;
 
 import enkan.collection.Parameters;
+import enkan.exception.MisconfigurationException;
 import enkan.util.ThreadingUtils;
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +13,7 @@ import java.util.Optional;
 
 import static enkan.middleware.multipart.MultipartParser.parseBoundary;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author kawasima
@@ -195,5 +197,34 @@ class MultipartParserTest {
         assertThat(params.getIn("document[attachment]", "name"))
                 .isEqualTo("document[attachment]");
         Files.deleteIfExists(((File) params.getIn("document[attachment]", "tempfile")).toPath());
+    }
+
+    // --- Size limit tests ---
+
+    @Test
+    void fileSizeLimitRejectsOversizedUpload() {
+        InputStream is = getClass().getResourceAsStream("/multipart/ie");
+        // "contents" is 8 bytes; set limit to 4 to trigger rejection
+        assertThatThrownBy(() ->
+                MultipartParser.parse(is, null, "multipart/form-data; boundary=AaB03x", 0, 4, -1)
+        ).isInstanceOf(MisconfigurationException.class);
+    }
+
+    @Test
+    void formFieldSizeLimitRejectsOversizedField() {
+        InputStream is = getClass().getResourceAsStream("/multipart/contentTypeAndNoFilename");
+        // "contents" is 8 bytes; set form field limit to 4
+        assertThatThrownBy(() ->
+                MultipartParser.parse(is, null, "multipart/form-data; boundary=AaB03x", 0, -1, 4)
+        ).isInstanceOf(MisconfigurationException.class);
+    }
+
+    @Test
+    void unlimitedSizeAllowsLargeUpload() throws IOException {
+        InputStream is = getClass().getResourceAsStream("/multipart/ie");
+        Parameters params = MultipartParser.parse(is, null, "multipart/form-data; boundary=AaB03x", 0, -1, -1);
+        Optional<String> content = getFileContents(params, "files");
+        assertThat(content).isPresent().contains("contents");
+        Files.deleteIfExists(((File) params.getIn("files", "tempfile")).toPath());
     }
 }
