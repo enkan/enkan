@@ -161,12 +161,5 @@ public class FormMiddlewareTest {
 
         p = parseFromQuery("x[y][][z][]=1");
         assertEquals("1", p.getIn("x", "y", 0, "z", 0));
-
-        // TODO
-        /*
-        p = parseFromQuery("x[y][][z]=1&x[y][][w]=2");
-        assertEquals("1", p.getIn("x", "y", 0, "z"));
-        assertEquals("1", p.getIn("x", "y", 0, "w"));
-        */
     }
 }

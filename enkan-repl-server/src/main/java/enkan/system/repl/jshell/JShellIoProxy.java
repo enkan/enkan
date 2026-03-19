@@ -256,6 +256,14 @@ public class JShellIoProxy {
         System.setErr(originalErr);
         ioThreadPool.shutdown();
         try {
+            if (!ioThreadPool.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                ioThreadPool.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            ioThreadPool.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        try {
             out.close();
             err.close();
             outReader.close();
