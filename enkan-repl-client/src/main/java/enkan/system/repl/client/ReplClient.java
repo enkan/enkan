@@ -191,8 +191,7 @@ public class ReplClient {
                         if (rendererSock != null) {
                             rendererSock.close();
                         }
-                        close();
-                        isAvailable.set(false);
+                        closeQuietly();
                         return;
                     } else {
                         if (this.socket == null) {
@@ -205,13 +204,13 @@ public class ReplClient {
                                 serverInstruction = rendererSock.recvStr(500);
                             }
                             if (Objects.equals(serverInstruction, "shutdown") || !isAvailable.get()) {
-                                close();
+                                closeQuietly();
                                 break;
                             }
                         }
                     }
                 } catch (EndOfFileException e) {
-                    close();
+                    closeQuietly();
                     return;
                 } catch (UserInterruptException e) {
                     if (serverDisconnected.get()) {
@@ -220,7 +219,7 @@ public class ReplClient {
                         return;
                     }
                     if (pendingExit.get()) {
-                        close();
+                        closeQuietly();
                         return;
                     }
                     pendingExit.set(true);
@@ -239,16 +238,30 @@ public class ReplClient {
             }
         }
 
+        /**
+         * Closes without raising INT signal. Used when called from within
+         * the run() loop where readLine() is not blocking.
+         */
+        private void closeQuietly() {
+            if (!isAvailable.compareAndSet(true, false)) {
+                return;
+            }
+            closeSockets();
+        }
+
         public void close() {
             if (!isAvailable.compareAndSet(true, false)) {
                 return; // already closed
             }
-            // Wake up readLine() if it is blocking
+            // Wake up readLine() if it is blocking (called from shutdown hook)
             try {
                 reader.getTerminal().raise(Terminal.Signal.INT);
             } catch (Exception ignore) {
             }
+            closeSockets();
+        }
 
+        private void closeSockets() {
             if (completerSock != null) {
                 try {
                     completerSock.close();
