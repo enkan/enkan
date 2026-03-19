@@ -4,7 +4,6 @@ import enkan.component.ComponentLifecycle;
 import enkan.component.SystemComponent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -28,6 +27,7 @@ public class MicrometerComponent extends SystemComponent<MicrometerComponent> {
     private final MeterRegistry registry;
     private Timer requestTimer;
     private Counter errorCounter;
+    private Gauge activeRequestsGauge;
     private final AtomicInteger activeRequests = new AtomicInteger(0);
 
     public MicrometerComponent() {
@@ -49,27 +49,28 @@ public class MicrometerComponent extends SystemComponent<MicrometerComponent> {
                 component.errorCounter = Counter.builder(metricPrefix + ".http.server.errors")
                         .description("HTTP server error count")
                         .register(registry);
-                Gauge.builder(metricPrefix + ".http.server.active.requests", component.activeRequests,
-                                AtomicInteger::get)
+                component.activeRequestsGauge = Gauge.builder(
+                                metricPrefix + ".http.server.active.requests",
+                                component.activeRequests, AtomicInteger::get)
                         .description("HTTP server active request count")
                         .register(registry);
             }
 
             @Override
             public void stop(MicrometerComponent component) {
-                removeMeter(metricPrefix + ".http.server.requests");
-                removeMeter(metricPrefix + ".http.server.errors");
-                removeMeter(metricPrefix + ".http.server.active.requests");
+                if (component.requestTimer != null) {
+                    registry.remove(component.requestTimer);
+                }
+                if (component.errorCounter != null) {
+                    registry.remove(component.errorCounter);
+                }
+                if (component.activeRequestsGauge != null) {
+                    registry.remove(component.activeRequestsGauge);
+                }
                 component.requestTimer = null;
                 component.errorCounter = null;
+                component.activeRequestsGauge = null;
                 component.activeRequests.set(0);
-            }
-
-            private void removeMeter(String name) {
-                Meter meter = registry.find(name).meter();
-                if (meter != null) {
-                    registry.remove(meter);
-                }
             }
         };
     }
