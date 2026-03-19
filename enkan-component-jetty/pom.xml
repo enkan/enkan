@@ -14,7 +14,7 @@
     <name>enkan-component-jetty</name>
 
     <properties>
-        <jetty.version>12.1.6</jetty.version>
+        <jetty.version>12.1.7</jetty.version>
     </properties>
 
     <dependencies>

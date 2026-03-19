@@ -15,7 +15,7 @@
     <name>enkan-component-opentelemetry</name>
 
     <properties>
-        <opentelemetry.version>1.59.0</opentelemetry.version>
+        <opentelemetry.version>1.60.1</opentelemetry.version>
     </properties>
 
     <dependencies>
