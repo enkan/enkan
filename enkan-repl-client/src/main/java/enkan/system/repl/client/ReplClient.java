@@ -240,7 +240,9 @@ public class ReplClient {
         }
 
         public void close() {
-            isAvailable.set(false);
+            if (!isAvailable.compareAndSet(true, false)) {
+                return; // already closed
+            }
             // Wake up readLine() if it is blocking
             try {
                 reader.getTerminal().raise(Terminal.Signal.INT);
