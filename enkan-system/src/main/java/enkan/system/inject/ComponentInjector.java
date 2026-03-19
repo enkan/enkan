@@ -33,12 +33,16 @@ public class ComponentInjector {
 
     /**
      * Set a value to a field of an object.
+     *
      * @param target an injection target object
      * @param f      an injection target field
      * @param value  an injecting value
      */
     private void setValueToField(Object target, Field f, Object value) {
-        f.setAccessible(true);
+        if (!f.canAccess(target) && !f.trySetAccessible()) {
+            throw new MisconfigurationException("core.INJECT_INACCESSIBLE",
+                    f.getName(), target.getClass().getName());
+        }
         try {
             f.set(target, value);
         } catch (IllegalAccessException e) {

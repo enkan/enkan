@@ -7,11 +7,13 @@ import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
+import enkan.middleware.multipart.BoundedInputStream;
 import enkan.middleware.multipart.MultipartParser;
 import enkan.util.ThreadingUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -76,10 +78,16 @@ public class MultipartParamsMiddleware implements WebMiddleware {
         if (maxTotalSize >= 0 && length != null && length > maxTotalSize) {
             throw new MisconfigurationException("web.MULTIPART_TOO_LARGE", maxTotalSize);
         }
+        InputStream body = request.getBody();
+        if (maxTotalSize >= 0) {
+            body = new BoundedInputStream(body, maxTotalSize);
+        }
         try {
-            return MultipartParser.parse(request.getBody(), length,
+            return MultipartParser.parse(body, length,
                     request.getHeaders().get("content-type"), 16384,
                     maxFileSize, maxFormFieldSize);
+        } catch (BoundedInputStream.SizeLimitExceededException e) {
+            throw new MisconfigurationException("web.MULTIPART_TOO_LARGE", maxTotalSize);
         } catch (IOException e) {
             throw new FalteringEnvironmentException(e);
         }

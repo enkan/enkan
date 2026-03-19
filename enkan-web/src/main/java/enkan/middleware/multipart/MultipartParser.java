@@ -201,12 +201,17 @@ public class MultipartParser {
         if (bufferSize == 0) bufferSize = DEFAULT_BUFFER_SIZE;
         byte[] buffer = new byte[bufferSize];
         MultipartParser parser = new MultipartParser(boundary, bufferSize, maxFileSize, maxFormFieldSize);
-        int readed = in.read(buffer);
-        parser.onRead(buffer, readed);
-
-        while (parser.state != ParseState.DONE) {
-            readed = in.read(buffer, 0, parser.buf.remaining());
+        try {
+            int readed = in.read(buffer);
             parser.onRead(buffer, readed);
+
+            while (parser.state != ParseState.DONE) {
+                readed = in.read(buffer, 0, parser.buf.remaining());
+                parser.onRead(buffer, readed);
+            }
+        } catch (Exception e) {
+            parser.collector.cleanup();
+            throw e;
         }
 
         return parser.result();
