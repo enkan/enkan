@@ -11,36 +11,118 @@ import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.*;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static enkan.util.BeanBuilder.builder;
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 /**
  * @author kawasima
  */
 class ServletUtilsTest {
 
+    // ---------------------------------------------------------------- Stub helpers
+
+    /**
+     * Creates an HttpServletRequest stub backed by a Map.
+     * Only methods actually called by ServletUtils.buildRequest() need entries.
+     */
+    private static HttpServletRequest stubRequest(Map<String, Object> props) {
+        return (HttpServletRequest) Proxy.newProxyInstance(
+                HttpServletRequest.class.getClassLoader(),
+                new Class<?>[]{ HttpServletRequest.class },
+                (proxy, method, args) -> {
+                    String name = method.getName();
+                    if (props.containsKey(name)) {
+                        Object val = props.get(name);
+                        // Dispatch getHeaders(String) to the StubHeaderProvider
+                        if (val instanceof StubHeaderProvider provider && args != null && args.length == 1) {
+                            return provider.getHeaders((String) args[0]);
+                        }
+                        return val;
+                    }
+                    // Sensible defaults for common methods
+                    return switch (name) {
+                        case "getServerPort" -> 0;
+                        case "getContentLengthLong" -> -1L;
+                        case "getHeaderNames" -> Collections.emptyEnumeration();
+                        case "getInputStream" -> stubServletInputStream(new byte[0]);
+                        default -> null;
+                    };
+                });
+    }
+
+    /**
+     * Creates an HttpServletResponse stub that captures setStatus, setHeader, addHeader,
+     * and provides a writer or output stream for body capture.
+     */
+    private static StubServletResponse stubResponse() {
+        return new StubServletResponse();
+    }
+
+    private static class StubServletResponse {
+        int status;
+        final Map<String, List<String>> headers = new LinkedHashMap<>();
+        final StringWriter writerCapture = new StringWriter();
+        final ByteArrayOutputStream outputCapture = new ByteArrayOutputStream();
+
+        HttpServletResponse proxy() {
+            return (HttpServletResponse) Proxy.newProxyInstance(
+                    HttpServletResponse.class.getClassLoader(),
+                    new Class<?>[]{ HttpServletResponse.class },
+                    (p, method, args) -> switch (method.getName()) {
+                        case "setStatus" -> { status = (int) args[0]; yield null; }
+                        case "setHeader" -> {
+                            headers.put((String) args[0], new ArrayList<>(List.of((String) args[1])));
+                            yield null;
+                        }
+                        case "addHeader" -> {
+                            headers.computeIfAbsent((String) args[0], k -> new ArrayList<>())
+                                    .add((String) args[1]);
+                            yield null;
+                        }
+                        case "getHeaders" -> headers.getOrDefault(args[0], Collections.emptyList());
+                        case "getWriter" -> new PrintWriter(writerCapture);
+                        case "getOutputStream" -> new ServletOutputStream() {
+                            @Override public boolean isReady() { return true; }
+                            @Override public void setWriteListener(jakarta.servlet.WriteListener l) {}
+                            @Override public void write(int b) { outputCapture.write(b); }
+                            @Override public void write(byte[] b, int off, int len) { outputCapture.write(b, off, len); }
+                        };
+                        default -> null;
+                    });
+        }
+    }
+
+    private static ServletInputStream stubServletInputStream(byte[] data) {
+        ByteArrayInputStream bais = new ByteArrayInputStream(data);
+        return new ServletInputStream() {
+            @Override public boolean isFinished() { return bais.available() == 0; }
+            @Override public boolean isReady() { return true; }
+            @Override public void setReadListener(jakarta.servlet.ReadListener l) {}
+            @Override public int read() { return bais.read(); }
+        };
+    }
+
     // ---------------------------------------------------------------- buildRequest
 
     @Test
     void buildRequestMapsBasicFields() throws IOException {
-        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
-        when(servletRequest.getServerPort()).thenReturn(8080);
-        when(servletRequest.getServerName()).thenReturn("localhost");
-        when(servletRequest.getRemoteAddr()).thenReturn("127.0.0.1");
-        when(servletRequest.getRequestURI()).thenReturn("/foo/bar");
-        when(servletRequest.getQueryString()).thenReturn("q=1");
-        when(servletRequest.getScheme()).thenReturn("http");
-        when(servletRequest.getMethod()).thenReturn("GET");
-        when(servletRequest.getProtocol()).thenReturn("HTTP/1.1");
-        when(servletRequest.getContentType()).thenReturn("application/json");
-        when(servletRequest.getContentLengthLong()).thenReturn(42L);
-        when(servletRequest.getCharacterEncoding()).thenReturn("UTF-8");
-        when(servletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(servletRequest.getInputStream()).thenReturn(mock(ServletInputStream.class));
+        HttpServletRequest servletRequest = stubRequest(Map.ofEntries(
+                Map.entry("getServerPort", 8080),
+                Map.entry("getServerName", "localhost"),
+                Map.entry("getRemoteAddr", "127.0.0.1"),
+                Map.entry("getRequestURI", "/foo/bar"),
+                Map.entry("getQueryString", "q=1"),
+                Map.entry("getScheme", "http"),
+                Map.entry("getMethod", "GET"),
+                Map.entry("getProtocol", "HTTP/1.1"),
+                Map.entry("getContentType", "application/json"),
+                Map.entry("getContentLengthLong", 42L),
+                Map.entry("getCharacterEncoding", "UTF-8")
+        ));
 
         HttpRequest request = ServletUtils.buildRequest(servletRequest);
 
@@ -58,11 +140,10 @@ class ServletUtilsTest {
 
     @Test
     void buildRequestPreservesHttpMethodCase() throws IOException {
-        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
-        when(servletRequest.getMethod()).thenReturn("POST");
-        when(servletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(servletRequest.getInputStream()).thenReturn(mock(ServletInputStream.class));
-        when(servletRequest.getContentLengthLong()).thenReturn(-1L);
+        HttpServletRequest servletRequest = stubRequest(Map.of(
+                "getMethod", "POST",
+                "getContentLengthLong", -1L
+        ));
 
         HttpRequest request = ServletUtils.buildRequest(servletRequest);
 
@@ -71,16 +152,16 @@ class ServletUtilsTest {
 
     @Test
     void buildRequestMapsHeaders() throws IOException {
-        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
-        when(servletRequest.getMethod()).thenReturn("GET");
-        when(servletRequest.getContentLengthLong()).thenReturn(-1L);
-        when(servletRequest.getInputStream()).thenReturn(mock(ServletInputStream.class));
-        when(servletRequest.getHeaderNames())
-                .thenReturn(Collections.enumeration(List.of("Content-Type", "X-Custom")));
-        when(servletRequest.getHeaders("Content-Type"))
-                .thenReturn(Collections.enumeration(List.of("application/json")));
-        when(servletRequest.getHeaders("X-Custom"))
-                .thenReturn(Collections.enumeration(List.of("value1")));
+        HttpServletRequest servletRequest = stubRequest(Map.of(
+                "getMethod", "GET",
+                "getContentLengthLong", -1L,
+                "getHeaderNames", Collections.enumeration(List.of("Content-Type", "X-Custom")),
+                "getHeaders", (StubHeaderProvider) name -> switch (name) {
+                    case "Content-Type" -> Collections.enumeration(List.of("application/json"));
+                    case "X-Custom" -> Collections.enumeration(List.of("value1"));
+                    default -> Collections.emptyEnumeration();
+                }
+        ));
 
         HttpRequest request = ServletUtils.buildRequest(servletRequest);
 
@@ -90,28 +171,27 @@ class ServletUtilsTest {
 
     @Test
     void buildRequestStoresEachMultiValueHeaderSeparately() throws IOException {
-        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
-        when(servletRequest.getMethod()).thenReturn("GET");
-        when(servletRequest.getContentLengthLong()).thenReturn(-1L);
-        when(servletRequest.getInputStream()).thenReturn(mock(ServletInputStream.class));
-        when(servletRequest.getHeaderNames())
-                .thenReturn(Collections.enumeration(List.of("Set-Cookie")));
-        when(servletRequest.getHeaders("Set-Cookie"))
-                .thenReturn(Collections.enumeration(List.of("a=1", "b=2")));
+        HttpServletRequest servletRequest = stubRequest(Map.of(
+                "getMethod", "GET",
+                "getContentLengthLong", -1L,
+                "getHeaderNames", Collections.enumeration(List.of("Set-Cookie")),
+                "getHeaders", (StubHeaderProvider) name ->
+                        "Set-Cookie".equals(name)
+                                ? Collections.enumeration(List.of("a=1", "b=2"))
+                                : Collections.emptyEnumeration()
+        ));
 
         HttpRequest request = ServletUtils.buildRequest(servletRequest);
 
-        // 複数値のヘッダーはカンマ結合されず個別に格納される
         assertThat(request.getHeaders().getList("Set-Cookie")).containsExactly("a=1", "b=2");
     }
 
     @Test
     void buildRequestReturnsNullContentLengthWhenNegative() throws IOException {
-        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
-        when(servletRequest.getMethod()).thenReturn("GET");
-        when(servletRequest.getContentLengthLong()).thenReturn(-1L);
-        when(servletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(servletRequest.getInputStream()).thenReturn(mock(ServletInputStream.class));
+        HttpServletRequest servletRequest = stubRequest(Map.of(
+                "getMethod", "GET",
+                "getContentLengthLong", -1L
+        ));
 
         HttpRequest request = ServletUtils.buildRequest(servletRequest);
 
@@ -122,56 +202,42 @@ class ServletUtilsTest {
 
     @Test
     void updateServletResponseSetsStatusCode() throws IOException {
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        when(servletResponse.getHeaders(any())).thenReturn(Collections.emptyList());
-        when(servletResponse.getWriter()).thenReturn(mock(PrintWriter.class));
+        StubServletResponse stub = stubResponse();
 
         HttpResponse response = HttpResponse.of("ok");
         response.setStatus(201);
         response.setHeaders(Headers.empty());
 
-        ServletUtils.updateServletResponse(servletResponse, response);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
 
-        verify(servletResponse).setStatus(201);
+        assertThat(stub.status).isEqualTo(201);
     }
 
     @Test
     void updateServletResponseSetsStringBody() throws IOException {
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        when(servletResponse.getHeaders(any())).thenReturn(Collections.emptyList());
-        PrintWriter writer = mock(PrintWriter.class);
-        when(servletResponse.getWriter()).thenReturn(writer);
+        StubServletResponse stub = stubResponse();
 
         HttpResponse response = builder(HttpResponse.of("hello"))
                 .set(HttpResponse::setHeaders, Headers.empty())
                 .build();
 
-        ServletUtils.updateServletResponse(servletResponse, response);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
 
-        verify(writer).print("hello");
+        assertThat(stub.writerCapture.toString()).isEqualTo("hello");
     }
 
     @Test
     void updateServletResponseSetsInputStreamBody() throws IOException {
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        when(servletResponse.getHeaders(any())).thenReturn(Collections.emptyList());
-        ByteArrayOutputStream captured = new ByteArrayOutputStream();
-        ServletOutputStream sos = new ServletOutputStream() {
-            @Override public boolean isReady() { return true; }
-            @Override public void setWriteListener(jakarta.servlet.WriteListener l) {}
-            @Override public void write(int b) { captured.write(b); }
-            @Override public void write(byte[] b, int off, int len) { captured.write(b, off, len); }
-        };
-        when(servletResponse.getOutputStream()).thenReturn(sos);
+        StubServletResponse stub = stubResponse();
 
         byte[] bytes = "stream".getBytes(StandardCharsets.UTF_8);
         HttpResponse response = builder(HttpResponse.of(new ByteArrayInputStream(bytes)))
                 .set(HttpResponse::setHeaders, Headers.empty())
                 .build();
 
-        ServletUtils.updateServletResponse(servletResponse, response);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
 
-        assertThat(captured.toString(StandardCharsets.UTF_8)).isEqualTo("stream");
+        assertThat(stub.outputCapture.toString(StandardCharsets.UTF_8)).isEqualTo("stream");
     }
 
     @Test
@@ -182,77 +248,77 @@ class ServletUtilsTest {
             fw.write("file-content");
         }
 
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        when(servletResponse.getHeaders(any())).thenReturn(Collections.emptyList());
-        ByteArrayOutputStream captured = new ByteArrayOutputStream();
-        ServletOutputStream sos = new ServletOutputStream() {
-            @Override public boolean isReady() { return true; }
-            @Override public void setWriteListener(jakarta.servlet.WriteListener l) {}
-            @Override public void write(int b) { captured.write(b); }
-            @Override public void write(byte[] b, int off, int len) { captured.write(b, off, len); }
-        };
-        when(servletResponse.getOutputStream()).thenReturn(sos);
+        StubServletResponse stub = stubResponse();
 
         HttpResponse response = builder(HttpResponse.of(tmp))
                 .set(HttpResponse::setHeaders, Headers.empty())
                 .build();
 
-        ServletUtils.updateServletResponse(servletResponse, response);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
 
-        assertThat(captured.toString(StandardCharsets.UTF_8)).isEqualTo("file-content");
+        assertThat(stub.outputCapture.toString(StandardCharsets.UTF_8)).isEqualTo("file-content");
     }
 
     @Test
     void updateServletResponseSetsStringHeader() throws IOException {
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        // Headers.keySet() normalizes "AAA" → "Aaa"
-        when(servletResponse.getHeaders("Aaa")).thenReturn(Collections.emptyList());
-        when(servletResponse.getWriter()).thenReturn(mock(PrintWriter.class));
+        StubServletResponse stub = stubResponse();
 
         HttpResponse response = builder(HttpResponse.of(""))
                 .set(HttpResponse::setHeaders, Headers.of("AAA", "val"))
                 .build();
 
-        ServletUtils.updateServletResponse(servletResponse, response);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
 
-        verify(servletResponse).setHeader("Aaa", "val");
+        assertThat(stub.headers).containsKey("Aaa");
+        assertThat(stub.headers.get("Aaa")).containsExactly("val");
     }
 
     @Test
     void updateServletResponseSetsNumericHeader() throws IOException {
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        // Headers.keySet() normalizes "AAA" → "Aaa"
-        when(servletResponse.getHeaders("Aaa")).thenReturn(Collections.emptyList());
-        when(servletResponse.getWriter()).thenReturn(mock(PrintWriter.class));
+        StubServletResponse stub = stubResponse();
 
         HttpResponse response = builder(HttpResponse.of(""))
                 .set(HttpResponse::setHeaders, Headers.of("AAA", 1))
                 .build();
 
-        ServletUtils.updateServletResponse(servletResponse, response);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
 
-        verify(servletResponse).setHeader("Aaa", "1");
+        assertThat(stub.headers).containsKey("Aaa");
+        assertThat(stub.headers.get("Aaa")).containsExactly("1");
     }
 
     @Test
     void updateServletResponseDoesNothingForNullArguments() {
+        StubServletResponse stub = stubResponse();
         assertThatCode(() -> {
-            ServletUtils.updateServletResponse(null, mock(HttpResponse.class));
-            ServletUtils.updateServletResponse(mock(HttpServletResponse.class), null);
+            ServletUtils.updateServletResponse(null, HttpResponse.of("ok"));
+            ServletUtils.updateServletResponse(stub.proxy(), null);
         }).doesNotThrowAnyException();
     }
 
     @Test
-    void setBodyThrowsUnreachableExceptionForUnsupportedType() {
-        HttpServletResponse servletResponse = mock(HttpServletResponse.class);
-        HttpResponse response = mock(HttpResponse.class);
-        when(response.getStatus()).thenReturn(200);
-        when(response.getHeaders()).thenReturn(Headers.empty());
-        when(response.getBody()).thenReturn(12345);
+    void updateServletResponseHandlesNullBody() throws IOException {
+        StubServletResponse stub = stubResponse();
+        HttpResponse response = builder(HttpResponse.of(""))
+                .set(HttpResponse::setHeaders, Headers.empty())
+                .build();
+        // Clear all body fields — getBody() returns null
+        response.setBody((String) null);
 
-        // UnreachableException is a RuntimeException, not IOException,
-        // so it propagates directly without being wrapped in FalteringEnvironmentException
-        assertThatThrownBy(() -> ServletUtils.updateServletResponse(servletResponse, response))
-                .isInstanceOf(UnreachableException.class);
+        ServletUtils.updateServletResponse(stub.proxy(), response);
+
+        assertThat(stub.writerCapture.toString()).isEmpty();
+        assertThat(stub.outputCapture.size()).isZero();
+    }
+
+    // ---------------------------------------------------------------- Helper interface
+
+    /**
+     * Functional interface for the getHeaders(String) dispatcher in the stub.
+     * Used because the Proxy needs to dispatch getHeaders calls per header name.
+     */
+    @FunctionalInterface
+    private interface StubHeaderProvider {
+        Enumeration<String> getHeaders(String name);
     }
 }

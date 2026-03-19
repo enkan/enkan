@@ -8,8 +8,9 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 class EntityManagerInjectorTest {
     private EntityManagerInjector injector;
@@ -33,7 +34,10 @@ class EntityManagerInjectorTest {
     @Test
     void getInjectObjectReturnsEntityManagerFromEntityManageableRequest() {
         HttpRequest request = MixinUtils.mixin(new DefaultHttpRequest(), EntityManageable.class);
-        EntityManager em = mock(EntityManager.class);
+        EntityManager em = (EntityManager) Proxy.newProxyInstance(
+                EntityManager.class.getClassLoader(),
+                new Class<?>[]{ EntityManager.class },
+                (proxy, method, args) -> null);
         ((EntityManageable) request).setEntityManager(em);
 
         assertThat(injector.getInjectObject(request)).isSameAs(em);
