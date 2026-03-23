@@ -1,8 +1,10 @@
 package enkan.config;
 
+import enkan.component.SystemComponent;
 import enkan.exception.UnreachableException;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,7 +12,9 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A reloadable classloader.
@@ -19,6 +23,7 @@ import java.util.List;
  */
 public class ConfigurationLoader extends ClassLoader {
     private final List<File> dirs;
+    private final Map<String, Boolean> systemComponentCache = new HashMap<>();
 
     public ConfigurationLoader(ClassLoader parent) {
         super(parent);
@@ -96,6 +101,98 @@ public class ConfigurationLoader extends ClassLoader {
         }
     }
 
+    /**
+     * Checks whether the given class is a {@link SystemComponent} subclass
+     * by walking the superclass chain via bytecode inspection. When a
+     * superclass is also in a reload-target directory, its bytecode is
+     * read directly instead of loading it into the parent classloader.
+     */
+    private boolean isSystemComponentSubclass(String name) {
+        Boolean cached = systemComponentCache.get(name);
+        if (cached != null) return cached;
+        boolean result = checkSystemComponentSubclass(name);
+        systemComponentCache.put(name, result);
+        return result;
+    }
+
+    private boolean checkSystemComponentSubclass(String name) {
+        String current = name;
+        while (current != null && !"java.lang.Object".equals(current)) {
+            if (SystemComponent.class.getName().equals(current)) {
+                return true;
+            }
+            // If the superclass is also a reload target, read its bytecode
+            // directly to avoid loading it into the parent classloader.
+            if (isTarget(current) && !current.equals(name)) {
+                current = readSuperClassName(current);
+                continue;
+            }
+            // Non-target superclass: safe to load via parent
+            if (!current.equals(name)) {
+                try {
+                    Class<?> superClass = getParent().loadClass(current);
+                    return SystemComponent.class.isAssignableFrom(superClass);
+                } catch (ClassNotFoundException e) {
+                    return false;
+                }
+            }
+            current = readSuperClassName(current);
+        }
+        return false;
+    }
+
+    /**
+     * Extracts the superclass name from a class file's constant pool
+     * without defining the class. Returns {@code null} if the bytecode
+     * cannot be read.
+     */
+    private String readSuperClassName(String name) {
+        String resource = name.replace('.', '/') + ".class";
+        try (InputStream raw = getResourceAsStream(resource);
+             DataInputStream in = raw != null ? new DataInputStream(raw) : null) {
+            if (in == null) return null;
+
+            int magic = in.readInt();
+            if (magic != 0xCAFEBABE) return null;
+            in.readUnsignedShort(); // minor version
+            in.readUnsignedShort(); // major version
+
+            // Read constant pool
+            int cpCount = in.readUnsignedShort();
+            Object[] cp = new Object[cpCount];
+            for (int i = 1; i < cpCount; i++) {
+                int tag = in.readUnsignedByte();
+                switch (tag) {
+                    case 1 -> cp[i] = in.readUTF(); // CONSTANT_Utf8
+                    case 7 -> cp[i] = in.readUnsignedShort(); // CONSTANT_Class → name index
+                    case 3, 4 -> in.readInt(); // CONSTANT_Integer, Float
+                    case 5, 6 -> { in.readLong(); i++; } // CONSTANT_Long, Double (2 slots)
+                    case 8 -> in.readUnsignedShort(); // CONSTANT_String
+                    case 9, 10, 11, 12 -> { in.readUnsignedShort(); in.readUnsignedShort(); }
+                    case 15 -> { in.readUnsignedByte(); in.readUnsignedShort(); } // MethodHandle
+                    case 16 -> in.readUnsignedShort(); // MethodType
+                    case 17, 18 -> { in.readUnsignedShort(); in.readUnsignedShort(); } // Dynamic, InvokeDynamic
+                    case 19, 20 -> in.readUnsignedShort(); // Module, Package
+                    default -> { return null; }
+                }
+            }
+
+            in.readUnsignedShort(); // access flags
+            in.readUnsignedShort(); // this_class
+            int superClassIndex = in.readUnsignedShort();
+            if (superClassIndex == 0) return null;
+
+            // Resolve: CONSTANT_Class → name_index → Utf8
+            if (cp[superClassIndex] instanceof Integer nameIndex
+                    && cp[nameIndex] instanceof String internalName) {
+                return internalName.replace('/', '.');
+            }
+            return null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     private Class<?> defineClass(String name, boolean resolve) {
         try (InputStream in = getResourceAsStream(name.replaceAll("\\.", "/") + ".class");
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
@@ -123,6 +220,15 @@ public class ConfigurationLoader extends ClassLoader {
             if (isTarget(name)) {
                 Class<?> c = findLoadedClass(name);
                 if (c != null) return c;
+
+                // SystemComponent subclasses must not be redefined — their instances
+                // are created by the parent classloader in EnkanSystem.of(), so
+                // redefining them here would cause classloader mismatch on injection.
+                // Use bytecode inspection to avoid loading the class into the parent,
+                // which would prevent hot-reload of non-component classes.
+                if (isSystemComponentSubclass(name)) {
+                    return super.loadClass(name, resolve);
+                }
                 c = defineClass(name, resolve);
                 if (c != null) return c;
             }

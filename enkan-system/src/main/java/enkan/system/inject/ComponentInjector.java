@@ -56,10 +56,17 @@ public class ComponentInjector {
             String name = named.value();
             SystemComponent<?> component = components.get(name);
             if (component != null) {
-                setValueToField(target, f, component);
+                if (isTypeAssignable(f.getType(), component.getClass())) {
+                    setValueToField(target, f, component);
+                } else {
+                    // Check if this is a classloader mismatch before reporting type error
+                    checkClassloaderMismatch(f.getType(), component.getClass());
+                    throw new MisconfigurationException("core.INJECT_WRONG_TYPE_COMPONENT",
+                            name, f.getType());
+                }
             } else {
                 Optional<String> correctName = components.entrySet().stream()
-                        .filter(c -> f.getType().isAssignableFrom(c.getValue().getClass()))
+                        .filter(c -> isTypeAssignable(f.getType(), c.getValue().getClass()))
                         .map(Map.Entry::getKey)
                         .min(Comparator.comparing(n -> levenshteinDistance(n, name)));
                 if (correctName.isPresent()) {
@@ -69,10 +76,15 @@ public class ComponentInjector {
                 }
             }
         } else {
-            components.values().stream()
-                    .filter(component -> f.getType().isAssignableFrom(component.getClass()))
-                    .findFirst()
-                    .ifPresent(c -> setValueToField(target, f, c));
+            Optional<SystemComponent<?>> match = components.values().stream()
+                    .filter(component -> isTypeAssignable(f.getType(), component.getClass()))
+                    .findFirst();
+            if (match.isPresent()) {
+                setValueToField(target, f, match.get());
+            } else {
+                // No assignable component — check if a classloader mismatch is the cause
+                components.values().forEach(c -> checkClassloaderMismatch(f.getType(), c.getClass()));
+            }
         }
     }
 
@@ -182,18 +194,24 @@ public class ComponentInjector {
                                 type.getName(), constructor.getDeclaringClass().getName());
                     }
                 }
-                if (!type.isAssignableFrom(component.getClass())) {
+                if (!isTypeAssignable(type, component.getClass())) {
+                    checkClassloaderMismatch(type, component.getClass());
                     throw new MisconfigurationException("core.INJECT_WRONG_TYPE_COMPONENT",
                             named.value(), type);
                 }
                 args[i] = component;
             } else {
-                args[i] = components.values().stream()
-                        .filter(component -> type.isAssignableFrom(component.getClass()))
-                        .findFirst()
-                        .orElseThrow(() -> new MisconfigurationException(
-                                "core.INJECT_MISSING_COMPONENT", type.getName(),
-                                constructor.getDeclaringClass().getName()));
+                Optional<SystemComponent<?>> match = components.values().stream()
+                        .filter(component -> isTypeAssignable(type, component.getClass()))
+                        .findFirst();
+                if (match.isPresent()) {
+                    args[i] = match.get();
+                } else {
+                    components.values().forEach(c -> checkClassloaderMismatch(type, c.getClass()));
+                    throw new MisconfigurationException(
+                            "core.INJECT_MISSING_COMPONENT", type.getName(),
+                            constructor.getDeclaringClass().getName());
+                }
             }
         }
         return args;
@@ -201,8 +219,47 @@ public class ComponentInjector {
 
     private Optional<String> suggestName(Class<?> type, String wrongName) {
         return components.entrySet().stream()
-                .filter(c -> type.isAssignableFrom(c.getValue().getClass()))
+                .filter(c -> isTypeAssignable(type, c.getValue().getClass()))
                 .map(Map.Entry::getKey)
                 .min(Comparator.comparing(n -> levenshteinDistance(n, wrongName)));
+    }
+
+    /**
+     * Pure assignability check — safe for use in stream filter predicates.
+     * Returns {@code true} only when the JVM considers the types compatible.
+     */
+    private boolean isTypeAssignable(Class<?> targetType, Class<?> componentClass) {
+        return targetType.isAssignableFrom(componentClass);
+    }
+
+    /**
+     * Checks whether a classloader mismatch exists between the target type
+     * and the component class (same FQCN somewhere in the hierarchy but
+     * loaded by different classloaders). Throws {@link MisconfigurationException}
+     * if a mismatch is detected.
+     */
+    private void checkClassloaderMismatch(Class<?> targetType, Class<?> componentClass) {
+        Class<?> match = findTypeInHierarchy(componentClass, targetType.getName());
+        if (match != null && match.getClassLoader() != targetType.getClassLoader()) {
+            throw new MisconfigurationException(
+                    "core.INJECT_CLASSLOADER_MISMATCH",
+                    targetType.getName(),
+                    String.valueOf(targetType.getClassLoader()),
+                    String.valueOf(match.getClassLoader()));
+        }
+    }
+
+    private Class<?> findTypeInHierarchy(Class<?> type, String fqcn) {
+        if (type == null || type == Object.class) {
+            return null;
+        }
+        if (type.getName().equals(fqcn)) {
+            return type;
+        }
+        for (Class<?> iface : type.getInterfaces()) {
+            Class<?> found = findTypeInHierarchy(iface, fqcn);
+            if (found != null) return found;
+        }
+        return findTypeInHierarchy(type.getSuperclass(), fqcn);
     }
 }

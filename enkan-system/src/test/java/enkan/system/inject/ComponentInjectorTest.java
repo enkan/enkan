@@ -8,6 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -197,6 +201,124 @@ public class ComponentInjectorTest {
         MultipleInjectConstructorTarget(TestComponent tc, String dummy) {
             this.tc = tc;
         }
+    }
+
+    @Test
+    public void fieldInjectionAcrossClassloaderBoundary() throws Exception {
+        // Simulate a configuration where the injection target class is loaded
+        // by a child classloader, while the component class and its supertypes
+        // remain loaded by the parent classloader. This verifies that
+        // ComponentInjector can still inject a parent-loaded component into a
+        // target instance whose class is loaded by a different classloader.
+        ClassLoader parentCl = getClass().getClassLoader();
+        // Only redefine CrossLoaderTarget — TestComponent stays in parent
+        ClassLoader childCl = new RedefiningClassLoader(parentCl,
+                CrossLoaderTarget.class.getName());
+
+        TestComponent component = new TestComponent("cross-cl");
+        componentMap.put("comp", component);
+
+        Class<?> targetClass = childCl.loadClass(CrossLoaderTarget.class.getName());
+        // The field type SystemComponent is NOT redefined, so it comes from parent.
+        // But the declaring class is from the child loader.
+        assertThat(targetClass.getClassLoader())
+                .as("target class should be loaded by child classloader")
+                .isSameAs(childCl);
+
+        ComponentInjector injector = new ComponentInjector(componentMap);
+        var ctor = targetClass.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        Object target = ctor.newInstance();
+        injector.inject(target);
+
+        Field field = targetClass.getDeclaredField("component");
+        field.setAccessible(true);
+        assertThat(field.get(target))
+                .as("component should be injected across classloader boundary")
+                .isSameAs(component);
+    }
+
+    @Test
+    public void classloaderMismatchThrowsMisconfigurationException() throws Exception {
+        // When a field type and a component class share the same FQCN but are
+        // loaded by different classloaders, injection must fail with a clear
+        // MisconfigurationException rather than silently skipping or producing
+        // a runtime IllegalArgumentException from Field.set.
+        ClassLoader parentCl = getClass().getClassLoader();
+        ClassLoader childCl = new RedefiningClassLoader(parentCl,
+                TestComponent.class.getName(),
+                InjectTarget1.class.getName());
+
+        TestComponent component = new TestComponent("cross-cl");
+        componentMap.put("comp", component);
+
+        Class<?> targetClass = childCl.loadClass(InjectTarget1.class.getName());
+        Field field = targetClass.getDeclaredField("tc");
+        // Verify the classloader mismatch setup
+        assertThat(field.getType().getClassLoader()).isSameAs(childCl);
+        assertThat(field.getType()).isNotEqualTo(TestComponent.class);
+
+        ComponentInjector injector = new ComponentInjector(componentMap);
+        var ctor = targetClass.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        Object target = ctor.newInstance();
+
+        assertThatThrownBy(() -> injector.inject(target))
+                .isInstanceOf(MisconfigurationException.class)
+                .hasMessageContaining("CLASSLOADER_MISMATCH");
+    }
+
+    /**
+     * A classloader that redefines specified classes from bytecode,
+     * simulating what ConfigurationLoader does during hot-reload.
+     */
+    private static class RedefiningClassLoader extends ClassLoader {
+        private final String[] targetNames;
+
+        RedefiningClassLoader(ClassLoader parent, String... targetNames) {
+            super(parent);
+            this.targetNames = targetNames;
+        }
+
+        private boolean isTarget(String name) {
+            for (String t : targetNames) {
+                if (name.equals(t)) return true;
+            }
+            return false;
+        }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            synchronized (getClassLoadingLock(name)) {
+                if (isTarget(name)) {
+                    Class<?> c = findLoadedClass(name);
+                    if (c != null) return c;
+                    String path = name.replace('.', '/') + ".class";
+                    try (InputStream in = getParent().getResourceAsStream(path)) {
+                        if (in == null) throw new ClassNotFoundException(name);
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[1024];
+                        int len;
+                        while ((len = in.read(buf)) != -1) baos.write(buf, 0, len);
+                        byte[] bytes = baos.toByteArray();
+                        c = defineClass(name, bytes, 0, bytes.length);
+                        if (resolve) resolveClass(c);
+                        return c;
+                    } catch (IOException e) {
+                        throw new ClassNotFoundException(name, e);
+                    }
+                }
+                return super.loadClass(name, resolve);
+            }
+        }
+    }
+
+    @SuppressWarnings("unused") // instantiated via reflection in test
+    public static class CrossLoaderTarget {
+        @Inject
+        SystemComponent<?> component;
+
+        public CrossLoaderTarget() {}
     }
 
     private static class TestComponent extends SystemComponent<TestComponent> {
