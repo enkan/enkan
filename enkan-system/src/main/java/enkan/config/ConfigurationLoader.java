@@ -12,7 +12,9 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A reloadable classloader.
@@ -21,6 +23,7 @@ import java.util.List;
  */
 public class ConfigurationLoader extends ClassLoader {
     private final List<File> dirs;
+    private final Map<String, Boolean> systemComponentCache = new HashMap<>();
 
     public ConfigurationLoader(ClassLoader parent) {
         super(parent);
@@ -105,6 +108,14 @@ public class ConfigurationLoader extends ClassLoader {
      * read directly instead of loading it into the parent classloader.
      */
     private boolean isSystemComponentSubclass(String name) {
+        Boolean cached = systemComponentCache.get(name);
+        if (cached != null) return cached;
+        boolean result = checkSystemComponentSubclass(name);
+        systemComponentCache.put(name, result);
+        return result;
+    }
+
+    private boolean checkSystemComponentSubclass(String name) {
         String current = name;
         while (current != null && !"java.lang.Object".equals(current)) {
             if (SystemComponent.class.getName().equals(current)) {
@@ -207,6 +218,9 @@ public class ConfigurationLoader extends ClassLoader {
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         synchronized (getClassLoadingLock(name)) {
             if (isTarget(name)) {
+                Class<?> c = findLoadedClass(name);
+                if (c != null) return c;
+
                 // SystemComponent subclasses must not be redefined — their instances
                 // are created by the parent classloader in EnkanSystem.of(), so
                 // redefining them here would cause classloader mismatch on injection.
@@ -215,9 +229,6 @@ public class ConfigurationLoader extends ClassLoader {
                 if (isSystemComponentSubclass(name)) {
                     return super.loadClass(name, resolve);
                 }
-
-                Class<?> c = findLoadedClass(name);
-                if (c != null) return c;
                 c = defineClass(name, resolve);
                 if (c != null) return c;
             }
