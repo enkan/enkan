@@ -118,14 +118,15 @@ public class ConfigurationLoaderTest {
 
         // Create a URLClassLoader that includes both the temp dir and the normal classpath
         URL[] urls = new URL[]{classesDir.toFile().toURI().toURL()};
-        URLClassLoader parent = new URLClassLoader(urls, getClass().getClassLoader());
-        ConfigurationLoader loader = new ConfigurationLoader(parent);
+        try (URLClassLoader parent = new URLClassLoader(urls, getClass().getClassLoader())) {
+            ConfigurationLoader loader = new ConfigurationLoader(parent);
 
-        // DummyComponent exists in a reload-target directory, but since it
-        // extends SystemComponent, ConfigurationLoader should delegate to parent
-        Class<?> loaded = loader.loadClass(className);
-        assertSame(loaded.getClassLoader(), getClass().getClassLoader(),
-                "SystemComponent subclass should be loaded by parent, not redefined");
+            // DummyComponent exists in a reload-target directory, but since it
+            // extends SystemComponent, ConfigurationLoader should delegate to parent
+            Class<?> loaded = loader.loadClass(className);
+            assertSame(loaded.getClassLoader(), getClass().getClassLoader(),
+                    "SystemComponent subclass should be loaded by parent, not redefined");
+        }
     }
 
     public static class DummyComponent extends SystemComponent<DummyComponent> {

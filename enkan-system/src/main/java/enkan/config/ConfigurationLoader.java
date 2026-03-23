@@ -99,28 +99,33 @@ public class ConfigurationLoader extends ClassLoader {
     }
 
     /**
-     * Reads the bytecode for the given class and checks whether it is a
-     * {@link SystemComponent} subclass by walking the superclass chain
-     * via the parent classloader. This avoids loading the class itself
-     * into the parent, which would prevent hot-reload.
+     * Checks whether the given class is a {@link SystemComponent} subclass
+     * by walking the superclass chain via bytecode inspection. When a
+     * superclass is also in a reload-target directory, its bytecode is
+     * read directly instead of loading it into the parent classloader.
      */
     private boolean isSystemComponentSubclass(String name) {
-        String superName = readSuperClassName(name);
-        while (superName != null && !"java.lang.Object".equals(superName)) {
-            if (SystemComponent.class.getName().equals(superName)) {
+        String current = name;
+        while (current != null && !"java.lang.Object".equals(current)) {
+            if (SystemComponent.class.getName().equals(current)) {
                 return true;
             }
-            try {
-                // Walk the chain via parent — superclasses of components
-                // (SystemComponent itself, etc.) are in JARs, not reloadable.
-                Class<?> superClass = getParent().loadClass(superName);
-                if (SystemComponent.class.isAssignableFrom(superClass)) {
-                    return true;
-                }
-                return false;
-            } catch (ClassNotFoundException e) {
-                return false;
+            // If the superclass is also a reload target, read its bytecode
+            // directly to avoid loading it into the parent classloader.
+            if (isTarget(current) && !current.equals(name)) {
+                current = readSuperClassName(current);
+                continue;
             }
+            // Non-target superclass: safe to load via parent
+            if (!current.equals(name)) {
+                try {
+                    Class<?> superClass = getParent().loadClass(current);
+                    return SystemComponent.class.isAssignableFrom(superClass);
+                } catch (ClassNotFoundException e) {
+                    return false;
+                }
+            }
+            current = readSuperClassName(current);
         }
         return false;
     }
