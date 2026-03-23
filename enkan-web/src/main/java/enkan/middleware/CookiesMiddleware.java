@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static enkan.util.CodecUtils.*;
 import static enkan.util.ParsingUtils.*;
 
 /**
@@ -56,7 +55,7 @@ public class CookiesMiddleware implements WebMiddleware {
         Map<String, Cookie> cookies = new HashMap<>();
         Matcher m = RE_COOKIE.matcher(cookieHeader);
         while (m.find()) {
-            Cookie cookie = Cookie.create(m.group(1), formDecodeStr(stripQuotes(m.group(2))));
+            Cookie cookie = Cookie.create(m.group(1), stripQuotes(m.group(2)));
             cookies.put(m.group(1), cookie);
         }
         return cookies;

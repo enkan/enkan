@@ -4,8 +4,7 @@ import enkan.util.HttpDateFormat;
 
 import java.io.Serializable;
 import java.util.Date;
-
-import static enkan.util.CodecUtils.formEncode;
+import java.util.regex.Pattern;
 
 /**
  * Represents an HTTP cookie (RFC 6265).
@@ -18,6 +17,9 @@ import static enkan.util.CodecUtils.formEncode;
  */
 public class Cookie implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    // RFC 7230 §3.2.6 token = 1*tchar
+    private static final Pattern RE_TOKEN = Pattern.compile("[!#$%&'\\*\\-+\\.0-9A-Z\\^_`a-z\\|~]+");
 
     private String name;
     private String value;
@@ -37,6 +39,9 @@ public class Cookie implements Serializable {
      * @return a new cookie instance
      */
     public static Cookie create(String name, String value) {
+        if (name == null || !RE_TOKEN.matcher(name).matches()) {
+            throw new IllegalArgumentException("Invalid cookie name: " + name);
+        }
         Cookie cookie = new Cookie();
         cookie.setName(name);
         cookie.setValue(value);
@@ -122,27 +127,27 @@ public class Cookie implements Serializable {
      */
     public String toHttpString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(formEncode(getName())).append("=").append(formEncode(getValue()));
+        sb.append(getName()).append("=").append(getValue());
         if (getDomain() != null) {
-            sb.append(";domain=").append(getDomain());
+            sb.append("; domain=").append(getDomain());
         }
         if (getPath() != null) {
-            sb.append(";path=").append(getPath());
+            sb.append("; path=").append(getPath());
         }
         if (getExpires() != null) {
-            sb.append(";expires=").append(HttpDateFormat.RFC1123.format(getExpires()));
+            sb.append("; expires=").append(HttpDateFormat.RFC1123.format(getExpires()));
         }
         if (getMaxAge() != null) {
-            sb.append(";max-age=").append(getMaxAge());
+            sb.append("; max-age=").append(getMaxAge());
         }
         if (isHttpOnly()) {
-            sb.append(";httponly");
+            sb.append("; httponly");
         }
         if (isSecure()) {
-            sb.append(";secure");
+            sb.append("; secure");
         }
         if (getSameSite() != null) {
-            sb.append(";samesite=").append(getSameSite());
+            sb.append("; samesite=").append(getSameSite());
         }
         return sb.toString();
     }

@@ -52,7 +52,7 @@ class CookiesMiddlewareTest {
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
                 (Endpoint<HttpRequest, HttpResponse>) req -> {
                     assertThat(some(req.getCookies().get("A"), Cookie::getValue).orElseThrow(AssertionError::new))
-                            .isEqualTo("あいう");
+                            .isEqualTo("hello");
                     assertThat(some(req.getCookies().get("B"), Cookie::getValue).orElseThrow(AssertionError::new))
                             .isEqualTo("1");
 
@@ -60,7 +60,7 @@ class CookiesMiddlewareTest {
                             .set(HttpResponse::setHeaders, Headers.of("Content-Type", "text/html"))
                             .build();
                 });
-        request.getHeaders().put("Cookie", "A=%E3%81%82%E3%81%84%E3%81%86; B=1");
+        request.getHeaders().put("Cookie", "A=hello; B=1");
         middleware.handle(request, chain);
     }
 
