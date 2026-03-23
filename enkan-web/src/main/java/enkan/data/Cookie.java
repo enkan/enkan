@@ -21,6 +21,10 @@ public class Cookie implements Serializable {
     // RFC 7230 §3.2.6 token = 1*tchar
     private static final Pattern RE_TOKEN = Pattern.compile("[!#$%&'\\*\\-+\\.0-9A-Z\\^_`a-z\\|~]+");
 
+    // RFC 6265 §4.1.1 cookie-value = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+    // cookie-octet = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+    private static final Pattern RE_COOKIE_VALUE = Pattern.compile("[\\x21\\x23-\\x2B\\x2D-\\x3A\\x3C-\\x5B\\x5D-\\x7E]*");
+
     private String name;
     private String value;
     private String domain;
@@ -41,6 +45,9 @@ public class Cookie implements Serializable {
     public static Cookie create(String name, String value) {
         if (name == null || !RE_TOKEN.matcher(name).matches()) {
             throw new IllegalArgumentException("Invalid cookie name: " + name);
+        }
+        if (value != null && !RE_COOKIE_VALUE.matcher(value).matches()) {
+            throw new IllegalArgumentException("Invalid cookie value: " + value);
         }
         Cookie cookie = new Cookie();
         cookie.setName(name);
@@ -127,7 +134,8 @@ public class Cookie implements Serializable {
      */
     public String toHttpString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(getName()).append("=").append(getValue());
+        String value = getValue();
+        sb.append(getName()).append("=").append(value != null ? value : "");
         if (getDomain() != null) {
             sb.append("; domain=").append(getDomain());
         }

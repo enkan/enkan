@@ -114,4 +114,34 @@ class CookieTest {
         assertThatThrownBy(() -> Cookie.create("a b", "v"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void createAllowsNullValue() {
+        Cookie cookie = Cookie.create("foo", null);
+        assertThat(cookie.toHttpString()).isEqualTo("foo=");
+    }
+
+    @Test
+    void createRejectsValueWithCrLf() {
+        assertThatThrownBy(() -> Cookie.create("foo", "bar\r\nbaz"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void createRejectsValueWithSemicolon() {
+        assertThatThrownBy(() -> Cookie.create("foo", "bar;baz"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void createRejectsValueWithBackslash() {
+        assertThatThrownBy(() -> Cookie.create("foo", "bar\\baz"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void createRejectsValueWithDoubleQuote() {
+        assertThatThrownBy(() -> Cookie.create("foo", "bar\"baz"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }
