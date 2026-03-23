@@ -59,7 +59,7 @@ public class ComponentInjector {
                 setValueToField(target, f, component);
             } else {
                 Optional<String> correctName = components.entrySet().stream()
-                        .filter(c -> f.getType().isAssignableFrom(c.getValue().getClass()))
+                        .filter(c -> isCompatibleType(f.getType(), c.getValue().getClass()))
                         .map(Map.Entry::getKey)
                         .min(Comparator.comparing(n -> levenshteinDistance(n, name)));
                 if (correctName.isPresent()) {
@@ -70,7 +70,7 @@ public class ComponentInjector {
             }
         } else {
             components.values().stream()
-                    .filter(component -> f.getType().isAssignableFrom(component.getClass()))
+                    .filter(component -> isCompatibleType(f.getType(), component.getClass()))
                     .findFirst()
                     .ifPresent(c -> setValueToField(target, f, c));
         }
@@ -182,14 +182,14 @@ public class ComponentInjector {
                                 type.getName(), constructor.getDeclaringClass().getName());
                     }
                 }
-                if (!type.isAssignableFrom(component.getClass())) {
+                if (!isCompatibleType(type, component.getClass())) {
                     throw new MisconfigurationException("core.INJECT_WRONG_TYPE_COMPONENT",
                             named.value(), type);
                 }
                 args[i] = component;
             } else {
                 args[i] = components.values().stream()
-                        .filter(component -> type.isAssignableFrom(component.getClass()))
+                        .filter(component -> isCompatibleType(type, component.getClass()))
                         .findFirst()
                         .orElseThrow(() -> new MisconfigurationException(
                                 "core.INJECT_MISSING_COMPONENT", type.getName(),
@@ -201,8 +201,30 @@ public class ComponentInjector {
 
     private Optional<String> suggestName(Class<?> type, String wrongName) {
         return components.entrySet().stream()
-                .filter(c -> type.isAssignableFrom(c.getValue().getClass()))
+                .filter(c -> isCompatibleType(type, c.getValue().getClass()))
                 .map(Map.Entry::getKey)
                 .min(Comparator.comparing(n -> levenshteinDistance(n, wrongName)));
+    }
+
+    /**
+     * Classloader-safe assignability check. Falls back to FQCN comparison
+     * when {@code isAssignableFrom} fails due to classloader boundary (e.g.
+     * {@link enkan.config.ConfigurationLoader} reloading application classes).
+     */
+    private boolean isCompatibleType(Class<?> targetType, Class<?> componentClass) {
+        if (targetType.isAssignableFrom(componentClass)) {
+            return true;
+        }
+        return isAssignableByName(targetType.getName(), componentClass);
+    }
+
+    private boolean isAssignableByName(String targetName, Class<?> clazz) {
+        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
+            if (c.getName().equals(targetName)) return true;
+            for (Class<?> iface : c.getInterfaces()) {
+                if (isAssignableByName(targetName, iface)) return true;
+            }
+        }
+        return false;
     }
 }
