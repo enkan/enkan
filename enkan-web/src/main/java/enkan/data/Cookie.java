@@ -1,6 +1,7 @@
 package enkan.data;
 
 import enkan.util.HttpDateFormat;
+import enkan.util.ParsingUtils;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -18,8 +19,7 @@ import java.util.regex.Pattern;
 public class Cookie implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    // RFC 7230 §3.2.6 token = 1*tchar
-    private static final Pattern RE_TOKEN = Pattern.compile("[!#$%&'\\*\\-+\\.0-9A-Z\\^_`a-z\\|~]+");
+    private static final Pattern RE_TOKEN = Pattern.compile(ParsingUtils.RE_TOKEN);
 
     // RFC 6265 §4.1.1 defines:
     //   cookie-value = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
@@ -45,7 +45,11 @@ public class Cookie implements Serializable {
      * @param value the cookie value
      * @return a new cookie instance
      */
-    private Cookie() {
+    /**
+     * @deprecated Use {@link #create(String, String)} instead.
+     */
+    @Deprecated
+    public Cookie() {
     }
 
     public static Cookie create(String name, String value) {
@@ -61,7 +65,7 @@ public class Cookie implements Serializable {
 
     public void setName(String name) {
         if (name == null || !RE_TOKEN.matcher(name).matches()) {
-            throw new IllegalArgumentException("Invalid cookie name: " + name);
+            throw new IllegalArgumentException("Invalid cookie name");
         }
         this.name = name;
     }
@@ -72,7 +76,7 @@ public class Cookie implements Serializable {
 
     public void setValue(String value) {
         if (value != null && !RE_COOKIE_VALUE.matcher(value).matches()) {
-            throw new IllegalArgumentException("Invalid cookie value: " + value);
+            throw new IllegalArgumentException("Invalid cookie value");
         }
         this.value = value;
     }
