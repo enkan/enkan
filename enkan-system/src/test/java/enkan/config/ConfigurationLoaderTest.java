@@ -1,9 +1,13 @@
 package enkan.config;
 
+import enkan.component.ComponentLifecycle;
+import enkan.component.SystemComponent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -93,6 +97,45 @@ public class ConfigurationLoaderTest {
             assertEquals("enkan.config.ConfigurationLoader", loadedClass.getName());
         } catch (ClassNotFoundException e) {
             fail("Should be able to load existing class: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void systemComponentSubclassIsNotRedefined() throws Exception {
+        // Create a temp directory with reload.xml and a copy of DummyComponent.class
+        Path classesDir = tempDir.resolve("classes");
+        Files.createDirectories(classesDir.resolve("META-INF"));
+        Files.writeString(classesDir.resolve("META-INF/reload.xml"), "<reload/>");
+
+        // Copy DummyComponent bytecode into the temp classes directory
+        String className = DummyComponent.class.getName();
+        String classResource = className.replace('.', '/') + ".class";
+        Path targetDir = classesDir.resolve(classResource).getParent();
+        Files.createDirectories(targetDir);
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream(classResource)) {
+            assertNotNull(in, "DummyComponent.class should be on classpath");
+            Files.copy(in, classesDir.resolve(classResource));
+        }
+
+        // Create a URLClassLoader that includes both the temp dir and the normal classpath
+        URL[] urls = new URL[]{classesDir.toFile().toURI().toURL()};
+        URLClassLoader parent = new URLClassLoader(urls, getClass().getClassLoader());
+        ConfigurationLoader loader = new ConfigurationLoader(parent);
+
+        // DummyComponent exists in a reload-target directory, but since it
+        // extends SystemComponent, ConfigurationLoader should delegate to parent
+        Class<?> loaded = loader.loadClass(className);
+        assertSame(loaded.getClassLoader(), getClass().getClassLoader(),
+                "SystemComponent subclass should be loaded by parent, not redefined");
+    }
+
+    public static class DummyComponent extends SystemComponent<DummyComponent> {
+        @Override
+        protected ComponentLifecycle<DummyComponent> lifecycle() {
+            return new ComponentLifecycle<>() {
+                @Override public void start(DummyComponent c) {}
+                @Override public void stop(DummyComponent c) {}
+            };
         }
     }
 }

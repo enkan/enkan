@@ -1,5 +1,6 @@
 package enkan.config;
 
+import enkan.component.SystemComponent;
 import enkan.exception.UnreachableException;
 
 import java.io.ByteArrayOutputStream;
@@ -121,6 +122,14 @@ public class ConfigurationLoader extends ClassLoader {
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         synchronized (getClassLoadingLock(name)) {
             if (isTarget(name)) {
+                // SystemComponent subclasses must not be redefined — their instances
+                // are created by the parent classloader in EnkanSystem.of(), so
+                // redefining them here would cause classloader mismatch on injection.
+                Class<?> parentClass = super.loadClass(name, resolve);
+                if (SystemComponent.class.isAssignableFrom(parentClass)) {
+                    return parentClass;
+                }
+
                 Class<?> c = findLoadedClass(name);
                 if (c != null) return c;
                 c = defineClass(name, resolve);
