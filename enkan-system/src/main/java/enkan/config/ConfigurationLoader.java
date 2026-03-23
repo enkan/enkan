@@ -4,6 +4,7 @@ import enkan.component.SystemComponent;
 import enkan.exception.UnreachableException;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -97,6 +98,85 @@ public class ConfigurationLoader extends ClassLoader {
         }
     }
 
+    /**
+     * Reads the bytecode for the given class and checks whether it is a
+     * {@link SystemComponent} subclass by walking the superclass chain
+     * via the parent classloader. This avoids loading the class itself
+     * into the parent, which would prevent hot-reload.
+     */
+    private boolean isSystemComponentSubclass(String name) {
+        String superName = readSuperClassName(name);
+        while (superName != null && !"java.lang.Object".equals(superName)) {
+            if (SystemComponent.class.getName().equals(superName)) {
+                return true;
+            }
+            try {
+                // Walk the chain via parent — superclasses of components
+                // (SystemComponent itself, etc.) are in JARs, not reloadable.
+                Class<?> superClass = getParent().loadClass(superName);
+                if (SystemComponent.class.isAssignableFrom(superClass)) {
+                    return true;
+                }
+                return false;
+            } catch (ClassNotFoundException e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Extracts the superclass name from a class file's constant pool
+     * without defining the class. Returns {@code null} if the bytecode
+     * cannot be read.
+     */
+    private String readSuperClassName(String name) {
+        String resource = name.replace('.', '/') + ".class";
+        try (InputStream raw = getResourceAsStream(resource);
+             DataInputStream in = raw != null ? new DataInputStream(raw) : null) {
+            if (in == null) return null;
+
+            int magic = in.readInt();
+            if (magic != 0xCAFEBABE) return null;
+            in.readUnsignedShort(); // minor version
+            in.readUnsignedShort(); // major version
+
+            // Read constant pool
+            int cpCount = in.readUnsignedShort();
+            Object[] cp = new Object[cpCount];
+            for (int i = 1; i < cpCount; i++) {
+                int tag = in.readUnsignedByte();
+                switch (tag) {
+                    case 1 -> cp[i] = in.readUTF(); // CONSTANT_Utf8
+                    case 7 -> cp[i] = in.readUnsignedShort(); // CONSTANT_Class → name index
+                    case 3, 4 -> in.readInt(); // CONSTANT_Integer, Float
+                    case 5, 6 -> { in.readLong(); i++; } // CONSTANT_Long, Double (2 slots)
+                    case 8 -> in.readUnsignedShort(); // CONSTANT_String
+                    case 9, 10, 11, 12 -> { in.readUnsignedShort(); in.readUnsignedShort(); }
+                    case 15 -> { in.readUnsignedByte(); in.readUnsignedShort(); } // MethodHandle
+                    case 16 -> in.readUnsignedShort(); // MethodType
+                    case 17, 18 -> { in.readUnsignedShort(); in.readUnsignedShort(); } // Dynamic, InvokeDynamic
+                    case 19, 20 -> in.readUnsignedShort(); // Module, Package
+                    default -> { return null; }
+                }
+            }
+
+            in.readUnsignedShort(); // access flags
+            in.readUnsignedShort(); // this_class
+            int superClassIndex = in.readUnsignedShort();
+            if (superClassIndex == 0) return null;
+
+            // Resolve: CONSTANT_Class → name_index → Utf8
+            if (cp[superClassIndex] instanceof Integer nameIndex
+                    && cp[nameIndex] instanceof String internalName) {
+                return internalName.replace('/', '.');
+            }
+            return null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     private Class<?> defineClass(String name, boolean resolve) {
         try (InputStream in = getResourceAsStream(name.replaceAll("\\.", "/") + ".class");
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
@@ -125,9 +205,10 @@ public class ConfigurationLoader extends ClassLoader {
                 // SystemComponent subclasses must not be redefined — their instances
                 // are created by the parent classloader in EnkanSystem.of(), so
                 // redefining them here would cause classloader mismatch on injection.
-                Class<?> parentClass = super.loadClass(name, resolve);
-                if (SystemComponent.class.isAssignableFrom(parentClass)) {
-                    return parentClass;
+                // Use bytecode inspection to avoid loading the class into the parent,
+                // which would prevent hot-reload of non-component classes.
+                if (isSystemComponentSubclass(name)) {
+                    return super.loadClass(name, resolve);
                 }
 
                 Class<?> c = findLoadedClass(name);

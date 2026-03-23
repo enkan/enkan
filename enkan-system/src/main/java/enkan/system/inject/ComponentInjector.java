@@ -56,7 +56,12 @@ public class ComponentInjector {
             String name = named.value();
             SystemComponent<?> component = components.get(name);
             if (component != null) {
-                setValueToField(target, f, component);
+                if (isCompatibleType(f.getType(), component.getClass())) {
+                    setValueToField(target, f, component);
+                } else {
+                    throw new MisconfigurationException("core.INJECT_WRONG_TYPE_COMPONENT",
+                            name, f.getType());
+                }
             } else {
                 Optional<String> correctName = components.entrySet().stream()
                         .filter(c -> isCompatibleType(f.getType(), c.getValue().getClass()))
@@ -210,10 +215,10 @@ public class ComponentInjector {
      * Class compatibility check used for injection.
      * <p>
      * This method only treats types as compatible when the JVM does
-     * ({@link Class#isAssignableFrom(Class)} is {@code true}). If two
-     * classes have the same fully-qualified name but come from different
-     * classloaders, this method throws a {@link MisconfigurationException}
-     * instead of treating them as assignable, to avoid runtime
+     * ({@link Class#isAssignableFrom(Class)} is {@code true}). If the
+     * same fully-qualified name appears in the component's type hierarchy
+     * but from a different classloader, this method throws a
+     * {@link MisconfigurationException} to avoid runtime
      * {@link IllegalArgumentException} from reflective calls.
      */
     private boolean isCompatibleType(Class<?> targetType, Class<?> componentClass) {
@@ -221,15 +226,29 @@ public class ComponentInjector {
             return true;
         }
 
-        if (targetType.getName().equals(componentClass.getName())
-                && targetType.getClassLoader() != componentClass.getClassLoader()) {
+        Class<?> match = findTypeInHierarchy(componentClass, targetType.getName());
+        if (match != null && match.getClassLoader() != targetType.getClassLoader()) {
             throw new MisconfigurationException(
                     "core.INJECT_CLASSLOADER_MISMATCH",
                     targetType.getName(),
                     String.valueOf(targetType.getClassLoader()),
-                    String.valueOf(componentClass.getClassLoader()));
+                    String.valueOf(match.getClassLoader()));
         }
 
         return false;
+    }
+
+    private Class<?> findTypeInHierarchy(Class<?> type, String fqcn) {
+        if (type == null || type == Object.class) {
+            return null;
+        }
+        if (type.getName().equals(fqcn)) {
+            return type;
+        }
+        for (Class<?> iface : type.getInterfaces()) {
+            Class<?> found = findTypeInHierarchy(iface, fqcn);
+            if (found != null) return found;
+        }
+        return findTypeInHierarchy(type.getSuperclass(), fqcn);
     }
 }
