@@ -31,7 +31,8 @@ public class SessionMiddleware implements WebMiddleware {
         store = new MemoryStore();
         cookieName = "enkan-session";
         cookieAttrs = OptionMap.of("httpOnly", true,
-                "path", "/");
+                "path", "/",
+                "sameSite", "Lax");
     }
 
     protected void populateAttrs(Cookie cookie) {
@@ -49,6 +50,10 @@ public class SessionMiddleware implements WebMiddleware {
 
         if (cookieAttrs.containsKey("httpOnly")) {
             cookie.setHttpOnly(cookieAttrs.getBoolean("httpOnly"));
+        }
+
+        if (cookieAttrs.containsKey("sameSite")) {
+            cookie.setSameSite(cookieAttrs.getString("sameSite"));
         }
     }
 

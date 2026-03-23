@@ -98,4 +98,30 @@ class SessionMiddlewareTest {
         assertThat(cookie.getDomain()).isNull();
         assertThat(cookie.isSecure()).isFalse();
     }
+
+    @Test
+    void populateAttrsSetsSameSite() {
+        SessionMiddleware middleware = new SessionMiddleware();
+        middleware.setCookieAttrs(OptionMap.of(
+                "httpOnly", true,
+                "path", "/",
+                "sameSite", "Strict"));
+
+        Cookie cookie = Cookie.create("enkan-session", "value");
+        middleware.populateAttrs(cookie);
+
+        assertThat(cookie.getSameSite()).isEqualTo("Strict");
+    }
+
+    @Test
+    void defaultCookieAttrsIncludeSameSiteLax() {
+        SessionMiddleware middleware = new SessionMiddleware();
+
+        Cookie cookie = Cookie.create("enkan-session", "value");
+        middleware.populateAttrs(cookie);
+
+        assertThat(cookie.getSameSite()).isEqualTo("Lax");
+        assertThat(cookie.isHttpOnly()).isTrue();
+        assertThat(cookie.getPath()).isEqualTo("/");
+    }
 }
