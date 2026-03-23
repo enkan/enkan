@@ -39,19 +39,19 @@ public class Cookie implements Serializable {
     private String sameSite;
 
     /**
-     * Creates a cookie with the given name and value.
-     *
-     * @param name  the cookie name
-     * @param value the cookie value
-     * @return a new cookie instance
-     */
-    /**
      * @deprecated Use {@link #create(String, String)} instead.
      */
     @Deprecated
     public Cookie() {
     }
 
+    /**
+     * Creates a cookie with the given name and value.
+     *
+     * @param name  the cookie name
+     * @param value the cookie value
+     * @return a new cookie instance
+     */
     public static Cookie create(String name, String value) {
         Cookie cookie = new Cookie();
         cookie.setName(name);
