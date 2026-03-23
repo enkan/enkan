@@ -36,12 +36,12 @@ Read more: [Why Enkan?](https://enkan.github.io/guide/why-enkan.html)
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>kotowari</artifactId>
-  <version>0.14.0</version>
+  <version>0.14.1-SNAPSHOT</version>
 </dependency>
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>enkan-component-jetty</artifactId>
-  <version>0.14.0</version>
+  <version>0.14.1-SNAPSHOT</version>
 </dependency>
 ```
 
