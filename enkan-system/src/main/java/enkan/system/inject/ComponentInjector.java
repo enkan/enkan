@@ -207,24 +207,29 @@ public class ComponentInjector {
     }
 
     /**
-     * Classloader-safe assignability check. Falls back to FQCN comparison
-     * when {@code isAssignableFrom} fails due to classloader boundary (e.g.
-     * {@link enkan.config.ConfigurationLoader} reloading application classes).
+     * Class compatibility check used for injection.
+     * <p>
+     * This method only treats types as compatible when the JVM does
+     * ({@link Class#isAssignableFrom(Class)} is {@code true}). If two
+     * classes have the same fully-qualified name but come from different
+     * classloaders, this method throws a {@link MisconfigurationException}
+     * instead of treating them as assignable, to avoid runtime
+     * {@link IllegalArgumentException} from reflective calls.
      */
     private boolean isCompatibleType(Class<?> targetType, Class<?> componentClass) {
         if (targetType.isAssignableFrom(componentClass)) {
             return true;
         }
-        return isAssignableByName(targetType.getName(), componentClass);
-    }
 
-    private boolean isAssignableByName(String targetName, Class<?> clazz) {
-        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            if (c.getName().equals(targetName)) return true;
-            for (Class<?> iface : c.getInterfaces()) {
-                if (isAssignableByName(targetName, iface)) return true;
-            }
+        if (targetType.getName().equals(componentClass.getName())
+                && targetType.getClassLoader() != componentClass.getClassLoader()) {
+            throw new MisconfigurationException(
+                    "core.INJECT_CLASSLOADER_MISMATCH",
+                    targetType.getName(),
+                    String.valueOf(targetType.getClassLoader()),
+                    String.valueOf(componentClass.getClassLoader()));
         }
+
         return false;
     }
 }

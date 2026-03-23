@@ -205,15 +205,11 @@ public class ComponentInjectorTest {
 
     @Test
     public void fieldInjectionAcrossClassloaderBoundary() throws Exception {
-        // Simulate ConfigurationLoader: a child classloader redefines the
-        // injection target (controller/resource) but NOT the component class.
-        // The target's @Inject field type (SystemComponent) is loaded by the
-        // parent classloader, so Field.set works. However, isAssignableFrom
-        // can still fail when the child redefines the target class and it
-        // references a type whose hierarchy crosses loaders.
-        //
-        // More precisely, we test that isCompatibleType matches a component
-        // by FQCN when the field's declaring class comes from a different loader.
+        // Simulate a configuration where the injection target class is loaded
+        // by a child classloader, while the component class and its supertypes
+        // remain loaded by the parent classloader. This verifies that
+        // ComponentInjector can still inject a parent-loaded component into a
+        // target instance whose class is loaded by a different classloader.
         ClassLoader parentCl = getClass().getClassLoader();
         // Only redefine CrossLoaderTarget — TestComponent stays in parent
         ClassLoader childCl = new RedefiningClassLoader(parentCl,
@@ -243,35 +239,33 @@ public class ComponentInjectorTest {
     }
 
     @Test
-    public void isCompatibleTypeMatchesByNameAcrossClassloaders() throws Exception {
-        // Directly test that isCompatibleType handles the case where both
-        // the field type AND the component class are redefined by child loader,
-        // but the component instance was created by the parent loader.
+    public void classloaderMismatchThrowsMisconfigurationException() throws Exception {
+        // When a field type and a component class share the same FQCN but are
+        // loaded by different classloaders, injection must fail with a clear
+        // MisconfigurationException rather than silently skipping or producing
+        // a runtime IllegalArgumentException from Field.set.
         ClassLoader parentCl = getClass().getClassLoader();
         ClassLoader childCl = new RedefiningClassLoader(parentCl,
-                TestComponent.class.getName());
+                TestComponent.class.getName(),
+                InjectTarget1.class.getName());
 
-        // child's TestComponent is a different Class object
-        Class<?> childTestComponent = childCl.loadClass(TestComponent.class.getName());
-        assertThat(childTestComponent).isNotEqualTo(TestComponent.class);
-        assertThat(childTestComponent.getName()).isEqualTo(TestComponent.class.getName());
-
-        // isAssignableFrom fails across classloaders
-        assertThat(childTestComponent.isAssignableFrom(TestComponent.class)).isFalse();
-
-        // But ComponentInjector's isCompatibleType should match by name
         TestComponent component = new TestComponent("cross-cl");
         componentMap.put("comp", component);
-        ComponentInjector injector = new ComponentInjector(componentMap);
 
-        // Use reflection to test the private isCompatibleType method
-        var method = ComponentInjector.class.getDeclaredMethod(
-                "isCompatibleType", Class.class, Class.class);
-        method.setAccessible(true);
-        boolean result = (boolean) method.invoke(injector, childTestComponent, component.getClass());
-        assertThat(result)
-                .as("isCompatibleType should match by FQCN across classloaders")
-                .isTrue();
+        Class<?> targetClass = childCl.loadClass(InjectTarget1.class.getName());
+        Field field = targetClass.getDeclaredField("tc");
+        // Verify the classloader mismatch setup
+        assertThat(field.getType().getClassLoader()).isSameAs(childCl);
+        assertThat(field.getType()).isNotEqualTo(TestComponent.class);
+
+        ComponentInjector injector = new ComponentInjector(componentMap);
+        var ctor = targetClass.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        Object target = ctor.newInstance();
+
+        assertThatThrownBy(() -> injector.inject(target))
+                .isInstanceOf(MisconfigurationException.class)
+                .hasMessageContaining("CLASSLOADER_MISMATCH");
     }
 
     /**
@@ -305,7 +299,7 @@ public class ComponentInjectorTest {
                         ByteArrayOutputStream baos = new ByteArrayOutputStream();
                         byte[] buf = new byte[1024];
                         int len;
-                        while ((len = in.read(buf)) > 0) baos.write(buf, 0, len);
+                        while ((len = in.read(buf)) != -1) baos.write(buf, 0, len);
                         byte[] bytes = baos.toByteArray();
                         c = defineClass(name, bytes, 0, bytes.length);
                         if (resolve) resolveClass(c);
