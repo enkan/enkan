@@ -64,6 +64,14 @@ class AcceptHeaderNegotiatorTest {
     }
 
     @Test
+    void acceptCharsetCaseInsensitive() {
+        // RFC 9110: charset comparison is case-insensitive
+        Set<String> available = new HashSet<>(Arrays.asList("utf-8", "iso-8859-1"));
+        assertThat(neg.bestAllowedCharset("UTF-8;q=1.0, ISO-8859-1;q=0.5", available))
+                .isEqualTo("utf-8");
+    }
+
+    @Test
     void acceptLanguage() {
         Set<String> allowedLangs = new HashSet<>(Arrays.asList("da", "en-gb", "en"));
         assertThat(neg.bestAllowedLanguage("da, en-gb;q=0.8, en; q=0.7", allowedLangs))

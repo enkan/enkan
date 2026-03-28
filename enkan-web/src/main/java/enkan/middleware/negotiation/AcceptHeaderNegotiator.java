@@ -107,13 +107,15 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
 
     @Override
     public String bestAllowedCharset(String acceptsHeader, Set<String> available) {
+        // Lowercase accept keys for case-insensitive matching (RFC 9110 §12.5.3)
         Map<String, Double> accepts = Arrays
                 .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
                 .map(this::parseStringAcceptFragment)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toMap(
-                        AcceptFragment::fragment,
-                        AcceptFragment::q));
+                        af -> af.fragment().toLowerCase(Locale.US),
+                        AcceptFragment::q,
+                        (a, b) -> a));
         // Pre-resolve accept entries to canonical Charset objects once,
         // skipping "*" and unrecognized names.
         Double wildcardQ = accepts.get("*");
@@ -137,7 +139,9 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                 if (wildcardQ != null) return wildcardQ;
                 // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
                 if (cs.equals(StandardCharsets.ISO_8859_1)) return 1.0;
-            } catch (UnsupportedCharsetException ignored) {}
+            } catch (UnsupportedCharsetException ignored) {
+                // Available charset not recognized by the JVM — fall through to wildcard
+            }
             if (wildcardQ != null) return wildcardQ;
             return 0.0;
         }).orElse(null);
