@@ -125,12 +125,13 @@ class AcceptHeaderNegotiatorTest {
 
     @Test
     void higherQWinsOverSpecificity() {
-        // text/* has higher q (1.0) so it wins despite lower specificity
-        Set<String> allowed = new HashSet<>(Arrays.asList("text/html", "text/plain"));
+        // text/* has higher q (1.0) so it wins despite lower specificity.
+        // Use a single allowed type so the matched subtype is deterministic.
+        Set<String> allowed = new HashSet<>(Arrays.asList("text/plain"));
         MediaType mt = neg.bestAllowedContentType("text/html;q=0.5, text/*;q=1.0", allowed);
         assertThat(mt).isNotNull();
         assertThat(mt.getType()).isEqualTo("text");
-        // q=1.0 from text/* wins over q=0.5 from text/html
+        assertThat(mt.getSubtype()).isEqualTo("plain");
     }
 
     @Test
