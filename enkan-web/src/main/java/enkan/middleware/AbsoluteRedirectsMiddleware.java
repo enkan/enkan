@@ -27,7 +27,7 @@ import static enkan.util.HttpRequestUtils.requestUrl;
  */
 @Middleware(name = "absoluteRedirect")
 public class AbsoluteRedirectsMiddleware implements WebMiddleware {
-    private static final Set<Integer> REDIRECT_STATUS = new HashSet<>(Arrays.asList(201, 301, 302, 303, 307));
+    private static final Set<Integer> REDIRECT_STATUS = new HashSet<>(Arrays.asList(201, 301, 302, 303, 307, 308));
 
     /**
      * Returns {@code true} if the response status is one of the redirect codes

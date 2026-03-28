@@ -59,4 +59,18 @@ class AbsoluteRedirectsMiddlewareTest {
         assertThat(response.getHeaders().get("Location"))
                 .isEqualTo("http://example.com/prefix/foo/bar");
     }
+
+    @Test
+    void permanentRedirect308() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req ->
+                        builder(HttpResponse.of("hello"))
+                                .set(HttpResponse::setStatus, 308)
+                                .set(HttpResponse::setHeaders, Headers.of("Location", "/new-path"))
+                                .build());
+
+        HttpResponse response = middleware.handle(request, chain);
+        assertThat(response.getHeaders().get("Location"))
+                .isEqualTo("http://example.com/new-path");
+    }
 }
