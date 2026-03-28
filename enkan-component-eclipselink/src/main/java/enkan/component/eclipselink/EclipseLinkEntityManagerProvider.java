@@ -4,17 +4,12 @@ import enkan.component.ComponentLifecycle;
 import enkan.component.DataSourceComponent;
 import enkan.component.jpa.EntityManagerProvider;
 import enkan.exception.MisconfigurationException;
-import enkan.exception.UnreachableException;
 import org.eclipse.persistence.config.PersistenceUnitProperties;
-import org.eclipse.persistence.internal.jpa.deployment.SEPersistenceUnitInfo;
 import org.eclipse.persistence.logging.slf4j.SLF4JLogger;
 
 import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
+import jakarta.persistence.PersistenceConfiguration;
 import jakarta.persistence.PersistenceUnitTransactionType;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,8 +19,8 @@ import java.util.UUID;
 /**
  * An {@link enkan.component.jpa.EntityManagerProvider} implementation backed by EclipseLink.
  *
- * <p>On startup, builds an {@link jakarta.persistence.EntityManagerFactory} from
- * {@code persistence.xml} if present on the classpath, or falls back to the classpath root.
+ * <p>On startup, builds an {@link jakarta.persistence.EntityManagerFactory} using
+ * the Jakarta Persistence 3.2 {@link PersistenceConfiguration} API.
  * Operates in {@code RESOURCE_LOCAL} transaction mode (no JTA), and bridges EclipseLink
  * logging to SLF4J.</p>
  *
@@ -50,7 +45,7 @@ public class EclipseLinkEntityManagerProvider extends EntityManagerProvider<Ecli
     /**
      * Returns the lifecycle of this component.
      *
-     * <p>On start, constructs a {@link SEPersistenceUnitInfo} and initializes the
+     * <p>On start, constructs a {@link PersistenceConfiguration} and creates the
      * {@link EntityManagerFactory}. On stop, closes the {@link EntityManagerFactory}.</p>
      *
      * @return the lifecycle of this component
@@ -64,41 +59,22 @@ public class EclipseLinkEntityManagerProvider extends EntityManagerProvider<Ecli
                     throw new MisconfigurationException("core.NULL_OR_EMPTY_ARGUMENT", "name");
                 }
                 component.setDataSourceComponent(component.getDependency(DataSourceComponent.class));
-                SEPersistenceUnitInfo pu = new SEPersistenceUnitInfo();
-                pu.setPersistenceUnitName(getName());
-                pu.setClassLoader(Thread.currentThread().getContextClassLoader());
-                URL persistenceXmlUrl = getClass().getResource("/META-INF/persistence.xml");
-                try {
-                    if (persistenceXmlUrl != null) {
-                        String s = persistenceXmlUrl.toExternalForm();
-                        URI rootUri = URI.create(s.substring(0, s.length() - "persistence.xml".length()));
-                        pu.setPersistenceUnitRootUrl(rootUri.toURL());
-                    } else {
-                        URL rootUrl = Thread.currentThread().getContextClassLoader().getResource("");
-                        if (rootUrl != null) {
-                            pu.setPersistenceUnitRootUrl(rootUrl);
-                        }
-                    }
-                } catch (MalformedURLException e) {
-                    throw new UnreachableException(e);
-                }
-                pu.setTransactionType(PersistenceUnitTransactionType.RESOURCE_LOCAL);
-                pu.setNonJtaDataSource(getDataSource());
 
-                List<String> managedClassNames = managedClasses.stream()
-                        .map(Class::getName)
-                        .toList();
-                pu.setManagedClassNames(managedClassNames);
-                pu.setExcludeUnlistedClasses(true);
+                PersistenceConfiguration config = new PersistenceConfiguration(getName())
+                        .transactionType(PersistenceUnitTransactionType.RESOURCE_LOCAL)
+                        .property(PersistenceUnitProperties.NON_JTA_DATASOURCE, getDataSource())
+                        .property(PersistenceUnitProperties.CLASSLOADER,
+                                Thread.currentThread().getContextClassLoader())
+                        .property(PersistenceUnitProperties.SESSION_NAME, UUID.randomUUID().toString())
+                        .property(PersistenceUnitProperties.LOGGING_LEVEL + ".sql", sqlLogLevel)
+                        .property(PersistenceUnitProperties.LOGGING_LOGGER, SLF4JLogger.class.getName());
 
-                getJpaProperties().put(PersistenceUnitProperties.ECLIPSELINK_SE_PUINFO, pu);
-                getJpaProperties().put(PersistenceUnitProperties.SESSION_NAME, UUID.randomUUID().toString());
-                getJpaProperties().put(PersistenceUnitProperties.LOGGING_LEVEL + ".sql", sqlLogLevel);
-                // Bridge EclipseLink logging to SLF4J
-                getJpaProperties().put(PersistenceUnitProperties.LOGGING_LOGGER, SLF4JLogger.class.getName());
+                managedClasses.forEach(config::managedClass);
 
-                component.setEntityManagerFactory(Persistence
-                        .createEntityManagerFactory(getName(), getJpaProperties()));
+                // Apply any additional JPA properties configured via setJpaProperties()
+                getJpaProperties().forEach((k, v) -> config.property((String) k, v));
+
+                component.setEntityManagerFactory(config.createEntityManagerFactory());
             }
 
             @Override
