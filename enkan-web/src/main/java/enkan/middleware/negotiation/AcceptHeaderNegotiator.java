@@ -167,9 +167,12 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                         AcceptFragment::q));
         available = new HashSet<>(available);
         available.add("identity");
-        return selectBest(available, encoding ->
-                accepts.getOrDefault(encoding,
-                        accepts.get("*")))
+        Double wildcardQ = accepts.get("*");
+        return selectBest(available, encoding -> {
+            Double q = accepts.get(encoding);
+            if (q != null) return q;
+            return wildcardQ != null ? wildcardQ : 0.0;
+        })
                 .orElseGet(() -> {
                     if (! (accepts.getOrDefault("identity", 1.0) == 0.0
                             || (accepts.getOrDefault("*", 1.0) == 0 && !accepts.containsKey("identity")))) {
