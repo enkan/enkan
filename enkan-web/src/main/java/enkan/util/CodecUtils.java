@@ -104,7 +104,7 @@ public class CodecUtils {
             }
             case String s -> {
                 try {
-                    return URLEncoder.encode((String) x, encoding);
+                    return URLEncoder.encode(s, encoding);
                 } catch (UnsupportedEncodingException e) {
                     throw new IllegalArgumentException(String.format("encoding %s is not supported", x), e);
                 }

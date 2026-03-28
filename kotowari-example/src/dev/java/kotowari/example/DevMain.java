@@ -20,7 +20,6 @@ public class DevMain {
 
         new ReplBoot(repl)
                 .register(new KotowariCommandRegister())
-                .register(new MetricsCommandRegister())
                 .register(r -> {
                     r.registerCommand("sql", new SqlCommand());
                     r.registerCommand("jsonRequest", new JsonRequestCommand());
