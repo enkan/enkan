@@ -161,4 +161,42 @@ class AcceptHeaderNegotiatorTest {
         assertThat(mt).isNotNull();
         assertThat(mt.getSubtype()).isEqualTo("plain");
     }
+
+    @Test
+    void encodingNegotiationWithoutWildcardDoesNotThrow() {
+        // Accept-Encoding: gzip with no wildcard — must not NPE
+        Set<String> available = new HashSet<>(Arrays.asList("deflate"));
+        String enc = neg.bestAllowedEncoding("gzip", available);
+        assertThat(enc).isEqualTo("identity");
+    }
+
+    @Test
+    void encodingNegotiationWithWildcard() {
+        Set<String> available = new HashSet<>(Arrays.asList("gzip", "br"));
+        String enc = neg.bestAllowedEncoding("*;q=0.5, gzip;q=1.0", available);
+        assertThat(enc).isEqualTo("gzip");
+    }
+
+    @Test
+    void encodingNegotiationExactMatch() {
+        Set<String> available = new HashSet<>(Arrays.asList("gzip", "deflate"));
+        String enc = neg.bestAllowedEncoding("gzip;q=1.0, deflate;q=0.5", available);
+        assertThat(enc).isEqualTo("gzip");
+    }
+
+    @Test
+    void encodingFallsBackToIdentity() {
+        // br accepted but not available, gzip available but not accepted
+        Set<String> available = new HashSet<>(Arrays.asList("gzip"));
+        String enc = neg.bestAllowedEncoding("br", available);
+        assertThat(enc).isEqualTo("identity");
+    }
+
+    @Test
+    void encodingReturnsNullWhenIdentityRejected() {
+        // identity explicitly rejected, no matching encoding available
+        Set<String> available = new HashSet<>(Arrays.asList("deflate"));
+        String enc = neg.bestAllowedEncoding("gzip, identity;q=0", available);
+        assertThat(enc).isNull();
+    }
 }
