@@ -11,7 +11,7 @@ import org.eclipse.persistence.logging.slf4j.SLF4JLogger;
 
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
-import jakarta.persistence.spi.PersistenceUnitTransactionType;
+import jakarta.persistence.PersistenceUnitTransactionType;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
