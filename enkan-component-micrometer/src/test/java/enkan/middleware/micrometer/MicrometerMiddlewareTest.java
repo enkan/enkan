@@ -6,12 +6,14 @@ import enkan.chain.DefaultMiddlewareChain;
 import enkan.component.LifecycleManager;
 import enkan.component.micrometer.MicrometerComponent;
 import enkan.util.Predicates;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -22,11 +24,16 @@ class MicrometerMiddlewareTest {
 
     private MicrometerComponent micrometerComponent;
     private MicrometerMiddleware<Object, Object> middleware;
+    private Timer requestTimer;
+    private Counter errorCounter;
 
     @BeforeEach
     void setUp() throws Exception {
         micrometerComponent = new MicrometerComponent();
         LifecycleManager.start(micrometerComponent);
+
+        requestTimer = Objects.requireNonNull(micrometerComponent.getRequestTimer());
+        errorCounter = Objects.requireNonNull(micrometerComponent.getErrorCounter());
 
         middleware = new MicrometerMiddleware<>();
         Field f = MicrometerMiddleware.class.getDeclaredField("micrometer");
@@ -72,23 +79,23 @@ class MicrometerMiddlewareTest {
 
     @Test
     void requestTimerIsUpdatedOnSuccess() {
-        Timer timer = micrometerComponent.getRequestTimer();
-        assertThat(timer.count()).isZero();
+        assertThat(requestTimer.count()).isZero();
 
         chainOf(req -> "res").next("req");
 
-        assertThat(timer.count()).isEqualTo(1);
+        assertThat(requestTimer.count()).isEqualTo(1);
     }
 
     @Test
+    @SuppressWarnings("null") // Eclipse null analysis vs AssertJ wildcard types
     void errorCounterIsIncrementedOnException() {
-        assertThat(micrometerComponent.getErrorCounter().count()).isZero();
+        assertThat(errorCounter.count()).isZero();
 
         assertThatThrownBy(() ->
                 chainOf(req -> { throw new RuntimeException("boom"); }).next("req")
         ).isInstanceOf(RuntimeException.class).hasMessage("boom");
 
-        assertThat(micrometerComponent.getErrorCounter().count()).isEqualTo(1);
+        assertThat(errorCounter.count()).isEqualTo(1);
     }
 
     @Test
@@ -102,19 +109,17 @@ class MicrometerMiddlewareTest {
 
     @Test
     void timerIsUpdatedOnException() {
-        Timer timer = micrometerComponent.getRequestTimer();
-
         assertThatThrownBy(() ->
                 chainOf(req -> { throw new RuntimeException("boom"); }).next("req")
         ).isInstanceOf(RuntimeException.class);
 
-        assertThat(timer.count()).isEqualTo(1);
+        assertThat(requestTimer.count()).isEqualTo(1);
     }
 
     @Test
     void errorsAreNotIncrementedOnSuccess() {
         chainOf(req -> "res").next("req");
 
-        assertThat(micrometerComponent.getErrorCounter().count()).isZero();
+        assertThat(errorCounter.count()).isZero();
     }
 }

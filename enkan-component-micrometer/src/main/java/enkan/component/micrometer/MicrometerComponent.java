@@ -7,6 +7,8 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,17 +26,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MicrometerComponent extends SystemComponent<MicrometerComponent> {
     private String metricPrefix = "enkan";
 
-    private final MeterRegistry registry;
-    private Timer requestTimer;
-    private Counter errorCounter;
-    private Gauge activeRequestsGauge;
+    private final @NonNull MeterRegistry registry;
     private final AtomicInteger activeRequests = new AtomicInteger(0);
+    private @Nullable Timer requestTimer;
+    private @Nullable Counter errorCounter;
+    private @Nullable Gauge activeRequestsGauge;
 
     public MicrometerComponent() {
         this(new SimpleMeterRegistry());
     }
 
-    public MicrometerComponent(MeterRegistry registry) {
+    public MicrometerComponent(@NonNull MeterRegistry registry) {
         this.registry = registry;
     }
 
@@ -43,46 +45,48 @@ public class MicrometerComponent extends SystemComponent<MicrometerComponent> {
         return new ComponentLifecycle<>() {
             @Override
             public void start(MicrometerComponent component) {
-                component.requestTimer = Timer.builder(metricPrefix + ".http.server.requests")
-                        .description("HTTP server request duration")
-                        .register(registry);
-                component.errorCounter = Counter.builder(metricPrefix + ".http.server.errors")
-                        .description("HTTP server error count")
-                        .register(registry);
-                component.activeRequestsGauge = Gauge.builder(
-                                metricPrefix + ".http.server.active.requests",
-                                component.activeRequests, AtomicInteger::get)
-                        .description("HTTP server active request count")
-                        .register(registry);
+                component.registerMetrics();
             }
 
             @Override
             public void stop(MicrometerComponent component) {
-                if (component.requestTimer != null) {
-                    registry.remove(component.requestTimer);
-                }
-                if (component.errorCounter != null) {
-                    registry.remove(component.errorCounter);
-                }
-                if (component.activeRequestsGauge != null) {
-                    registry.remove(component.activeRequestsGauge);
-                }
-                component.requestTimer = null;
-                component.errorCounter = null;
-                component.activeRequestsGauge = null;
+                component.removeMetrics();
             }
         };
     }
 
-    public MeterRegistry getRegistry() {
+    private void registerMetrics() {
+        requestTimer = Timer.builder(metricPrefix + ".http.server.requests")
+                .description("HTTP server request duration")
+                .register(registry);
+        errorCounter = Counter.builder(metricPrefix + ".http.server.errors")
+                .description("HTTP server error count")
+                .register(registry);
+        activeRequestsGauge = Gauge.builder(
+                        metricPrefix + ".http.server.active.requests",
+                        activeRequests, AtomicInteger::get)
+                .description("HTTP server active request count")
+                .register(registry);
+    }
+
+    private void removeMetrics() {
+        if (requestTimer != null) registry.remove(requestTimer);
+        if (errorCounter != null) registry.remove(errorCounter);
+        if (activeRequestsGauge != null) registry.remove(activeRequestsGauge);
+        requestTimer = null;
+        errorCounter = null;
+        activeRequestsGauge = null;
+    }
+
+    public @NonNull MeterRegistry getRegistry() {
         return registry;
     }
 
-    public Timer getRequestTimer() {
+    public @Nullable Timer getRequestTimer() {
         return requestTimer;
     }
 
-    public Counter getErrorCounter() {
+    public @Nullable Counter getErrorCounter() {
         return errorCounter;
     }
 

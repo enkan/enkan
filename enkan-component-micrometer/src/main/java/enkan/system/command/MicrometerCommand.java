@@ -65,7 +65,9 @@ public class MicrometerCommand implements SystemCommand {
             return true;
         }
         MicrometerComponent micrometer = found.get();
-        if (micrometer.getRequestTimer() == null) {
+        Timer requestTimer = micrometer.getRequestTimer();
+        var errorCounter = micrometer.getErrorCounter();
+        if (requestTimer == null || errorCounter == null) {
             transport.send(ReplResponse.withOut("MicrometerComponent is not started."));
             transport.sendOut("", ReplResponse.ResponseStatus.DONE);
             return true;
@@ -79,10 +81,10 @@ public class MicrometerCommand implements SystemCommand {
         transport.send(ReplResponse.withOut("-- Errors -------------------------------------------"));
         transport.send(ReplResponse.withOut(
                 String.format(Locale.US, "             count = %.0f",
-                        micrometer.getErrorCounter().count())));
+                        errorCounter.count())));
 
         transport.send(ReplResponse.withOut("-- Request Timer ------------------------------------"));
-        printTimer(transport, micrometer.getRequestTimer());
+        printTimer(transport, requestTimer);
 
         transport.sendOut("", ReplResponse.ResponseStatus.DONE);
         return true;
