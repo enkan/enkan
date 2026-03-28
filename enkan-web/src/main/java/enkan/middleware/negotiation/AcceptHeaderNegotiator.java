@@ -114,6 +114,16 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                 .collect(Collectors.toMap(
                         AcceptFragment::fragment,
                         AcceptFragment::q));
+        // Pre-resolve accept entries to canonical Charset objects once,
+        // skipping "*" and unrecognized names.
+        Double wildcardQ = accepts.get("*");
+        Map<Charset, Double> resolvedAccepts = new HashMap<>();
+        for (Map.Entry<String, Double> entry : accepts.entrySet()) {
+            if ("*".equals(entry.getKey())) continue;
+            try {
+                resolvedAccepts.put(Charset.forName(entry.getKey()), entry.getValue());
+            } catch (UnsupportedCharsetException ignored) {}
+        }
         return selectBest(available, charset -> {
             charset = charset.toLowerCase(Locale.US);
             Double q = accepts.get(charset);
@@ -122,22 +132,13 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
             // latin1, iso_8859_1, iso-8859-1, etc.)
             try {
                 Charset cs = Charset.forName(charset);
-                for (Map.Entry<String, Double> entry : accepts.entrySet()) {
-                    try {
-                        if (Charset.forName(entry.getKey()).equals(cs)) {
-                            return entry.getValue();
-                        }
-                    } catch (UnsupportedCharsetException ignored) {}
-                }
+                q = resolvedAccepts.get(cs);
+                if (q != null) return q;
+                if (wildcardQ != null) return wildcardQ;
+                // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
+                if (cs.equals(StandardCharsets.ISO_8859_1)) return 1.0;
             } catch (UnsupportedCharsetException ignored) {}
-            q = accepts.get("*");
-            if (q != null) return q;
-            // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
-            try {
-                if (Charset.forName(charset).equals(StandardCharsets.ISO_8859_1)) {
-                    return 1.0;
-                }
-            } catch (UnsupportedCharsetException ignored) {}
+            if (wildcardQ != null) return wildcardQ;
             return 0.0;
         }).orElse(null);
     }

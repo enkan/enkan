@@ -54,6 +54,16 @@ class AcceptHeaderNegotiatorTest {
     }
 
     @Test
+    void acceptCharsetWildcard() {
+        // "*" in Accept-Charset applies to any charset not explicitly listed
+        Set<String> available = new HashSet<>(Arrays.asList("utf-8", "shift_jis"));
+        assertThat(neg.bestAllowedCharset("utf-8;q=0.5, *;q=0.1", available))
+                .isEqualTo("utf-8");
+        assertThat(neg.bestAllowedCharset("*;q=0.5", available))
+                .isNotNull();
+    }
+
+    @Test
     void acceptLanguage() {
         Set<String> allowedLangs = new HashSet<>(Arrays.asList("da", "en-gb", "en"));
         assertThat(neg.bestAllowedLanguage("da, en-gb;q=0.8, en; q=0.7", allowedLangs))
