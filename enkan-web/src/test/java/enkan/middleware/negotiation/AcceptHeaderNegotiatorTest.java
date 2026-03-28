@@ -89,4 +89,29 @@ class AcceptHeaderNegotiatorTest {
         assertThat(neg.bestAllowedLanguage("da, en-gb;q=0.8", allowedLangs))
                 .isNull();
     }
+
+    @Test
+    void parseQRejectsInvalidFormats() {
+        // RFC 9110 §12.4.2: qvalue = ( "0" [ "." 0*3DIGIT ] ) / ( "1" [ "." 0*3("0") ] )
+        assertThat(neg.parseQ("0.5")).isEqualTo(0.5);
+        assertThat(neg.parseQ("1.0")).isEqualTo(1.0);
+        assertThat(neg.parseQ("1.000")).isEqualTo(1.0);
+        assertThat(neg.parseQ("0")).isEqualTo(0.0);
+        // Invalid formats should return 0.0
+        assertThat(neg.parseQ("1e-1")).isEqualTo(0.0);
+        assertThat(neg.parseQ("0.1234")).isEqualTo(0.0);
+        assertThat(neg.parseQ("2.0")).isEqualTo(0.0);
+        assertThat(neg.parseQ("-0.5")).isEqualTo(0.0);
+        assertThat(neg.parseQ(null)).isEqualTo(0.0);
+    }
+
+    @Test
+    void quotedParameterWithEscapedQuote() {
+        // Quoted-string parameter values may contain escaped quotes
+        Set<String> allowedTypes = new HashSet<>(Arrays.asList("text/html", "text/plain"));
+        // q parameter with a normal value should still work alongside quoted params
+        MediaType mt = neg.bestAllowedContentType("text/html;q=0.5;ext=\"a\\\"b\", text/plain;q=1.0", allowedTypes);
+        assertThat(mt).isNotNull();
+        assertThat(mt.getSubtype()).isEqualTo("plain");
+    }
 }

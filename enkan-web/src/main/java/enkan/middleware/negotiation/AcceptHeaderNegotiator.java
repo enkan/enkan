@@ -20,7 +20,7 @@ import static java.util.Collections.reverseOrder;
  * @author kawasima
  */
 public class AcceptHeaderNegotiator implements ContentNegotiator {
-    private static final Pattern ACCEPT_FRAGMENT_PARAM_RE = Pattern.compile("([^()<>@,;:\"/\\[\\]?={} 	]+)=([^()<>@,;:\"/\\[\\]?={} 	]+|\"[^\"]*\")$");
+    private static final Pattern ACCEPT_FRAGMENT_PARAM_RE = Pattern.compile("([^()<>@,;:\"/\\[\\]?={} 	]+)=([^()<>@,;:\"/\\[\\]?={} 	]+|\"(?:[^\"\\\\]|\\\\.)*\")$");
     private static final Pattern ACCEPTS_DELIMITER = Pattern.compile("[\\s\\n\\r]*,[\\s\\n\\r]*");
     private static final Pattern ACCEPT_DELIMITER = Pattern.compile("[\\s\\n\\r]*;[\\s\\n\\r]*");
 
@@ -29,16 +29,14 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
     /** Cache: (acceptHeader + "|" + available) → resolved language */
     private final ConcurrentHashMap<String, Optional<String>> languageCache = new ConcurrentHashMap<>();
 
-    private double clamp(double min, double max, double val) {
-        return Math.max(Math.min(max, val), min);
-    }
+    // RFC 9110 §12.4.2: qvalue = ( "0" [ "." 0*3DIGIT ] ) / ( "1" [ "." 0*3("0") ] )
+    private static final Pattern RE_QVALUE = Pattern.compile("0(?:\\.\\d{0,3})?|1(?:\\.0{0,3})?");
 
     public double parseQ(String qstr) {
-        try {
-            return clamp(0.0, 1.0, Double.parseDouble(qstr));
-        } catch (Throwable e) {
+        if (qstr == null || !RE_QVALUE.matcher(qstr).matches()) {
             return 0.0;
         }
+        return Double.parseDouble(qstr);
     }
 
     public AcceptFragment<MediaType> parseMediaTypeAcceptFragment(String accept) {
@@ -89,9 +87,13 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                 .findFirst();
     }
 
+    private static String stableCacheKey(String header, Set<String> values) {
+        return header + "|" + values.stream().sorted().collect(Collectors.joining(","));
+    }
+
     @Override
     public MediaType bestAllowedContentType(String acceptsHeader, Set<String> allowedTypes) {
-        String cacheKey = acceptsHeader + "|" + allowedTypes;
+        String cacheKey = stableCacheKey(acceptsHeader, allowedTypes);
         return contentTypeCache.computeIfAbsent(cacheKey, k -> {
             Function<AcceptFragment<MediaType>, AcceptFragment<MediaType>> serverWeightFunc = createServerWeightFunc(allowedTypes.stream()
                     .map(CodecUtils::parseMediaType)
@@ -174,7 +176,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
 
     @Override
     public String bestAllowedLanguage(String acceptsHeader, Set<String> available) {
-        String cacheKey = acceptsHeader + "|" + available;
+        String cacheKey = stableCacheKey(acceptsHeader, available);
         return languageCache.computeIfAbsent(cacheKey, k -> {
             Map<String, Double> accepts = Arrays
                     .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
