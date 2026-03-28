@@ -22,4 +22,20 @@ public interface ContentNegotiable extends Extendable {
     default void setLocale(Locale locale) {
         setExtension("locale", locale);
     }
+
+    default String getCharset() {
+        return getExtension("charset");
+    }
+
+    default void setCharset(String charset) {
+        setExtension("charset", charset);
+    }
+
+    default String getEncoding() {
+        return getExtension("encoding");
+    }
+
+    default void setEncoding(String encoding) {
+        setExtension("encoding", encoding);
+    }
 }

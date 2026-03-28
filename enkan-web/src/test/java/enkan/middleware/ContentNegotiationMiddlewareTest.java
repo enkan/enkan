@@ -145,6 +145,76 @@ class ContentNegotiationMiddlewareTest {
     }
 
     @Test
+    void charsetAndEncodingNotNegotiatedByDefault() {
+        request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "Accept", "text/html",
+                        "Accept-Charset", "utf-8",
+                        "Accept-Encoding", "gzip"))
+                .build();
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    ContentNegotiable cn = (ContentNegotiable) req;
+                    assertThat(cn.getCharset()).isNull();
+                    assertThat(cn.getEncoding()).isNull();
+                    return HttpResponse.of("ok");
+                });
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void charsetNegotiatedWhenConfigured() {
+        middleware.setAllowedCharsets(Set.of("utf-8", "iso-8859-1"));
+        request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "Accept", "text/html",
+                        "Accept-Charset", "utf-8"))
+                .build();
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    assertThat(((ContentNegotiable) req).getCharset()).isEqualTo("utf-8");
+                    return HttpResponse.of("ok");
+                });
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void encodingNegotiatedWhenConfigured() {
+        middleware.setAllowedEncodings(Set.of("gzip", "deflate"));
+        request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "Accept", "text/html",
+                        "Accept-Encoding", "gzip"))
+                .build();
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    assertThat(((ContentNegotiable) req).getEncoding()).isEqualTo("gzip");
+                    return HttpResponse.of("ok");
+                });
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void charsetAndEncodingBothConfigured() {
+        middleware.setAllowedCharsets(Set.of("utf-8"));
+        middleware.setAllowedEncodings(Set.of("gzip"));
+        request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "Accept", "text/html",
+                        "Accept-Charset", "utf-8",
+                        "Accept-Encoding", "gzip"))
+                .build();
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    ContentNegotiable cn = (ContentNegotiable) req;
+                    assertThat(cn.getCharset()).isEqualTo("utf-8");
+                    assertThat(cn.getEncoding()).isEqualTo("gzip");
+                    return HttpResponse.of("ok");
+                });
+        middleware.handle(request, chain);
+    }
+
+    @Test
     void acceptLanguageWithRegionFallsBackToLanguage() {
         middleware.setAllowedLanguages(new HashSet<>(Collections.singletonList("en")));
         request = builder(new DefaultHttpRequest())

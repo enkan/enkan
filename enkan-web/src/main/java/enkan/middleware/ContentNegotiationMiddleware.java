@@ -27,6 +27,8 @@ public class ContentNegotiationMiddleware implements WebMiddleware {
     private ContentNegotiator negotiator;
     private Set<String> allowedTypes;
     private Set<String> allowedLanguages;
+    private Set<String> allowedCharsets;
+    private Set<String> allowedEncodings;
 
     public ContentNegotiationMiddleware() {
         negotiator = new AcceptHeaderNegotiator();
@@ -46,6 +48,20 @@ public class ContentNegotiationMiddleware implements WebMiddleware {
         request = MixinUtils.mixin(request, ContentNegotiable.class);
         ((ContentNegotiable) request).setMediaType(mediaType);
         ((ContentNegotiable) request).setLocale(locale);
+
+        if (allowedCharsets != null) {
+            String acceptCharset = headers != null
+                    ? Objects.toString(headers.getOrDefault("Accept-Charset", "*"), "*") : "*";
+            String charset = negotiator.bestAllowedCharset(acceptCharset, allowedCharsets);
+            ((ContentNegotiable) request).setCharset(charset);
+        }
+        if (allowedEncodings != null) {
+            String acceptEncoding = headers != null
+                    ? Objects.toString(headers.getOrDefault("Accept-Encoding", "identity"), "identity") : "identity";
+            String encoding = negotiator.bestAllowedEncoding(acceptEncoding, allowedEncodings);
+            ((ContentNegotiable) request).setEncoding(encoding);
+        }
+
         return castToHttpResponse(chain.next(request));
     }
 
@@ -59,5 +75,13 @@ public class ContentNegotiationMiddleware implements WebMiddleware {
 
     public void setAllowedLanguages(Set<String> allowedLanguages) {
         this.allowedLanguages = Set.copyOf(allowedLanguages);
+    }
+
+    public void setAllowedCharsets(Set<String> allowedCharsets) {
+        this.allowedCharsets = allowedCharsets != null ? Set.copyOf(allowedCharsets) : null;
+    }
+
+    public void setAllowedEncodings(Set<String> allowedEncodings) {
+        this.allowedEncodings = allowedEncodings != null ? Set.copyOf(allowedEncodings) : null;
     }
 }
