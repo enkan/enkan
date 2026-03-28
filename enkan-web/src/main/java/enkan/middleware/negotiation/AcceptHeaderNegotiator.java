@@ -196,12 +196,28 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                             AcceptFragment::fragment,
                             AcceptFragment::q));
             Function<String, Double> score = langtag -> {
+                // Direction 1: truncate available tag to find a matching range
+                // e.g. available "en-gb" tries "en-gb" then "en" in accepts
                 for (String x = langtag; x != null; x = x.substring(0, x.lastIndexOf('-'))) {
                     Double q = accepts.get(x);
                     if (q != null) return q;
                     if (!x.contains("-")) break;
                 }
-                return Objects.equals(langtag, "*") ? 0.01 : 0;
+                // Direction 2 (RFC 4647 §3.4): accept range is a prefix of available tag
+                // e.g. accept "en" matches available "en-gb"
+                double bestQ = 0.0;
+                for (Map.Entry<String, Double> entry : accepts.entrySet()) {
+                    String range = entry.getKey();
+                    if ("*".equals(range)) continue;
+                    if (langtag.startsWith(range + "-") && entry.getValue() > bestQ) {
+                        bestQ = entry.getValue();
+                    }
+                }
+                if (bestQ > 0.0) return bestQ;
+                // Wildcard range "*" matches any tag with a low default weight
+                Double wildcardQ = accepts.get("*");
+                if (wildcardQ != null) return wildcardQ > 0 ? wildcardQ : 0.01;
+                return 0.0;
             };
 
             return selectBest(available, score);

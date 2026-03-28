@@ -91,6 +91,37 @@ class AcceptHeaderNegotiatorTest {
     }
 
     @Test
+    void acceptLanguageRangeMatchesMoreSpecificTag() {
+        // RFC 4647 §3.4: range "en" matches tag "en-gb"
+        Set<String> available = new HashSet<>(Collections.singletonList("en-gb"));
+        assertThat(neg.bestAllowedLanguage("en", available))
+                .isEqualTo("en-gb");
+    }
+
+    @Test
+    void acceptLanguageRangeWithQuality() {
+        // "fr" has higher q than "en", so "fr-ca" should be preferred
+        Set<String> available = new HashSet<>(Arrays.asList("en-gb", "fr-ca"));
+        assertThat(neg.bestAllowedLanguage("en;q=0.5, fr;q=1.0", available))
+                .isEqualTo("fr-ca");
+    }
+
+    @Test
+    void acceptLanguageExactMatchPreferredOverPrefixMatch() {
+        // "en-gb" exact match (q=0.9) should beat "en" prefix match on "en-us" (q=0.5)
+        Set<String> available = new HashSet<>(Arrays.asList("en-gb", "en-us"));
+        assertThat(neg.bestAllowedLanguage("en-gb;q=0.9, en;q=0.5", available))
+                .isEqualTo("en-gb");
+    }
+
+    @Test
+    void acceptLanguageWildcardStillWorks() {
+        Set<String> available = new HashSet<>(Arrays.asList("ja", "ko"));
+        assertThat(neg.bestAllowedLanguage("*", available))
+                .isNotNull();
+    }
+
+    @Test
     void parseQRejectsInvalidFormats() {
         // RFC 9110 §12.4.2: qvalue = ( "0" [ "." 0*3DIGIT ] ) / ( "1" [ "." 0*3("0") ] )
         assertThat(neg.parseQ("0.5")).isEqualTo(0.5);
