@@ -4,6 +4,9 @@ import enkan.util.CodecUtils;
 
 import jakarta.ws.rs.core.MediaType;
 import java.io.Serializable;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -17,25 +20,25 @@ import static java.util.Collections.reverseOrder;
  * @author kawasima
  */
 public class AcceptHeaderNegotiator implements ContentNegotiator {
-    private static final Pattern ACCEPT_FRAGMENT_PARAM_RE = Pattern.compile("([^()<>@,;:\"/\\[\\]?={} 	]+)=([^()<>@,;:\"/\\[\\]?={} 	]+|\"[^\"]*\")$");
+    private static final Pattern ACCEPT_FRAGMENT_PARAM_RE = Pattern.compile("([^()<>@,;:\"/\\[\\]?={} 	]+)=([^()<>@,;:\"/\\[\\]?={} 	]+|\"(?:[^\"\\\\]|\\\\.)*\")$");
     private static final Pattern ACCEPTS_DELIMITER = Pattern.compile("[\\s\\n\\r]*,[\\s\\n\\r]*");
     private static final Pattern ACCEPT_DELIMITER = Pattern.compile("[\\s\\n\\r]*;[\\s\\n\\r]*");
 
     /** Cache: (acceptHeader + "|" + allowedTypes) → resolved MediaType */
     private final ConcurrentHashMap<String, Optional<MediaType>> contentTypeCache = new ConcurrentHashMap<>();
+    /** Cache: (acceptHeader + "|" + available) → resolved charset */
+    private final ConcurrentHashMap<String, Optional<String>> charsetCache = new ConcurrentHashMap<>();
     /** Cache: (acceptHeader + "|" + available) → resolved language */
     private final ConcurrentHashMap<String, Optional<String>> languageCache = new ConcurrentHashMap<>();
 
-    private double clamp(double min, double max, double val) {
-        return Math.max(Math.min(max, val), min);
-    }
+    // RFC 9110 §12.4.2: qvalue = ( "0" [ "." 0*3DIGIT ] ) / ( "1" [ "." 0*3("0") ] )
+    private static final Pattern RE_QVALUE = Pattern.compile("0(?:\\.\\d{0,3})?|1(?:\\.0{0,3})?");
 
     public double parseQ(String qstr) {
-        try {
-            return clamp(0.0, 1.0, Double.parseDouble(qstr));
-        } catch (Throwable e) {
+        if (qstr == null || !RE_QVALUE.matcher(qstr).matches()) {
             return 0.0;
         }
+        return Double.parseDouble(qstr);
     }
 
     public AcceptFragment<MediaType> parseMediaTypeAcceptFragment(String accept) {
@@ -86,9 +89,13 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                 .findFirst();
     }
 
+    private static String stableCacheKey(String header, Set<String> values) {
+        return header + "|" + values.stream().sorted().collect(Collectors.joining(","));
+    }
+
     @Override
     public MediaType bestAllowedContentType(String acceptsHeader, Set<String> allowedTypes) {
-        String cacheKey = acceptsHeader + "|" + allowedTypes;
+        String cacheKey = stableCacheKey(acceptsHeader, allowedTypes);
         return contentTypeCache.computeIfAbsent(cacheKey, k -> {
             Function<AcceptFragment<MediaType>, AcceptFragment<MediaType>> serverWeightFunc = createServerWeightFunc(allowedTypes.stream()
                     .map(CodecUtils::parseMediaType)
@@ -104,18 +111,46 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
 
     @Override
     public String bestAllowedCharset(String acceptsHeader, Set<String> available) {
-        Map<String, Double> accepts = Arrays
-                .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
-                .map(this::parseStringAcceptFragment)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(
-                        AcceptFragment::fragment,
-                        AcceptFragment::q));
-        return selectBest(available, charset -> {
-            charset = charset.toLowerCase(Locale.US);
-            return accepts.getOrDefault(charset,
-                    accepts.getOrDefault("*",
-                            charset.equals("iso_8859_1") ? 1.0 : 0.0));
+        String cacheKey = stableCacheKey(acceptsHeader, available);
+        return charsetCache.computeIfAbsent(cacheKey, k -> {
+            // Lowercase accept keys for case-insensitive matching (RFC 9110 §12.5.3)
+            Map<String, Double> accepts = Arrays
+                    .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
+                    .map(this::parseStringAcceptFragment)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toMap(
+                            af -> af.fragment().toLowerCase(Locale.US),
+                            AcceptFragment::q,
+                            (a, b) -> a));
+            // Pre-resolve accept entries to canonical Charset objects once,
+            // skipping "*" and unrecognized names.
+            Double wildcardQ = accepts.get("*");
+            Map<Charset, Double> resolvedAccepts = new HashMap<>();
+            for (Map.Entry<String, Double> entry : accepts.entrySet()) {
+                if ("*".equals(entry.getKey())) continue;
+                try {
+                    resolvedAccepts.put(Charset.forName(entry.getKey()), entry.getValue());
+                } catch (UnsupportedCharsetException ignored) {}
+            }
+            return selectBest(available, charset -> {
+                charset = charset.toLowerCase(Locale.US);
+                Double q = accepts.get(charset);
+                if (q != null) return q;
+                // Try matching by canonical charset name (handles aliases like
+                // latin1, iso_8859_1, iso-8859-1, etc.)
+                try {
+                    Charset cs = Charset.forName(charset);
+                    q = resolvedAccepts.get(cs);
+                    if (q != null) return q;
+                    if (wildcardQ != null) return wildcardQ;
+                    // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
+                    if (cs.equals(StandardCharsets.ISO_8859_1)) return 1.0;
+                } catch (UnsupportedCharsetException ignored) {
+                    // Available charset not recognized by the JVM — fall through to wildcard
+                }
+                if (wildcardQ != null) return wildcardQ;
+                return 0.0;
+            });
         }).orElse(null);
     }
 
@@ -146,7 +181,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
 
     @Override
     public String bestAllowedLanguage(String acceptsHeader, Set<String> available) {
-        String cacheKey = acceptsHeader + "|" + available;
+        String cacheKey = stableCacheKey(acceptsHeader, available);
         return languageCache.computeIfAbsent(cacheKey, k -> {
             Map<String, Double> accepts = Arrays
                     .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
