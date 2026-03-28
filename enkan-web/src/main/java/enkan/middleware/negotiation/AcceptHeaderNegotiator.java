@@ -4,6 +4,9 @@ import enkan.util.CodecUtils;
 
 import jakarta.ws.rs.core.MediaType;
 import java.io.Serializable;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -113,9 +116,29 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                         AcceptFragment::q));
         return selectBest(available, charset -> {
             charset = charset.toLowerCase(Locale.US);
-            return accepts.getOrDefault(charset,
-                    accepts.getOrDefault("*",
-                            charset.equals("iso_8859_1") ? 1.0 : 0.0));
+            Double q = accepts.get(charset);
+            if (q != null) return q;
+            // Try matching by canonical charset name (handles aliases like
+            // latin1, iso_8859_1, iso-8859-1, etc.)
+            try {
+                Charset cs = Charset.forName(charset);
+                for (Map.Entry<String, Double> entry : accepts.entrySet()) {
+                    try {
+                        if (Charset.forName(entry.getKey()).equals(cs)) {
+                            return entry.getValue();
+                        }
+                    } catch (UnsupportedCharsetException ignored) {}
+                }
+            } catch (UnsupportedCharsetException ignored) {}
+            q = accepts.get("*");
+            if (q != null) return q;
+            // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
+            try {
+                if (Charset.forName(charset).equals(StandardCharsets.ISO_8859_1)) {
+                    return 1.0;
+                }
+            } catch (UnsupportedCharsetException ignored) {}
+            return 0.0;
         }).orElse(null);
     }
 

@@ -31,6 +31,29 @@ class AcceptHeaderNegotiatorTest {
     }
 
     @Test
+    void acceptCharsetMatchesStandardName() {
+        Set<String> available = new HashSet<>(Arrays.asList("utf-8", "iso-8859-1"));
+        assertThat(neg.bestAllowedCharset("iso-8859-1", available))
+                .isEqualTo("iso-8859-1");
+    }
+
+    @Test
+    void acceptCharsetMatchesAlias() {
+        // Client sends "latin1" which is an alias for iso-8859-1
+        Set<String> available = new HashSet<>(Arrays.asList("utf-8", "iso-8859-1"));
+        assertThat(neg.bestAllowedCharset("latin1;q=1.0, utf-8;q=0.5", available))
+                .isEqualTo("iso-8859-1");
+    }
+
+    @Test
+    void acceptCharsetDefaultsIso88591() {
+        // RFC 9110 §12.5.3: ISO-8859-1 gets default quality 1.0 when not listed
+        Set<String> available = new HashSet<>(Arrays.asList("utf-8", "iso-8859-1"));
+        assertThat(neg.bestAllowedCharset("utf-8;q=0.5", available))
+                .isEqualTo("iso-8859-1");
+    }
+
+    @Test
     void acceptLanguage() {
         Set<String> allowedLangs = new HashSet<>(Arrays.asList("da", "en-gb", "en"));
         assertThat(neg.bestAllowedLanguage("da, en-gb;q=0.8, en; q=0.7", allowedLangs))
