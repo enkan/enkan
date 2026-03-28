@@ -195,6 +195,14 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                     .collect(Collectors.toMap(
                             AcceptFragment::fragment,
                             AcceptFragment::q));
+            // Pre-compute range prefixes (e.g. "en" → "en-") to avoid
+            // string allocation per available tag in the scoring lambda.
+            Double wildcardQ = accepts.get("*");
+            record RangePrefix(String prefix, double q) {}
+            List<RangePrefix> rangePrefixes = accepts.entrySet().stream()
+                    .filter(e -> !"*".equals(e.getKey()))
+                    .map(e -> new RangePrefix(e.getKey() + "-", e.getValue()))
+                    .toList();
             Function<String, Double> score = langtag -> {
                 // Direction 1: truncate available tag to find a matching range
                 // e.g. available "en-gb" tries "en-gb" then "en" in accepts
@@ -206,16 +214,13 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                 // Direction 2 (RFC 4647 §3.4): accept range is a prefix of available tag
                 // e.g. accept "en" matches available "en-gb"
                 double bestQ = 0.0;
-                for (Map.Entry<String, Double> entry : accepts.entrySet()) {
-                    String range = entry.getKey();
-                    if ("*".equals(range)) continue;
-                    if (langtag.startsWith(range + "-") && entry.getValue() > bestQ) {
-                        bestQ = entry.getValue();
+                for (RangePrefix rp : rangePrefixes) {
+                    if (langtag.startsWith(rp.prefix()) && rp.q() > bestQ) {
+                        bestQ = rp.q();
                     }
                 }
                 if (bestQ > 0.0) return bestQ;
-                // Wildcard range "*" matches any tag with a low default weight
-                Double wildcardQ = accepts.get("*");
+                // Wildcard range "*" matches any tag
                 if (wildcardQ != null) return wildcardQ > 0 ? wildcardQ : 0.01;
                 return 0.0;
             };
