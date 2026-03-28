@@ -72,4 +72,23 @@ class HttpDateFormatTest {
         // Feb 30 does not exist
         assertThat(HttpDateFormat.parse("Wed, 30 Feb 1994 08:49:37 GMT")).isEmpty();
     }
+
+    @Test
+    void parseStripsLeadingAndTrailingWhitespace() {
+        Optional<Instant> result = HttpDateFormat.parse("  Sun, 06 Nov 1994 08:49:37 GMT  ");
+        assertThat(result).isPresent();
+        assertThat(result.get()).isEqualTo(Instant.parse("1994-11-06T08:49:37Z"));
+    }
+
+    @Test
+    void parseRfc850TwoDigitYearBoundary() {
+        // year=49 → 2049
+        Optional<Instant> r1 = HttpDateFormat.parse("Saturday, 06-Nov-49 08:49:37 GMT");
+        assertThat(r1).isPresent();
+        assertThat(r1.get().toString()).startsWith("2049-");
+        // year=50 → 1950
+        Optional<Instant> r2 = HttpDateFormat.parse("Saturday, 04-Nov-50 08:49:37 GMT");
+        assertThat(r2).isPresent();
+        assertThat(r2.get().toString()).startsWith("1950-");
+    }
 }

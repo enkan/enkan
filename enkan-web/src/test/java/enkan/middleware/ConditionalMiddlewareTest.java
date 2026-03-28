@@ -253,4 +253,65 @@ class ConditionalMiddlewareTest {
         assertThat(plain.getHeaders().get("ETag"))
                 .isNotEqualTo(gzipped.getHeaders().get("ETag"));
     }
+
+    // --- Additional boundary and edge case tests ---
+
+    @Test
+    void headMethodGets304ForIfNoneMatch() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of("If-None-Match", "\"abc\""))
+                .set(HttpRequest::setRequestMethod, "HEAD")
+                .build();
+        HttpResponse resp = handle(request, ok("hello", "ETag", "\"abc\""));
+        assertThat(resp.getStatus()).isEqualTo(304);
+    }
+
+    @Test
+    void ifModifiedSinceEqualTimestampReturns304() {
+        // §13.1.3: "earlier or equal to" → condition false → 304
+        String date = "Sun, 06 Nov 1994 08:49:37 GMT";
+        HttpResponse resp = handle(
+                get("If-Modified-Since", date),
+                ok("hello", "Last-Modified", date));
+        assertThat(resp.getStatus()).isEqualTo(304);
+    }
+
+    @Test
+    void ifUnmodifiedSinceEqualTimestampPassesThrough() {
+        // §13.1.4: "earlier than or equal to" → condition true → pass
+        String date = "Sun, 06 Nov 1994 08:49:37 GMT";
+        HttpResponse resp = handle(
+                get("If-Unmodified-Since", date),
+                ok("hello", "Last-Modified", date));
+        assertThat(resp.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void ifMatchWildcardPassesThrough() {
+        HttpResponse resp = handle(
+                get("If-Match", "*"),
+                ok("hello", "ETag", "\"abc\""));
+        assertThat(resp.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void malformedIfModifiedSinceDateIsIgnored() {
+        // §13.1.3: invalid date → ignore condition → normal response
+        HttpResponse resp = handle(
+                get("If-Modified-Since", "not-a-date"),
+                ok("hello", "Last-Modified", "Sun, 06 Nov 1994 08:49:37 GMT"));
+        assertThat(resp.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void headMethodGets304ForIfModifiedSince() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "If-Modified-Since", "Sun, 06 Nov 1994 08:49:37 GMT"))
+                .set(HttpRequest::setRequestMethod, "HEAD")
+                .build();
+        HttpResponse resp = handle(request, ok("hello",
+                "Last-Modified", "Sat, 05 Nov 1994 08:49:37 GMT"));
+        assertThat(resp.getStatus()).isEqualTo(304);
+    }
 }

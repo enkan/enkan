@@ -121,4 +121,16 @@ class ETagUtilsTest {
         assertThat(ETagUtils.matchesHeader(null, "\"a\"", true)).isFalse();
         assertThat(ETagUtils.matchesHeader("\"a\"", null, true)).isFalse();
     }
+
+    @Test
+    void matchesHeaderWildcardWithNullETag() {
+        // "*" with null etag — no representation identity available
+        assertThat(ETagUtils.matchesHeader("*", null, true)).isFalse();
+        assertThat(ETagUtils.matchesHeader("*", null, false)).isFalse();
+    }
+
+    @Test
+    void matchesHeaderWithWhitespace() {
+        assertThat(ETagUtils.matchesHeader(" \"a\" , \"b\" ", "\"b\"", true)).isTrue();
+    }
 }
