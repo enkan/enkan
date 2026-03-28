@@ -15,7 +15,7 @@
     <name>enkan-component-eclipselink</name>
 
     <properties>
-        <eclipselink.version>4.0.9</eclipselink.version>
+        <eclipselink.version>5.0.0</eclipselink.version>
     </properties>
 
     <dependencies>
