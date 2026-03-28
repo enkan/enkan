@@ -50,7 +50,8 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                     .filter(m -> m.group(1).equals("q"))
                     .map(m -> parseQ(m.group(2)))
                     .findFirst();
-            return new AcceptFragment<>(CodecUtils.parseMediaType(tokens[0]), q.orElse(1.0));
+            MediaType mt = CodecUtils.parseMediaType(tokens[0]);
+            return new AcceptFragment<>(mt, q.orElse(1.0), mediaTypeSpecificity(mt));
         }
         return null;
     }
@@ -75,8 +76,8 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                     .filter(mt -> fragment.fragment().isCompatible(mt))
                     .findFirst();
             return matched
-                    .map(mediaType -> new AcceptFragment<>(mediaType, fragment.q()))
-                    .orElseGet(() -> new AcceptFragment<>(fragment.fragment(), 0.0));
+                    .map(mediaType -> new AcceptFragment<>(mediaType, fragment.q(), fragment.specificity()))
+                    .orElseGet(() -> new AcceptFragment<>(fragment.fragment(), 0.0, fragment.specificity()));
         };
     }
 
@@ -104,7 +105,8 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                     .map(this::parseMediaTypeAcceptFragment)
                     .filter(Objects::nonNull)
                     .map(serverWeightFunc)
-                    .max(Comparator.comparing(AcceptFragment::q))
+                    .max(Comparator.comparing(AcceptFragment<MediaType>::q)
+                            .thenComparingInt(AcceptFragment::specificity))
                     .map(af -> af.fragment);
         }).orElse(null);
     }
@@ -204,7 +206,16 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
     }
 
 
-    private record AcceptFragment<T>(T fragment, double q) implements Serializable {
+    private record AcceptFragment<T>(T fragment, double q, int specificity) implements Serializable {
+        AcceptFragment(T fragment, double q) {
+            this(fragment, q, 0);
+        }
+    }
+
+    private static int mediaTypeSpecificity(MediaType mt) {
+        if (mt.isWildcardType()) return 0;           // */*
+        if (mt.isWildcardSubtype()) return 1;         // text/*
+        return 2;                                      // text/html
     }
 
 }

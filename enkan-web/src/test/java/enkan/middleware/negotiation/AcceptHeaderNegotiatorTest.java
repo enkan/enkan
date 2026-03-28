@@ -106,6 +106,53 @@ class AcceptHeaderNegotiatorTest {
     }
 
     @Test
+    void specificMediaTypePreferredOverWildcardSubtype() {
+        // text/html (specificity=2) should beat text/* (specificity=1) at same q
+        Set<String> allowed = new HashSet<>(Arrays.asList("text/html"));
+        MediaType mt = neg.bestAllowedContentType("text/*, text/html", allowed);
+        assertThat(mt.getType()).isEqualTo("text");
+        assertThat(mt.getSubtype()).isEqualTo("html");
+    }
+
+    @Test
+    void specificMediaTypePreferredOverFullWildcard() {
+        // text/html (specificity=2) should beat */* (specificity=0) at same q
+        Set<String> allowed = new HashSet<>(Arrays.asList("text/html"));
+        MediaType mt = neg.bestAllowedContentType("*/*, text/html", allowed);
+        assertThat(mt.getType()).isEqualTo("text");
+        assertThat(mt.getSubtype()).isEqualTo("html");
+    }
+
+    @Test
+    void higherQWinsOverSpecificity() {
+        // text/* has higher q (1.0) so it wins despite lower specificity.
+        // Use a single allowed type so the matched subtype is deterministic.
+        Set<String> allowed = new HashSet<>(Arrays.asList("text/plain"));
+        MediaType mt = neg.bestAllowedContentType("text/html;q=0.5, text/*;q=1.0", allowed);
+        assertThat(mt).isNotNull();
+        assertThat(mt.getType()).isEqualTo("text");
+        assertThat(mt.getSubtype()).isEqualTo("plain");
+    }
+
+    @Test
+    void threeWaySpecificityOrdering() {
+        // */*, text/*, text/html all q=1.0 — text/html should win
+        Set<String> allowed = new HashSet<>(Arrays.asList("text/html", "application/json"));
+        MediaType mt = neg.bestAllowedContentType("*/*, text/*, text/html", allowed);
+        assertThat(mt.getType()).isEqualTo("text");
+        assertThat(mt.getSubtype()).isEqualTo("html");
+    }
+
+    @Test
+    void specificityWinsRegardlessOfOrder() {
+        // Same as above but reversed order in Accept header
+        Set<String> allowed = new HashSet<>(Arrays.asList("text/html", "application/json"));
+        MediaType mt = neg.bestAllowedContentType("text/html, text/*, */*", allowed);
+        assertThat(mt.getType()).isEqualTo("text");
+        assertThat(mt.getSubtype()).isEqualTo("html");
+    }
+
+    @Test
     void quotedParameterWithEscapedQuote() {
         // Quoted-string parameter values may contain escaped quotes
         Set<String> allowedTypes = new HashSet<>(Arrays.asList("text/html", "text/plain"));
