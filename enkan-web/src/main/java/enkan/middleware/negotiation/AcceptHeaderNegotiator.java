@@ -26,6 +26,8 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
 
     /** Cache: (acceptHeader + "|" + allowedTypes) → resolved MediaType */
     private final ConcurrentHashMap<String, Optional<MediaType>> contentTypeCache = new ConcurrentHashMap<>();
+    /** Cache: (acceptHeader + "|" + available) → resolved charset */
+    private final ConcurrentHashMap<String, Optional<String>> charsetCache = new ConcurrentHashMap<>();
     /** Cache: (acceptHeader + "|" + available) → resolved language */
     private final ConcurrentHashMap<String, Optional<String>> languageCache = new ConcurrentHashMap<>();
 
@@ -109,43 +111,46 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
 
     @Override
     public String bestAllowedCharset(String acceptsHeader, Set<String> available) {
-        // Lowercase accept keys for case-insensitive matching (RFC 9110 §12.5.3)
-        Map<String, Double> accepts = Arrays
-                .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
-                .map(this::parseStringAcceptFragment)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(
-                        af -> af.fragment().toLowerCase(Locale.US),
-                        AcceptFragment::q,
-                        (a, b) -> a));
-        // Pre-resolve accept entries to canonical Charset objects once,
-        // skipping "*" and unrecognized names.
-        Double wildcardQ = accepts.get("*");
-        Map<Charset, Double> resolvedAccepts = new HashMap<>();
-        for (Map.Entry<String, Double> entry : accepts.entrySet()) {
-            if ("*".equals(entry.getKey())) continue;
-            try {
-                resolvedAccepts.put(Charset.forName(entry.getKey()), entry.getValue());
-            } catch (UnsupportedCharsetException ignored) {}
-        }
-        return selectBest(available, charset -> {
-            charset = charset.toLowerCase(Locale.US);
-            Double q = accepts.get(charset);
-            if (q != null) return q;
-            // Try matching by canonical charset name (handles aliases like
-            // latin1, iso_8859_1, iso-8859-1, etc.)
-            try {
-                Charset cs = Charset.forName(charset);
-                q = resolvedAccepts.get(cs);
-                if (q != null) return q;
-                if (wildcardQ != null) return wildcardQ;
-                // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
-                if (cs.equals(StandardCharsets.ISO_8859_1)) return 1.0;
-            } catch (UnsupportedCharsetException ignored) {
-                // Available charset not recognized by the JVM — fall through to wildcard
+        String cacheKey = stableCacheKey(acceptsHeader, available);
+        return charsetCache.computeIfAbsent(cacheKey, k -> {
+            // Lowercase accept keys for case-insensitive matching (RFC 9110 §12.5.3)
+            Map<String, Double> accepts = Arrays
+                    .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
+                    .map(this::parseStringAcceptFragment)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toMap(
+                            af -> af.fragment().toLowerCase(Locale.US),
+                            AcceptFragment::q,
+                            (a, b) -> a));
+            // Pre-resolve accept entries to canonical Charset objects once,
+            // skipping "*" and unrecognized names.
+            Double wildcardQ = accepts.get("*");
+            Map<Charset, Double> resolvedAccepts = new HashMap<>();
+            for (Map.Entry<String, Double> entry : accepts.entrySet()) {
+                if ("*".equals(entry.getKey())) continue;
+                try {
+                    resolvedAccepts.put(Charset.forName(entry.getKey()), entry.getValue());
+                } catch (UnsupportedCharsetException ignored) {}
             }
-            if (wildcardQ != null) return wildcardQ;
-            return 0.0;
+            return selectBest(available, charset -> {
+                charset = charset.toLowerCase(Locale.US);
+                Double q = accepts.get(charset);
+                if (q != null) return q;
+                // Try matching by canonical charset name (handles aliases like
+                // latin1, iso_8859_1, iso-8859-1, etc.)
+                try {
+                    Charset cs = Charset.forName(charset);
+                    q = resolvedAccepts.get(cs);
+                    if (q != null) return q;
+                    if (wildcardQ != null) return wildcardQ;
+                    // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
+                    if (cs.equals(StandardCharsets.ISO_8859_1)) return 1.0;
+                } catch (UnsupportedCharsetException ignored) {
+                    // Available charset not recognized by the JVM — fall through to wildcard
+                }
+                if (wildcardQ != null) return wildcardQ;
+                return 0.0;
+            });
         }).orElse(null);
     }
 
