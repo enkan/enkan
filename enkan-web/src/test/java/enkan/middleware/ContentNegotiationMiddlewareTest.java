@@ -165,10 +165,11 @@ class ContentNegotiationMiddlewareTest {
     @Test
     void charsetNegotiatedWhenConfigured() {
         middleware.setAllowedCharsets(Set.of("utf-8", "iso-8859-1"));
+        // Give utf-8 a higher q to avoid tie with iso-8859-1's default q=1.0
         request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of(
                         "Accept", "text/html",
-                        "Accept-Charset", "utf-8"))
+                        "Accept-Charset", "utf-8, iso-8859-1;q=0.5"))
                 .build();
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
                 (Endpoint<HttpRequest, HttpResponse>) req -> {

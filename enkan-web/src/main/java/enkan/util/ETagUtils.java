@@ -12,6 +12,16 @@ import java.util.HexFormat;
  */
 public final class ETagUtils {
 
+    private static final ThreadLocal<MessageDigest> SHA256 = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError("SHA-256 not available", e);
+        }
+    });
+
+    private static final HexFormat HEX = HexFormat.of();
+
     private ETagUtils() {}
 
     /**
@@ -37,21 +47,16 @@ public final class ETagUtils {
             return null;
         }
 
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            if (contentEncoding != null) {
-                digest.update(contentEncoding.getBytes(StandardCharsets.UTF_8));
-                digest.update((byte) 0);
-            }
-            digest.update(data);
-            byte[] hash = digest.digest();
-            // Use first 16 bytes (128 bits) for a compact but collision-resistant tag
-            String hex = HexFormat.of().formatHex(hash, 0, 16);
-            return "W/\"" + hex + "\"";
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is required by the JVM spec
-            throw new AssertionError("SHA-256 not available", e);
+        MessageDigest digest = SHA256.get();
+        digest.reset();
+        if (contentEncoding != null) {
+            digest.update(contentEncoding.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
         }
+        digest.update(data);
+        byte[] hash = digest.digest();
+        String hex = HEX.formatHex(hash, 0, 16);
+        return "W/\"" + hex + "\"";
     }
 
     /**
@@ -99,12 +104,19 @@ public final class ETagUtils {
         if (headerValue == null || etag == null) return false;
         String trimmed = headerValue.strip();
         if ("*".equals(trimmed)) return true;
-        for (String candidate : trimmed.split(",")) {
-            String tag = candidate.strip();
-            if (tag.isEmpty()) continue;
-            if (weakComparison ? weakMatch(tag, etag) : strongMatch(tag, etag)) {
-                return true;
+
+        int start = 0;
+        int len = trimmed.length();
+        while (start < len) {
+            int comma = trimmed.indexOf(',', start);
+            int end = (comma >= 0) ? comma : len;
+            String tag = trimmed.substring(start, end).strip();
+            if (!tag.isEmpty()) {
+                if (weakComparison ? weakMatch(tag, etag) : strongMatch(tag, etag)) {
+                    return true;
+                }
             }
+            start = end + 1;
         }
         return false;
     }

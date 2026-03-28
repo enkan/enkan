@@ -12,7 +12,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
-import static enkan.util.BeanBuilder.builder;
 
 /**
  * Evaluates conditional request headers (RFC 9110 §13) and returns
@@ -74,16 +73,8 @@ public class ConditionalMiddleware implements WebMiddleware {
         // §13.2.2 Step 2: If-Unmodified-Since (only when no If-Match)
         if (ifMatch == null) {
             String ifUnmodifiedSince = request.getHeaders().get("If-Unmodified-Since");
-            if (ifUnmodifiedSince != null) {
-                String lastModified = response.getHeaders().get("Last-Modified");
-                if (lastModified != null) {
-                    Optional<Instant> condDate = HttpDateFormat.parse(ifUnmodifiedSince);
-                    Optional<Instant> modDate = HttpDateFormat.parse(lastModified);
-                    if (condDate.isPresent() && modDate.isPresent()
-                            && modDate.get().isAfter(condDate.get())) {
-                        return preconditionFailed();
-                    }
-                }
+            if (isModifiedAfter(ifUnmodifiedSince, response)) {
+                return preconditionFailed();
             }
         }
 
@@ -102,16 +93,8 @@ public class ConditionalMiddleware implements WebMiddleware {
         // §13.2.2 Step 4: If-Modified-Since (GET/HEAD only, no If-None-Match)
         if (ifNoneMatch == null && ("GET".equals(method) || "HEAD".equals(method))) {
             String ifModifiedSince = request.getHeaders().get("If-Modified-Since");
-            if (ifModifiedSince != null) {
-                String lastModified = response.getHeaders().get("Last-Modified");
-                if (lastModified != null) {
-                    Optional<Instant> condDate = HttpDateFormat.parse(ifModifiedSince);
-                    Optional<Instant> modDate = HttpDateFormat.parse(lastModified);
-                    if (condDate.isPresent() && modDate.isPresent()
-                            && !modDate.get().isAfter(condDate.get())) {
-                        return notModified(response);
-                    }
-                }
+            if (isNotModifiedSince(ifModifiedSince, response)) {
+                return notModified(response);
             }
         }
 
@@ -120,11 +103,38 @@ public class ConditionalMiddleware implements WebMiddleware {
         return response;
     }
 
+    /**
+     * Checks whether the response's Last-Modified date is after the given condition date.
+     * Returns false if either date is null or unparseable.
+     */
+    private boolean isModifiedAfter(String conditionDate, HttpResponse response) {
+        if (conditionDate == null) return false;
+        Optional<Instant> condInstant = HttpDateFormat.parse(conditionDate);
+        Optional<Instant> modInstant = parseLastModified(response);
+        return condInstant.isPresent() && modInstant.isPresent()
+                && modInstant.get().isAfter(condInstant.get());
+    }
+
+    /**
+     * Checks whether the response has NOT been modified since the given condition date.
+     * Returns false if either date is null or unparseable (condition is skipped per §13.1.3).
+     */
+    private boolean isNotModifiedSince(String conditionDate, HttpResponse response) {
+        if (conditionDate == null) return false;
+        Optional<Instant> condInstant = HttpDateFormat.parse(conditionDate);
+        Optional<Instant> modInstant = parseLastModified(response);
+        return condInstant.isPresent() && modInstant.isPresent()
+                && !modInstant.get().isAfter(condInstant.get());
+    }
+
+    private Optional<Instant> parseLastModified(HttpResponse response) {
+        String lastModified = response.getHeaders().get("Last-Modified");
+        return lastModified != null ? HttpDateFormat.parse(lastModified) : Optional.empty();
+    }
+
     private HttpResponse notModified(HttpResponse original) {
-        HttpResponse response = builder(HttpResponse.of(""))
-                .set(HttpResponse::setStatus, 304)
-                .build();
-        // §15.4.5: preserve specific headers
+        HttpResponse response = HttpResponse.of("");
+        response.setStatus(304);
         original.getHeaders().keySet().forEach(name -> {
             if (NOT_MODIFIED_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
                 response.getHeaders().put(name, original.getHeaders().get(name));
@@ -135,8 +145,9 @@ public class ConditionalMiddleware implements WebMiddleware {
     }
 
     private HttpResponse preconditionFailed() {
-        return builder(HttpResponse.of(""))
-                .set(HttpResponse::setStatus, 412)
-                .build();
+        HttpResponse response = HttpResponse.of("");
+        response.setStatus(412);
+        response.setBody((String) null);
+        return response;
     }
 }
