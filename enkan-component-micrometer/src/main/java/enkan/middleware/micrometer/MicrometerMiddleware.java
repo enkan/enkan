@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
 import jakarta.inject.Inject;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -23,8 +24,10 @@ public class MicrometerMiddleware<REQ, RES> implements DecoratorMiddleware<REQ, 
 
     @Override
     public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
-        Timer requestTimer = micrometer.getRequestTimer();
-        Counter errorCounter = micrometer.getErrorCounter();
+        Timer requestTimer = Objects.requireNonNull(micrometer.getRequestTimer(),
+                "MicrometerComponent is not started");
+        Counter errorCounter = Objects.requireNonNull(micrometer.getErrorCounter(),
+                "MicrometerComponent is not started");
         AtomicInteger activeRequests = micrometer.getActiveRequests();
 
         Timer.Sample sample = Timer.start(micrometer.getRegistry());
