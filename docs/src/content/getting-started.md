@@ -18,12 +18,12 @@ Add `kotowari` (MVC framework) and a server component to your `pom.xml`:
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>kotowari</artifactId>
-  <version>0.14.1-SNAPSHOT</version>
+  <version>0.14.1</version>
 </dependency>
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>enkan-component-jetty</artifactId>
-  <version>0.14.1-SNAPSHOT</version>
+  <version>0.14.1</version>
 </dependency>
 ```
 
