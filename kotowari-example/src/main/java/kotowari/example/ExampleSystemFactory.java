@@ -9,7 +9,6 @@ import enkan.component.flyway.FlywayMigration;
 import enkan.component.freemarker.FreemarkerTemplateEngine;
 import enkan.component.hikaricp.HikariCPComponent;
 import enkan.component.jackson.JacksonBeansConverter;
-import enkan.component.metrics.MetricsComponent;
 import enkan.component.opentelemetry.OpenTelemetryComponent;
 import enkan.component.undertow.UndertowComponent;
 import io.opentelemetry.api.common.Attributes;
@@ -41,7 +40,6 @@ public class ExampleSystemFactory implements EnkanSystemFactory {
                 "jackson", new JacksonBeansConverter(),
                 "flyway", new FlywayMigration(),
                 "template", new FreemarkerTemplateEngine(),
-                "metrics", new MetricsComponent(),
                 "opentelemetry", new OpenTelemetryComponent(
                         OpenTelemetrySdk.builder()
                                 .setTracerProvider(SdkTracerProvider.builder()

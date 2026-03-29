@@ -1,7 +1,6 @@
 package kotowari.example;
 
 import enkan.system.command.JsonRequestCommand;
-import enkan.system.command.MetricsCommandRegister;
 import enkan.system.command.SqlCommand;
 import enkan.system.devel.command.AutoResetCommand;
 import enkan.system.devel.command.CompileCommand;

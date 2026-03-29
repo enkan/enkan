@@ -13,7 +13,6 @@ import enkan.data.HttpResponse;
 import enkan.endpoint.ResourceEndpoint;
 import enkan.middleware.*;
 import enkan.middleware.doma2.DomaTransactionMiddleware;
-import enkan.middleware.metrics.MetricsMiddleware;
 import enkan.middleware.opentelemetry.TracingMiddleware;
 import enkan.middleware.session.MemoryStore;
 import enkan.predicate.PathPredicate;
@@ -88,7 +87,6 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
                 .set(SecurityHeadersMiddleware::setContentSecurityPolicy,
                         "default-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' ws://localhost:*")
                 .build());
-        app.use(new MetricsMiddleware<>());
         app.use(new TracingMiddleware());
         app.use(none(), new ServiceUnavailableMiddleware<>(new ResourceEndpoint("/public/html/503.html")));
         app.use(envIn("development"), new LazyLoadMiddleware<>("enkan.middleware.devel.StacktraceMiddleware"));
