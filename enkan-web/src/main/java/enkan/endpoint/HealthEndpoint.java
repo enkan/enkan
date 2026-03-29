@@ -24,9 +24,14 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <p>The overall {@code status} is {@code "UP"} (HTTP 200) when every
- * component reports {@link HealthStatus#UP}, and {@code "DOWN"} (HTTP 503)
- * when at least one component reports {@link HealthStatus#DOWN}.
+ * <p>The overall {@code status} reflects the worst component status using
+ * this precedence: {@code DOWN} &gt; {@code STOPPING} &gt; {@code STARTING} &gt; {@code UP}.
+ *
+ * <p>HTTP status codes:
+ * <ul>
+ *   <li>200 — all components are {@code UP}</li>
+ *   <li>503 — at least one component is {@code DOWN}, {@code STARTING}, or {@code STOPPING}</li>
+ * </ul>
  *
  * <p>Components that do not implement {@link HealthCheckable} are not included
  * in the {@code components} map but do not affect the overall status.
@@ -61,15 +66,34 @@ public class HealthEndpoint implements Endpoint<HttpRequest, HttpResponse> {
             }
         });
 
-        boolean allUp = componentStatuses.values().stream()
-                .allMatch(s -> s == HealthStatus.UP);
-        HealthStatus overall = allUp ? HealthStatus.UP : HealthStatus.DOWN;
+        HealthStatus overall = computeOverallStatus(componentStatuses);
 
         String json = buildJson(overall, componentStatuses);
         HttpResponse response = HttpResponse.of(json);
-        response.setStatus(allUp ? 200 : 503);
+        response.setStatus(overall == HealthStatus.UP ? 200 : 503);
         response.getHeaders().put("Content-Type", "application/json");
         return response;
+    }
+
+    private static final Map<HealthStatus, Integer> SEVERITY = Map.of(
+            HealthStatus.UP, 0,
+            HealthStatus.STARTING, 1,
+            HealthStatus.STOPPING, 2,
+            HealthStatus.DOWN, 3
+    );
+
+    /**
+     * Computes the overall health status from individual component statuses.
+     * Uses worst-status-wins: DOWN &gt; STOPPING &gt; STARTING &gt; UP.
+     */
+    static HealthStatus computeOverallStatus(Map<String, HealthStatus> componentStatuses) {
+        HealthStatus worst = HealthStatus.UP;
+        for (HealthStatus s : componentStatuses.values()) {
+            if (SEVERITY.get(s) > SEVERITY.get(worst)) {
+                worst = s;
+            }
+        }
+        return worst;
     }
 
     private String buildJson(HealthStatus overall, Map<String, HealthStatus> componentStatuses) {

@@ -121,6 +121,8 @@ Both `JettyComponent` and `UndertowComponent` inherit from `WebServerComponent` 
 | SSL port | `setSslPort(int)` | `443` | HTTPS listen port |
 | Keystore path | `setKeystorePath(String)` | — | Path to JKS keystore |
 | Keystore password | `setKeystorePassword(String)` | — | Keystore password |
+| Pre-stop delay | `setPreStopDelay(long)` | `0` | Milliseconds to keep serving after shutdown begins |
+| Stop timeout | `setStopTimeout(long)` | `30000` | Milliseconds to wait for in-flight requests |
 
 ### HTTPS example
 
@@ -133,6 +135,46 @@ builder(new JettyComponent())
     .set(JettyComponent::setKeystorePassword, Env.get("KEYSTORE_PASSWORD"))
     .build()
 ```
+
+---
+
+## Graceful Shutdown
+
+When stopping, Enkan web server components follow a three-phase shutdown sequence:
+
+1. **Pre-stop delay** — The component reports `STOPPING` health status but continues to serve requests. This gives load balancers and Kubernetes Endpoints time to stop routing new traffic to the pod.
+2. **Drain** — The server stops accepting new connections and waits for in-flight requests to complete.
+3. **Force stop** — After the timeout, the server is forcefully stopped.
+
+### Configuration
+
+```java
+builder(new JettyComponent())
+    .set(JettyComponent::setPort, Env.getInt("PORT", 3000))
+    .set(JettyComponent::setPreStopDelay, 5000)  // 5s for Endpoints propagation
+    .set(JettyComponent::setStopTimeout, 25000)   // 25s drain
+    .build()
+```
+
+### Kubernetes deployment
+
+Set `preStopDelay + stopTimeout` to be less than the pod's `terminationGracePeriodSeconds` (default 30s) to ensure the JVM exits cleanly before Kubernetes sends SIGKILL:
+
+```yaml
+spec:
+  terminationGracePeriodSeconds: 35
+```
+
+### Health status lifecycle
+
+The `HealthCheckable` interface reports four states that map to Kubernetes probes:
+
+| HealthStatus | Readiness | Liveness | Meaning |
+|---|---|---|---|
+| `STARTING` | not ready | alive | Initializing — don't send traffic, don't kill |
+| `UP` | ready | alive | Normal operation |
+| `STOPPING` | not ready | alive | Draining — stop sending traffic, don't kill |
+| `DOWN` | not ready | dead | Failed — restart |
 
 ---
 

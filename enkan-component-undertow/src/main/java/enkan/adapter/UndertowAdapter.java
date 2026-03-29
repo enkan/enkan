@@ -13,6 +13,7 @@ import io.undertow.io.IoCallback;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.server.handlers.GracefulShutdownHandler;
 import io.undertow.server.handlers.encoding.ContentEncodingRepository;
 import io.undertow.server.handlers.encoding.EncodingHandler;
 import io.undertow.server.handlers.encoding.GzipEncodingProvider;
@@ -41,6 +42,8 @@ import java.security.*;
  */
 public class UndertowAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(UndertowAdapter.class);
+
+    public record UndertowServer(Undertow undertow, GracefulShutdownHandler shutdownHandler) {}
 
     private static final IoCallback callback = new IoCallback() {
         @Override
@@ -109,7 +112,7 @@ public class UndertowAdapter {
         if (options.containsKey("directBuffers")) builder.setDirectBuffers(options.getBoolean("directBuffers"));
     }
 
-    public Undertow runUndertow(WebApplication application, OptionMap options) {
+    public UndertowServer runUndertow(WebApplication application, OptionMap options) {
         Undertow.Builder builder = Undertow.builder();
 
         HttpHandler appHandler = new HttpHandler() {
@@ -160,7 +163,9 @@ public class UndertowAdapter {
                         new ContentEncodingRepository()
                                 .addEncodingHandler("gzip", new GzipEncodingProvider(), 50))
                 : appHandler;
-        builder.setHandler(finalHandler);
+
+        GracefulShutdownHandler shutdownHandler = new GracefulShutdownHandler(finalHandler);
+        builder.setHandler(shutdownHandler);
 
         setOptions(builder, options);
         if (options.getBoolean("http?", true)) {
@@ -176,7 +181,7 @@ public class UndertowAdapter {
         Undertow undertow = builder.build();
         undertow.start();
 
-        return undertow;
+        return new UndertowServer(undertow, shutdownHandler);
     }
 
     private SSLContext createSslContext(OptionMap options) {
