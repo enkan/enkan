@@ -17,6 +17,7 @@
 
     <properties>
         <jeromq.version>0.6.0</jeromq.version>
+        <fressian.version>0.6.8</fressian.version>
     </properties>
 
     <dependencies>
@@ -27,7 +28,7 @@
         <dependency>
             <groupId>org.fressian</groupId>
             <artifactId>fressian</artifactId>
-            <version>0.6.6</version>
+            <version>${fressian.version}</version>
         </dependency>
         <dependency>
             <groupId>org.zeromq</groupId>

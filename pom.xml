@@ -32,7 +32,7 @@
         <jakarta.transaction.version>2.0.1</jakarta.transaction.version>
         <jakarta.enterprise.version>3.0.1</jakarta.enterprise.version>
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
-        <jackson.version>3.1.0</jackson.version>
+        <jackson.version>3.1.1</jackson.version>
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
         <jakarta.validation.version>3.1.1</jakarta.validation.version>
         <jakarta.persistence.version>3.2.0</jakarta.persistence.version>
