@@ -89,8 +89,9 @@ public class HealthEndpoint implements Endpoint<HttpRequest, HttpResponse> {
     static HealthStatus computeOverallStatus(Map<String, HealthStatus> componentStatuses) {
         HealthStatus worst = HealthStatus.UP;
         for (HealthStatus s : componentStatuses.values()) {
-            if (SEVERITY.get(s) > SEVERITY.get(worst)) {
-                worst = s;
+            HealthStatus normalized = (s == null) ? HealthStatus.DOWN : s;
+            if (SEVERITY.get(normalized) > SEVERITY.get(worst)) {
+                worst = normalized;
             }
         }
         return worst;

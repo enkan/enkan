@@ -61,4 +61,13 @@ class HealthEndpointTest {
 
         assertThat(HealthEndpoint.computeOverallStatus(statuses)).isEqualTo(HealthStatus.DOWN);
     }
+
+    @Test
+    void nullStatusIsTreatedAsDown() {
+        Map<String, HealthStatus> statuses = new LinkedHashMap<>();
+        statuses.put("a", HealthStatus.UP);
+        statuses.put("b", null);
+
+        assertThat(HealthEndpoint.computeOverallStatus(statuses)).isEqualTo(HealthStatus.DOWN);
+    }
 }
