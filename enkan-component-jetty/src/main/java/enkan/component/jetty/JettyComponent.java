@@ -14,6 +14,8 @@ import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.function.BiFunction;
 
@@ -21,9 +23,12 @@ import java.util.function.BiFunction;
  * @author kawasima
  */
 public class JettyComponent extends WebServerComponent<JettyComponent> implements HealthCheckable {
+    private static final Logger LOG = LoggerFactory.getLogger(JettyComponent.class);
+
     private Server server;
     private BiFunction<Server, OptionMap, Connector> serverConnectorFactory;
     private boolean virtualThreads = true;
+    private volatile boolean stopping = false;
 
     @Override
     protected ComponentLifecycle<JettyComponent> lifecycle() {
@@ -48,22 +53,45 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
             public void stop(JettyComponent component) {
                 if (server != null) {
                     try {
+                        // Phase 1: Mark as stopping and wait for LB/K8s Endpoints propagation
+                        stopping = true;
+                        long preStopDelay = getPreStopDelay();
+                        if (preStopDelay > 0) {
+                            LOG.info("Graceful shutdown: waiting {}ms for load balancer propagation", preStopDelay);
+                            try {
+                                Thread.sleep(preStopDelay);
+                            } catch (InterruptedException ex) {
+                                Thread.currentThread().interrupt();
+                                LOG.warn("Pre-stop delay interrupted, proceeding to drain");
+                            }
+                        }
+                        // Phase 2+3: Jetty handles drain + timeout via stopTimeout
+                        LOG.info("Graceful shutdown: draining in-flight requests (timeout={}ms)", getStopTimeout());
                         server.stop();
                         server.join();
                     } catch (Exception ex) {
                         throw new FalteringEnvironmentException(ex);
                     } finally {
                         server = null;
+                        stopping = false;
                     }
                 }
-
             }
         };
     }
 
     @Override
     public HealthStatus health() {
-        return (server != null && server.isRunning()) ? HealthStatus.UP : HealthStatus.DOWN;
+        if (stopping) {
+            return HealthStatus.STOPPING;
+        }
+        if (server == null) {
+            return HealthStatus.DOWN;
+        }
+        if (server.isStarting()) {
+            return HealthStatus.STARTING;
+        }
+        return server.isRunning() ? HealthStatus.UP : HealthStatus.DOWN;
     }
 
     public boolean isVirtualThreads() {
