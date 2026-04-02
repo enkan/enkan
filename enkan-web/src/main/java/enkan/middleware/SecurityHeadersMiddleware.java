@@ -30,7 +30,7 @@ import static enkan.util.HttpResponseUtils.header;
  *   <li>{@code Cross-Origin-Embedder-Policy: require-corp}</li>
  * </ul>
  *
- * <p>The following headers are available but disabled by default (no safe universal default):
+ * <p>The following headers are available but disabled by default (no safe universal default exists):
  * <ul>
  *   <li>{@code Permissions-Policy} — restricts browser features (camera, geolocation, etc.)</li>
  * </ul>
