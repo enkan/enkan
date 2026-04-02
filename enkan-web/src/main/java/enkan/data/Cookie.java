@@ -156,6 +156,18 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
      * @return the cookie string in RFC 6265 format
      */
     public String toHttpString() {
+        String result = buildHttpString();
+        warnIfOversized(result);
+        return result;
+    }
+
+    /**
+     * Builds the {@code Set-Cookie} header value without size validation.
+     * Subclasses can use this to prepend a prefix before calling {@link #warnIfOversized(String)}.
+     *
+     * @return the cookie string in RFC 6265 format (without prefix)
+     */
+    protected String buildHttpString() {
         StringBuilder sb = new StringBuilder();
         String value = getValue();
         sb.append(getName()).append("=").append(value != null ? value : "");
@@ -180,9 +192,7 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
         if (getSameSite() != null) {
             sb.append("; samesite=").append(getSameSite());
         }
-        String result = sb.toString();
-        warnIfOversized(result);
-        return result;
+        return sb.toString();
     }
 
     /**

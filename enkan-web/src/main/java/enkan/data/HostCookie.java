@@ -79,8 +79,7 @@ public final class HostCookie extends Cookie {
 
     @Override
     public String toHttpString() {
-        String original = super.toHttpString();
-        String result = "__Host-" + original;
+        String result = "__Host-" + buildHttpString();
         warnIfOversized(result);
         return result;
     }
