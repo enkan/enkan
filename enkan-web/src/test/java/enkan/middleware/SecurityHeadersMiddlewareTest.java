@@ -47,11 +47,13 @@ class SecurityHeadersMiddlewareTest {
         SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
         middleware.setStrictTransportSecurity(null);
         middleware.setContentSecurityPolicy(null);
+        middleware.setCrossOriginEmbedderPolicy(null);
 
         HttpResponse response = middleware.handle(request, chain);
 
         assertThat(response.getHeaders().containsKey("Strict-Transport-Security")).isFalse();
         assertThat(response.getHeaders().containsKey("Content-Security-Policy")).isFalse();
+        assertThat(response.getHeaders().containsKey("Cross-Origin-Embedder-Policy")).isFalse();
         // other headers still present
         assertThat((String) getHeader(response, "X-Content-Type-Options")).isEqualTo("nosniff");
     }
@@ -65,16 +67,6 @@ class SecurityHeadersMiddlewareTest {
 
         assertThat((String) getHeader(response, "Content-Security-Policy"))
                 .isEqualTo("default-src 'self'; img-src *");
-    }
-
-    @Test
-    void coepCanBeDisabled() {
-        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
-        middleware.setCrossOriginEmbedderPolicy(null);
-
-        HttpResponse response = middleware.handle(request, chain);
-
-        assertThat(response.getHeaders().containsKey("Cross-Origin-Embedder-Policy")).isFalse();
     }
 
     @Test
