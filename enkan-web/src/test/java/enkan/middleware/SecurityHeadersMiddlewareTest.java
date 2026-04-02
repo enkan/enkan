@@ -38,6 +38,8 @@ class SecurityHeadersMiddlewareTest {
         assertThat((String) getHeader(response, "Cross-Origin-Opener-Policy")).isEqualTo("same-origin");
         assertThat((String) getHeader(response, "Cross-Origin-Resource-Policy")).isEqualTo("same-origin");
         assertThat((String) getHeader(response, "Strict-Transport-Security")).contains("max-age=");
+        assertThat((String) getHeader(response, "Cross-Origin-Embedder-Policy")).isEqualTo("require-corp");
+        assertThat(response.getHeaders().containsKey("Permissions-Policy")).isFalse();
     }
 
     @Test
@@ -63,6 +65,38 @@ class SecurityHeadersMiddlewareTest {
 
         assertThat((String) getHeader(response, "Content-Security-Policy"))
                 .isEqualTo("default-src 'self'; img-src *");
+    }
+
+    @Test
+    void coepCanBeDisabled() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setCrossOriginEmbedderPolicy(null);
+
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat(response.getHeaders().containsKey("Cross-Origin-Embedder-Policy")).isFalse();
+    }
+
+    @Test
+    void credentiallessCoepIsApplied() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setCrossOriginEmbedderPolicy("credentialless");
+
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat((String) getHeader(response, "Cross-Origin-Embedder-Policy"))
+                .isEqualTo("credentialless");
+    }
+
+    @Test
+    void permissionsPolicyIsAppliedWhenSet() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setPermissionsPolicy("camera=(), geolocation=(self)");
+
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat((String) getHeader(response, "Permissions-Policy"))
+                .isEqualTo("camera=(), geolocation=(self)");
     }
 
     @Test

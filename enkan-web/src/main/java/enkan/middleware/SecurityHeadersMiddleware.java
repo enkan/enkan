@@ -27,6 +27,12 @@ import static enkan.util.HttpResponseUtils.header;
  *   <li>{@code Referrer-Policy: strict-origin-when-cross-origin}</li>
  *   <li>{@code Cross-Origin-Opener-Policy: same-origin}</li>
  *   <li>{@code Cross-Origin-Resource-Policy: same-origin}</li>
+ *   <li>{@code Cross-Origin-Embedder-Policy: require-corp}</li>
+ * </ul>
+ *
+ * <p>The following headers are available but disabled by default (no safe universal default):
+ * <ul>
+ *   <li>{@code Permissions-Policy} — restricts browser features (camera, geolocation, etc.)</li>
  * </ul>
  *
  * <h2>Usage</h2>
@@ -61,6 +67,9 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
     private String referrerPolicy = "strict-origin-when-cross-origin";
     private String crossOriginOpenerPolicy = "same-origin";
     private String crossOriginResourcePolicy = "same-origin";
+    private String crossOriginEmbedderPolicy = "require-corp";
+    /** Disabled by default — no safe universal default exists. */
+    private String permissionsPolicy;
 
     /**
      * Passes the request through the chain and applies all enabled security
@@ -84,6 +93,8 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
         applyIfEnabled(response, "Referrer-Policy", referrerPolicy);
         applyIfEnabled(response, "Cross-Origin-Opener-Policy", crossOriginOpenerPolicy);
         applyIfEnabled(response, "Cross-Origin-Resource-Policy", crossOriginResourcePolicy);
+        applyIfEnabled(response, "Cross-Origin-Embedder-Policy", crossOriginEmbedderPolicy);
+        applyIfEnabled(response, "Permissions-Policy", permissionsPolicy);
 
         return response;
     }
@@ -176,5 +187,30 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      */
     public void setCrossOriginResourcePolicy(String crossOriginResourcePolicy) {
         this.crossOriginResourcePolicy = crossOriginResourcePolicy;
+    }
+
+    /**
+     * Sets the {@code Cross-Origin-Embedder-Policy} header value.
+     * Required (together with COOP) to enable {@code crossOriginIsolated} context
+     * in browsers, which gates {@code SharedArrayBuffer} and high-resolution timers.
+     * Pass {@code null} to disable.
+     *
+     * @param crossOriginEmbedderPolicy policy value, e.g. {@code "require-corp"} or {@code "credentialless"}
+     */
+    public void setCrossOriginEmbedderPolicy(String crossOriginEmbedderPolicy) {
+        this.crossOriginEmbedderPolicy = crossOriginEmbedderPolicy;
+    }
+
+    /**
+     * Sets the {@code Permissions-Policy} header value.
+     * Controls which browser features (camera, geolocation, payment, etc.) the page
+     * and its iframes are allowed to use.
+     * Disabled by default ({@code null}) because no safe universal default exists.
+     * Pass {@code null} to disable.
+     *
+     * @param permissionsPolicy policy value, e.g. {@code "camera=(), geolocation=(self)"}
+     */
+    public void setPermissionsPolicy(String permissionsPolicy) {
+        this.permissionsPolicy = permissionsPolicy;
     }
 }
