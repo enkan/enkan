@@ -51,6 +51,8 @@ public final class SecureCookie extends Cookie {
     @Override
     public String toHttpString() {
         String original = super.toHttpString();
-        return "__Secure-" + original;
+        String result = "__Secure-" + original;
+        warnIfOversized(result);
+        return result;
     }
 }

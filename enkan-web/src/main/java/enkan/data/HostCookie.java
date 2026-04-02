@@ -15,7 +15,7 @@ package enkan.data;
  *
  * <pre>{@code
  * HostCookie cookie = HostCookie.create("token", "abc123");
- * // Set-Cookie: __Host-token=abc123; path=/; httponly; secure
+ * // Set-Cookie: __Host-token=abc123; path=/; secure
  * }</pre>
  *
  * @author kawasima
@@ -77,6 +77,8 @@ public final class HostCookie extends Cookie {
     @Override
     public String toHttpString() {
         String original = super.toHttpString();
-        return "__Host-" + original;
+        String result = "__Host-" + original;
+        warnIfOversized(result);
+        return result;
     }
 }

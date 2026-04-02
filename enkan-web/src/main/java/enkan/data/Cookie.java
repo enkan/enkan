@@ -181,11 +181,20 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
             sb.append("; samesite=").append(getSameSite());
         }
         String result = sb.toString();
-        int byteLength = result.getBytes(StandardCharsets.UTF_8).length;
+        warnIfOversized(result);
+        return result;
+    }
+
+    /**
+     * Logs a warning if the Set-Cookie header exceeds the 4096-byte limit.
+     *
+     * @param setCookieValue the complete Set-Cookie header value
+     */
+    protected void warnIfOversized(String setCookieValue) {
+        int byteLength = setCookieValue.getBytes(StandardCharsets.UTF_8).length;
         if (byteLength > MAX_COOKIE_SIZE) {
             LOG.warning("Set-Cookie header for '" + getName() + "' is " + byteLength
                     + " bytes, exceeding the 4096-byte limit. Browsers may reject this cookie.");
         }
-        return result;
     }
 }
