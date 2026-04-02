@@ -42,12 +42,15 @@ public final class HostCookie extends Cookie {
 
     /**
      * Not supported — {@code __Host-} cookies must not have a {@code Domain} attribute.
+     * Setting {@code null} is permitted (no-op since domain is always null).
      *
-     * @throws UnsupportedOperationException always
+     * @throws UnsupportedOperationException if {@code domain} is not {@code null}
      */
     @Override
     public void setDomain(String domain) {
-        throw new UnsupportedOperationException("__Host- cookies must not have a Domain attribute");
+        if (domain != null) {
+            throw new UnsupportedOperationException("__Host- cookies must not have a Domain attribute");
+        }
     }
 
     /**

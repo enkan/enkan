@@ -40,6 +40,13 @@ class HostCookieTest {
     }
 
     @Test
+    void setDomainNullIsNoOp() {
+        HostCookie cookie = HostCookie.create("token", "abc");
+        cookie.setDomain(null); // should not throw
+        assertThat(cookie.getDomain()).isNull();
+    }
+
+    @Test
     void setSecureFalseThrows() {
         HostCookie cookie = HostCookie.create("token", "abc");
         assertThatThrownBy(() -> cookie.setSecure(false))
