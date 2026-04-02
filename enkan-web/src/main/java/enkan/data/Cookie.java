@@ -4,7 +4,9 @@ import enkan.util.HttpDateFormat;
 import enkan.util.ParsingUtils;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
@@ -16,8 +18,10 @@ import java.util.regex.Pattern;
  *
  * @author kawasima
  */
-public class Cookie implements Serializable {
+public sealed class Cookie implements Serializable permits HostCookie, SecureCookie {
     private static final long serialVersionUID = 1L;
+    private static final Logger LOG = Logger.getLogger(Cookie.class.getName());
+    private static final int MAX_COOKIE_SIZE = 4096;
 
     private static final Pattern RE_TOKEN = Pattern.compile(ParsingUtils.RE_TOKEN);
 
@@ -39,10 +43,19 @@ public class Cookie implements Serializable {
     private String sameSite;
 
     /**
-     * @deprecated Use {@link #create(String, String)} instead.
+     * @deprecated Use {@link #create(String, String)}, {@link HostCookie#create(String, String)},
+     *             or {@link SecureCookie#create(String, String)} instead.
      */
     @Deprecated
     public Cookie() {
+    }
+
+    /**
+     * Constructor for subclasses.
+     */
+    protected Cookie(String name, String value) {
+        setName(name);
+        setValue(value);
     }
 
     /**
@@ -167,6 +180,12 @@ public class Cookie implements Serializable {
         if (getSameSite() != null) {
             sb.append("; samesite=").append(getSameSite());
         }
-        return sb.toString();
+        String result = sb.toString();
+        int byteLength = result.getBytes(StandardCharsets.UTF_8).length;
+        if (byteLength > MAX_COOKIE_SIZE) {
+            LOG.warning("Set-Cookie header for '" + getName() + "' is " + byteLength
+                    + " bytes, exceeding the 4096-byte limit. Browsers may reject this cookie.");
+        }
+        return result;
     }
 }
