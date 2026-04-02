@@ -38,6 +38,8 @@ class SecurityHeadersMiddlewareTest {
         assertThat((String) getHeader(response, "Cross-Origin-Opener-Policy")).isEqualTo("same-origin");
         assertThat((String) getHeader(response, "Cross-Origin-Resource-Policy")).isEqualTo("same-origin");
         assertThat((String) getHeader(response, "Strict-Transport-Security")).contains("max-age=");
+        assertThat((String) getHeader(response, "Cross-Origin-Embedder-Policy")).isEqualTo("require-corp");
+        assertThat(response.getHeaders().containsKey("Permissions-Policy")).isFalse();
     }
 
     @Test
@@ -45,11 +47,13 @@ class SecurityHeadersMiddlewareTest {
         SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
         middleware.setStrictTransportSecurity(null);
         middleware.setContentSecurityPolicy(null);
+        middleware.setCrossOriginEmbedderPolicy(null);
 
         HttpResponse response = middleware.handle(request, chain);
 
         assertThat(response.getHeaders().containsKey("Strict-Transport-Security")).isFalse();
         assertThat(response.getHeaders().containsKey("Content-Security-Policy")).isFalse();
+        assertThat(response.getHeaders().containsKey("Cross-Origin-Embedder-Policy")).isFalse();
         // other headers still present
         assertThat((String) getHeader(response, "X-Content-Type-Options")).isEqualTo("nosniff");
     }
@@ -63,6 +67,28 @@ class SecurityHeadersMiddlewareTest {
 
         assertThat((String) getHeader(response, "Content-Security-Policy"))
                 .isEqualTo("default-src 'self'; img-src *");
+    }
+
+    @Test
+    void credentiallessCoepIsApplied() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setCrossOriginEmbedderPolicy("credentialless");
+
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat((String) getHeader(response, "Cross-Origin-Embedder-Policy"))
+                .isEqualTo("credentialless");
+    }
+
+    @Test
+    void permissionsPolicyIsAppliedWhenSet() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setPermissionsPolicy("camera=(), geolocation=(self)");
+
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat((String) getHeader(response, "Permissions-Policy"))
+                .isEqualTo("camera=(), geolocation=(self)");
     }
 
     @Test
