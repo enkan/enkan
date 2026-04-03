@@ -8,6 +8,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class SecureCookieTest {
 
     @Test
+    void createRejectsDoublePrefix() {
+        assertThatThrownBy(() -> SecureCookie.create("__Secure-sid", "abc"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void toHttpStringPrependsSecurePrefix() {
         SecureCookie cookie = SecureCookie.create("sid", "xyz789");
         assertThat(cookie.toHttpString())

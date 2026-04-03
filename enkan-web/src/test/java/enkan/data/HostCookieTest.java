@@ -8,6 +8,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class HostCookieTest {
 
     @Test
+    void createRejectsDoublePrefix() {
+        assertThatThrownBy(() -> HostCookie.create("__Host-token", "abc"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void toHttpStringPrependsHostPrefix() {
         HostCookie cookie = HostCookie.create("token", "abc123");
         assertThat(cookie.toHttpString())
@@ -64,6 +70,13 @@ class HostCookieTest {
     void setPathNonRootThrows() {
         HostCookie cookie = HostCookie.create("token", "abc");
         assertThatThrownBy(() -> cookie.setPath("/app"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void setPathNullThrows() {
+        HostCookie cookie = HostCookie.create("token", "abc");
+        assertThatThrownBy(() -> cookie.setPath(null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

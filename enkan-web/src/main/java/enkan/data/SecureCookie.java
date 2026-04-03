@@ -20,6 +20,8 @@ package enkan.data;
 public final class SecureCookie extends Cookie {
     private static final long serialVersionUID = 1L;
 
+    private static final String PREFIX = "__Secure-";
+
     private SecureCookie(String name, String value) {
         super(name, value);
         super.setSecure(true);
@@ -31,8 +33,13 @@ public final class SecureCookie extends Cookie {
      * @param name  the cookie name (without the {@code __Secure-} prefix)
      * @param value the cookie value
      * @return a new SecureCookie instance
+     * @throws IllegalArgumentException if the name already starts with {@code __Secure-}
      */
     public static SecureCookie create(String name, String value) {
+        if (name != null && name.startsWith(PREFIX)) {
+            throw new IllegalArgumentException(
+                    "Name must not include the __Secure- prefix; it is added automatically");
+        }
         return new SecureCookie(name, value);
     }
 
@@ -50,7 +57,7 @@ public final class SecureCookie extends Cookie {
 
     @Override
     public String toHttpString() {
-        String result = "__Secure-" + buildHttpString();
+        String result = PREFIX + buildHttpString();
         warnIfOversized(result);
         return result;
     }

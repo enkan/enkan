@@ -23,6 +23,8 @@ package enkan.data;
 public final class HostCookie extends Cookie {
     private static final long serialVersionUID = 1L;
 
+    private static final String PREFIX = "__Host-";
+
     private HostCookie(String name, String value) {
         super(name, value);
         super.setSecure(true);
@@ -35,8 +37,13 @@ public final class HostCookie extends Cookie {
      * @param name  the cookie name (without the {@code __Host-} prefix)
      * @param value the cookie value
      * @return a new HostCookie instance
+     * @throws IllegalArgumentException if the name already starts with {@code __Host-}
      */
     public static HostCookie create(String name, String value) {
+        if (name != null && name.startsWith(PREFIX)) {
+            throw new IllegalArgumentException(
+                    "Name must not include the __Host- prefix; it is added automatically");
+        }
         return new HostCookie(name, value);
     }
 
@@ -72,14 +79,14 @@ public final class HostCookie extends Cookie {
      */
     @Override
     public void setPath(String path) {
-        if (!"/".equals(path)) {
+        if (path == null || !"/".equals(path)) {
             throw new IllegalArgumentException("__Host- cookies must have Path=/");
         }
     }
 
     @Override
     public String toHttpString() {
-        String result = "__Host-" + buildHttpString();
+        String result = PREFIX + buildHttpString();
         warnIfOversized(result);
         return result;
     }
