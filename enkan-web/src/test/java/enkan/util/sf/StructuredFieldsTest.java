@@ -641,5 +641,71 @@ class StructuredFieldsTest {
             assertThatThrownBy(() -> StructuredFields.serializeItem(item))
                     .isInstanceOf(IllegalArgumentException.class);
         }
+
+        @Test
+        void parseEmptyListReturnsEmptyList() {
+            SfList list = StructuredFields.parseList("");
+            assertThat(list.size()).isZero();
+        }
+
+        @Test
+        void parseEmptyDictionaryReturnsEmptyDictionary() {
+            SfDictionary dict = StructuredFields.parseDictionary("");
+            assertThat(dict.size()).isZero();
+        }
+
+        @Test
+        void parseWhitespaceOnlyListReturnsEmptyList() {
+            SfList list = StructuredFields.parseList("  \t  ");
+            assertThat(list.size()).isZero();
+        }
+
+        @Test
+        void serializeIntegerRejectsOutOfRange() {
+            SfItem item = new SfItem(new SfInteger(1000000000000000L));
+            assertThatThrownBy(() -> StructuredFields.serializeItem(item))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void serializeDecimalRejectsOutOfRange() {
+            SfItem item = new SfItem(new SfDecimal(9999999999999.0));
+            assertThatThrownBy(() -> StructuredFields.serializeItem(item))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void serializeNullItemThrows() {
+            assertThatThrownBy(() -> StructuredFields.serializeItem(null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void serializeNullListThrows() {
+            assertThatThrownBy(() -> StructuredFields.serializeList(null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void serializeNullDictionaryThrows() {
+            assertThatThrownBy(() -> StructuredFields.serializeDictionary(null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void serializeInvalidKeyThrows() {
+            LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
+            members.put("Invalid-Key", new SfItem(new SfInteger(1)));
+            SfDictionary dict = new SfDictionary(members);
+            assertThatThrownBy(() -> StructuredFields.serializeDictionary(dict))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void serializeInvalidTokenThrows() {
+            SfItem item = new SfItem(new SfToken("invalid token"));
+            assertThatThrownBy(() -> StructuredFields.serializeItem(item))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 }

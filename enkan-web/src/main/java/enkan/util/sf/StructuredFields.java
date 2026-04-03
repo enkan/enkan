@@ -52,8 +52,8 @@ public final class StructuredFields {
      * @throws SfParseException if the input is malformed
      */
     public static SfList parseList(String input) {
-        if (input == null || input.isEmpty()) {
-            throw new SfParseException("Empty input");
+        if (input == null) {
+            throw new SfParseException("Null input");
         }
         SfParser parser = new SfParser(input);
         SfList list = parser.parseList();
@@ -69,8 +69,8 @@ public final class StructuredFields {
      * @throws SfParseException if the input is malformed
      */
     public static SfDictionary parseDictionary(String input) {
-        if (input == null || input.isEmpty()) {
-            throw new SfParseException("Empty input");
+        if (input == null) {
+            throw new SfParseException("Null input");
         }
         SfParser parser = new SfParser(input);
         SfDictionary dict = parser.parseDictionary();
@@ -85,6 +85,7 @@ public final class StructuredFields {
      * @return the serialized header value
      */
     public static String serializeItem(SfItem item) {
+        if (item == null) throw new IllegalArgumentException("item must not be null");
         return SfSerializer.serializeItem(item);
     }
 
@@ -95,6 +96,7 @@ public final class StructuredFields {
      * @return the serialized header value
      */
     public static String serializeList(SfList list) {
+        if (list == null) throw new IllegalArgumentException("list must not be null");
         return SfSerializer.serializeList(list);
     }
 
@@ -105,6 +107,7 @@ public final class StructuredFields {
      * @return the serialized header value
      */
     public static String serializeDictionary(SfDictionary dict) {
+        if (dict == null) throw new IllegalArgumentException("dict must not be null");
         return SfSerializer.serializeDictionary(dict);
     }
 }

@@ -1,6 +1,7 @@
 package enkan.util.sf;
 
 import enkan.util.sf.SfValue.*;
+import static enkan.util.sf.SfChars.*;
 
 import java.util.Base64;
 import java.util.Iterator;
@@ -113,7 +114,12 @@ final class SfSerializer {
 
     private static void serializeBareItem(StringBuilder sb, SfValue value) {
         switch (value) {
-            case SfInteger v -> sb.append(v.value());
+            case SfInteger v -> {
+                if (v.value() > 999999999999999L || v.value() < -999999999999999L) {
+                    throw new IllegalArgumentException("Integer value out of range: " + v.value());
+                }
+                sb.append(v.value());
+            }
             case SfDecimal v -> serializeDecimal(sb, v.value());
             case SfString v -> serializeString(sb, v.value());
             case SfToken v -> {
@@ -135,6 +141,10 @@ final class SfSerializer {
     }
 
     private static void serializeDecimal(StringBuilder sb, double value) {
+        // RFC 8941 §3.3.2: integer component has at most 12 digits
+        if (value > 999999999999.999 || value < -999999999999.999) {
+            throw new IllegalArgumentException("Decimal value out of range: " + value);
+        }
         // RFC 8941 §4.1.5: round to 3 decimal places, remove trailing zeros
         long rounded = Math.round(value * 1000);
         long intPart = rounded / 1000;
@@ -233,24 +243,4 @@ final class SfSerializer {
         }
     }
 
-    private static boolean isDigit(char c) {
-        return c >= '0' && c <= '9';
-    }
-
-    private static boolean isAlpha(char c) {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-    }
-
-    private static boolean isLcAlpha(char c) {
-        return c >= 'a' && c <= 'z';
-    }
-
-    // RFC 7230 tchar
-    private static boolean isTchar(char c) {
-        if (isAlpha(c) || isDigit(c)) return true;
-        return switch (c) {
-            case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~' -> true;
-            default -> false;
-        };
-    }
 }
