@@ -146,7 +146,7 @@ class UndertowAdapterTest {
     void unsupportedBodyTypeThrowsUnreachableException() throws Exception {
         UndertowAdapter adapter = new UndertowAdapter();
         java.lang.reflect.Method m = UndertowAdapter.class.getDeclaredMethod("setBody",
-                io.undertow.io.Sender.class, Object.class);
+                io.undertow.server.HttpServerExchange.class, Object.class);
         m.setAccessible(true);
         assertThatThrownBy(() -> {
             try {
