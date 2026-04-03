@@ -55,7 +55,7 @@ import static enkan.util.HttpResponseUtils.header;
  *
  * @author kawasima
  */
-@Middleware(name = "cspNonce", dependencies = {"securityHeaders"})
+@Middleware(name = "cspNonce")
 public class CspNonceMiddleware implements WebMiddleware {
 
     /** Request extension key under which the nonce value is stored. */

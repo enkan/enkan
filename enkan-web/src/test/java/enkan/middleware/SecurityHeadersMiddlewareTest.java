@@ -106,15 +106,17 @@ class SecurityHeadersMiddlewareTest {
     }
 
     @Test
-    void crlfInAnyHeaderValueIsRejectedAtRequestTime() {
-        // applyIfEnabled protects ALL headers uniformly, not just Reporting-Endpoints.
-        // setContentSecurityPolicy has no setter-level CRLF guard, so the value is accepted
-        // at configuration time but rejected when handle() calls applyIfEnabled.
+    void crlfInAnyHeaderValueIsRejectedAtSetterTime() {
+        // All setters delegate to requireNoCrlf, so misconfiguration is caught at startup,
+        // not during request handling. applyIfEnabled provides defense-in-depth at request time.
         SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
-        middleware.setContentSecurityPolicy("default-src 'self'\r\nX-Injected: evil");
 
-        assertThatThrownBy(() -> middleware.handle(request, chain))
+        assertThatThrownBy(() -> middleware.setContentSecurityPolicy("default-src 'self'\r\nX-Injected: evil"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Content-Security-Policy");
+        assertThatThrownBy(() -> middleware.setStrictTransportSecurity("max-age=0\r\nX-Injected: evil"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> middleware.setFrameOptions("DENY\r\nX-Injected: evil"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }
