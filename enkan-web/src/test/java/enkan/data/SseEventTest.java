@@ -96,6 +96,13 @@ class SseEventTest {
     }
 
     @Test
+    void eventFieldRejectsNulCharacter() {
+        assertThatThrownBy(() -> SseEvent.builder().event("bad\0event").build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("U+0000");
+    }
+
+    @Test
     void idFieldRejectsNewline() {
         assertThatThrownBy(() -> SseEvent.builder().id("bad\nid").build())
                 .isInstanceOf(IllegalArgumentException.class)

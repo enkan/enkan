@@ -35,25 +35,26 @@ public record SseEvent(String data, String event, String id, Duration retry) {
      */
     public SseEvent {
         if (event != null) {
-            requireNoLineBreaks(event, "event");
+            requireNoLineBreaksOrNul(event, "event");
         }
         if (id != null) {
-            requireNoLineBreaks(id, "id");
-            if (id.indexOf('\0') >= 0) {
-                throw new IllegalArgumentException("SSE id must not contain U+0000");
-            }
+            requireNoLineBreaksOrNul(id, "id");
         }
         if (retry != null && retry.isNegative()) {
             throw new IllegalArgumentException("SSE retry must not be negative");
         }
     }
 
-    private static void requireNoLineBreaks(String value, String fieldName) {
+    private static void requireNoLineBreaksOrNul(String value, String fieldName) {
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
             if (c == '\n' || c == '\r') {
                 throw new IllegalArgumentException(
                         "SSE " + fieldName + " must not contain line breaks");
+            }
+            if (c == '\0') {
+                throw new IllegalArgumentException(
+                        "SSE " + fieldName + " must not contain U+0000");
             }
         }
     }

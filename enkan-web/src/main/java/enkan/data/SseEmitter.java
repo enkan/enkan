@@ -119,6 +119,14 @@ public class SseEmitter implements StreamingBody {
             while (true) {
                 SseEvent event = queue.take();
                 if (event == COMPLETION_SENTINEL) {
+                    // Drain any events enqueued by a racing send() after the sentinel
+                    SseEvent trailing;
+                    while ((trailing = queue.poll()) != null) {
+                        if (trailing != COMPLETION_SENTINEL) {
+                            trailing.writeTo(out);
+                            out.flush();
+                        }
+                    }
                     break;
                 }
                 event.writeTo(out);

@@ -82,6 +82,9 @@ public class DefaultHttpResponse implements HttpResponse {
 
     @Override
     public InputStream getBodyAsStream() {
+        if (bodyStreaming != null) {
+            throw new IllegalStateException("StreamingBody cannot be represented as InputStream");
+        }
         if (bodyStream != null) {
             return bodyStream;
         } else if (bodyString != null) {
@@ -99,6 +102,9 @@ public class DefaultHttpResponse implements HttpResponse {
 
     @Override
     public String getBodyAsString() {
+        if (bodyStreaming != null) {
+            throw new IllegalStateException("StreamingBody cannot be represented as String");
+        }
         if (bodyStream != null) {
             try(BufferedReader reader = new BufferedReader(new InputStreamReader(bodyStream, StandardCharsets.UTF_8))) {
                 return reader.lines().collect(Collectors.joining(System.lineSeparator()));
