@@ -377,6 +377,54 @@ class ForwardedMiddlewareTest {
     }
 
     @Test
+    void stripsPortFromRfc7239HostDirective() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setHeaders, Headers.of("Forwarded", "for=192.0.2.1;host=example.com:443;proto=https"))
+                .build();
+
+        middleware.handle(request, chain);
+
+        assertThat(request.getServerName()).isEqualTo("example.com");
+    }
+
+    @Test
+    void stripsPortFromRfc7239IPv6HostDirective() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setHeaders, Headers.of("Forwarded", "for=192.0.2.1;host=\"[2001:db8::1]:8443\""))
+                .build();
+
+        middleware.handle(request, chain);
+
+        assertThat(request.getServerName()).isEqualTo("2001:db8::1");
+    }
+
+    @Test
+    void stripsPortFromXForwardedHost() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setHeaders, Headers.of("X-Forwarded-Host", "example.com:8080"))
+                .build();
+
+        middleware.handle(request, chain);
+
+        assertThat(request.getServerName()).isEqualTo("example.com");
+    }
+
+    @Test
+    void preservesBareIpv6HostWithoutPort() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setHeaders, Headers.of("Forwarded", "for=192.0.2.1;host=2001:db8::1"))
+                .build();
+
+        middleware.handle(request, chain);
+
+        assertThat(request.getServerName()).isEqualTo("2001:db8::1");
+    }
+
+    @Test
     void ipv4MappedRemoteAddrMatchesIpv4Cidr() {
         // Servlet containers on dual-stack servers may provide remoteAddr as ::ffff:x.x.x.x.
         // normalizeToIpv4IfMapped must be applied so it still matches an IPv4 CIDR.

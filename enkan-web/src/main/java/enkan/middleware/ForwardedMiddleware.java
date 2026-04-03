@@ -167,7 +167,10 @@ public class ForwardedMiddleware implements WebMiddleware {
             request.setScheme(protoValue.toLowerCase(Locale.ROOT));
         }
         if (hostValue != null) {
-            request.setServerName(hostValue);
+            String serverName = extractHostName(hostValue);
+            if (!serverName.isEmpty()) {
+                request.setServerName(serverName);
+            }
         }
     }
 
@@ -207,11 +210,42 @@ public class ForwardedMiddleware implements WebMiddleware {
             }
         }
         if (xHost != null) {
-            String host = xHost.trim();
-            if (!host.isEmpty()) {
-                request.setServerName(host);
+            String serverName = extractHostName(xHost.trim());
+            if (!serverName.isEmpty()) {
+                request.setServerName(serverName);
             }
         }
+    }
+
+    /**
+     * Extracts the host name from a {@code host} header value, stripping any optional port.
+     *
+     * <p>Handles:
+     * <ul>
+     *   <li>Plain hostname or IPv4: {@code example.com}, {@code 192.0.2.1}</li>
+     *   <li>Hostname or IPv4 with port: {@code example.com:443} → {@code example.com}</li>
+     *   <li>Bracketed IPv6: {@code [2001:db8::1]} → {@code 2001:db8::1}</li>
+     *   <li>Bracketed IPv6 with port: {@code [2001:db8::1]:8443} → {@code 2001:db8::1}</li>
+     *   <li>Bare IPv6 (no brackets, no port): {@code 2001:db8::1} → {@code 2001:db8::1}</li>
+     * </ul>
+     */
+    private static String extractHostName(String value) {
+        if (value.isEmpty()) return value;
+
+        if (value.startsWith("[")) {
+            // Bracketed IPv6: "[::1]" or "[::1]:8443" — extract content between brackets
+            int closingBracket = value.indexOf(']');
+            return closingBracket > 0 ? value.substring(1, closingBracket) : value;
+        }
+
+        int firstColon = value.indexOf(':');
+        if (firstColon < 0) return value; // no colon: plain hostname or IPv4
+
+        int lastColon = value.lastIndexOf(':');
+        if (firstColon != lastColon) return value; // multiple colons: bare IPv6, no port to strip
+
+        // Exactly one colon: "hostname:port" or "IPv4:port" — strip port
+        return value.substring(0, firstColon);
     }
 
     private static String stripQuotes(String value) {
