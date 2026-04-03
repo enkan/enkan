@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -18,6 +20,22 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * @author kawasima
  */
 public class MavenCompilerTest {
+
+    private static boolean isMvnAvailable() {
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("win");
+        String mvnBin = isWindows ? "bin/mvn.cmd" : "bin/mvn";
+        String mavenHomeEnv = Env.getString("MAVEN_HOME", Env.getString("M2_HOME", null));
+        if (mavenHomeEnv != null && !mavenHomeEnv.isBlank()) {
+            return new File(mavenHomeEnv, mvnBin).canExecute();
+        }
+        // Check if mvn is resolvable from PATH
+        String path = System.getenv("PATH");
+        if (path == null) return false;
+        String mvnExe = isWindows ? "mvn.cmd" : "mvn";
+        return Arrays.stream(path.split(File.pathSeparator))
+                .map(dir -> new File(dir, mvnExe))
+                .anyMatch(File::canExecute);
+    }
 
     @BeforeEach
     public void setup() throws IOException {
@@ -52,11 +70,7 @@ public class MavenCompilerTest {
             }
         };
 
-        assumeTrue(() -> {
-            final File mavenHome = new File(Env.getString("MAVEN_HOME",
-                    Env.getString("M2_HOME", "/opt/maven")));
-            return mavenHome.exists();
-        });
+        assumeTrue(MavenCompilerTest::isMvnAvailable);
         CompileResult result = compiler.execute(t);
         assertThat(result.executionException()).isNull();
     }
@@ -82,11 +96,7 @@ public class MavenCompilerTest {
             }
         };
 
-        assumeTrue(() -> {
-            final File mavenHome = new File(Env.getString("MAVEN_HOME",
-                    Env.getString("M2_HOME", "/opt/maven")));
-            return mavenHome.exists();
-        });
+        assumeTrue(MavenCompilerTest::isMvnAvailable);
         CompileResult result = compiler.execute(t);
         assertThat(result.executionException()).isNotNull();
     }
