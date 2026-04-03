@@ -154,12 +154,17 @@ class CookieTest {
     @Test
     void toHttpStringWarnsWhenOversized() {
         Logger logger = Logger.getLogger(Cookie.class.getName());
+        boolean oldUseParent = logger.getUseParentHandlers();
+        Level oldLevel = logger.getLevel();
         List<LogRecord> records = new ArrayList<>();
         Handler handler = new Handler() {
             @Override public void publish(LogRecord record) { records.add(record); }
             @Override public void flush() {}
             @Override public void close() {}
         };
+        handler.setLevel(Level.ALL);
+        logger.setLevel(Level.ALL);
+        logger.setUseParentHandlers(false);
         logger.addHandler(handler);
         try {
             Cookie cookie = Cookie.create("big", "x".repeat(4096));
@@ -168,18 +173,25 @@ class CookieTest {
                     r.getLevel() == Level.WARNING && r.getMessage().contains("big"));
         } finally {
             logger.removeHandler(handler);
+            logger.setUseParentHandlers(oldUseParent);
+            logger.setLevel(oldLevel);
         }
     }
 
     @Test
     void toHttpStringDoesNotWarnWhenWithinLimit() {
         Logger logger = Logger.getLogger(Cookie.class.getName());
+        boolean oldUseParent = logger.getUseParentHandlers();
+        Level oldLevel = logger.getLevel();
         List<LogRecord> records = new ArrayList<>();
         Handler handler = new Handler() {
             @Override public void publish(LogRecord record) { records.add(record); }
             @Override public void flush() {}
             @Override public void close() {}
         };
+        handler.setLevel(Level.ALL);
+        logger.setLevel(Level.ALL);
+        logger.setUseParentHandlers(false);
         logger.addHandler(handler);
         try {
             Cookie cookie = Cookie.create("small", "v");
@@ -187,6 +199,23 @@ class CookieTest {
             assertThat(records).isEmpty();
         } finally {
             logger.removeHandler(handler);
+            logger.setUseParentHandlers(oldUseParent);
+            logger.setLevel(oldLevel);
         }
+    }
+
+    @Test
+    void toHttpStringRejectsHostPrefixWithoutSecure() {
+        Cookie cookie = Cookie.create("__Host-token", "abc");
+        cookie.setPath("/");
+        assertThatThrownBy(cookie::toHttpString)
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void toHttpStringRejectsSecurePrefixWithoutSecure() {
+        Cookie cookie = Cookie.create("__Secure-sid", "abc");
+        assertThatThrownBy(cookie::toHttpString)
+                .isInstanceOf(IllegalStateException.class);
     }
 }

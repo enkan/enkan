@@ -156,9 +156,30 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
      * @return the cookie string in RFC 6265 format
      */
     public String toHttpString() {
+        validatePrefixConstraints();
         String result = buildHttpString();
         warnIfOversized(result);
         return result;
+    }
+
+    private void validatePrefixConstraints() {
+        String name = getName();
+        if (name == null) {
+            return;
+        }
+        if (name.startsWith("__Host-")) {
+            if (!isSecure()) {
+                throw new IllegalStateException("__Host- cookies must have the Secure attribute");
+            }
+            if (getDomain() != null) {
+                throw new IllegalStateException("__Host- cookies must not have a Domain attribute");
+            }
+            if (!"/".equals(getPath())) {
+                throw new IllegalStateException("__Host- cookies must have Path=/");
+            }
+        } else if (name.startsWith("__Secure-") && !isSecure()) {
+            throw new IllegalStateException("__Secure- cookies must have the Secure attribute");
+        }
     }
 
     /**

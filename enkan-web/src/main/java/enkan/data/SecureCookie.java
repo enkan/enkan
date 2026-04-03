@@ -53,6 +53,7 @@ public final class SecureCookie extends Cookie {
         if (!secure) {
             throw new UnsupportedOperationException("__Secure- cookies must have the Secure attribute");
         }
+        super.setSecure(true);
     }
 
     @Override

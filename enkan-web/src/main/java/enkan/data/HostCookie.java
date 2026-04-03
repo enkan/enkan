@@ -58,6 +58,7 @@ public final class HostCookie extends Cookie {
         if (domain != null) {
             throw new UnsupportedOperationException("__Host- cookies must not have a Domain attribute");
         }
+        super.setDomain(null);
     }
 
     /**
@@ -70,6 +71,7 @@ public final class HostCookie extends Cookie {
         if (!secure) {
             throw new UnsupportedOperationException("__Host- cookies must have the Secure attribute");
         }
+        super.setSecure(true);
     }
 
     /**
@@ -82,6 +84,7 @@ public final class HostCookie extends Cookie {
         if (path == null || !"/".equals(path)) {
             throw new IllegalArgumentException("__Host- cookies must have Path=/");
         }
+        super.setPath("/");
     }
 
     @Override
