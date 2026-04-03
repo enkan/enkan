@@ -51,7 +51,7 @@ public record IdempotencyEntry(State state, int status, Map<String, List<String>
                     hdrs.computeIfAbsent(name, _ -> new ArrayList<>()).add(value.toString()));
         }
         Object responseBody = response.getBody();
-        String body = responseBody instanceof String s ? s : null;
+        String body = responseBody instanceof String s ? s : "";
         return new IdempotencyEntry(State.COMPLETED, status, hdrs, body);
     }
 
@@ -63,19 +63,9 @@ public record IdempotencyEntry(State state, int status, Map<String, List<String>
     public HttpResponse toResponse() {
         Headers responseHeaders = Headers.empty();
         headers.forEach((name, values) -> values.forEach(v -> responseHeaders.put(name, v)));
-        return builder(HttpResponse.of(body != null ? body : ""))
+        return builder(HttpResponse.of(body))
                 .set(HttpResponse::setStatus, status)
                 .set(HttpResponse::setHeaders, responseHeaders)
                 .build();
-    }
-
-    /**
-     * Returns whether the body was cached. If false, the response body
-     * was not a String and the original request should be re-executed.
-     *
-     * @return true if the body was captured
-     */
-    public boolean hasBody() {
-        return body != null;
     }
 }

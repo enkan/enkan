@@ -94,8 +94,8 @@ class IdempotencyKeyMiddlewareTest {
         assertThat(response.getStatus()).isEqualTo(201);
         assertThat(response.getBody()).isEqualTo("{\"id\":1}");
         assertThat(callCount.get()).isEqualTo(1);
-        // Verify entry was stored
-        assertThat(store.read("key-1")).isNotNull();
+        // Verify entry was stored with prefix
+        assertThat(store.read("idempotency:key-1")).isNotNull();
     }
 
     @Test
@@ -128,8 +128,8 @@ class IdempotencyKeyMiddlewareTest {
 
     @Test
     void inFlightReturns409() {
-        // Manually write an IN_FLIGHT entry
-        store.write("key-inflight", IdempotencyEntry.inFlight());
+        // Manually write an IN_FLIGHT entry with prefix
+        store.write("idempotency:key-inflight", IdempotencyEntry.inFlight());
 
         HttpResponse response = middleware.handle(postRequest("key-inflight"),
                 chainReturning("{}", 200));
@@ -152,7 +152,7 @@ class IdempotencyKeyMiddlewareTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(callCount.get()).isEqualTo(1);
-        assertThat(store.read("patch-key")).isNotNull();
+        assertThat(store.read("idempotency:patch-key")).isNotNull();
     }
 
     @Test
@@ -169,7 +169,7 @@ class IdempotencyKeyMiddlewareTest {
         }
 
         // IN_FLIGHT entry should be cleaned up
-        assertThat(store.read("key-error")).isNull();
+        assertThat(store.read("idempotency:key-error")).isNull();
     }
 
     @Test
@@ -184,6 +184,32 @@ class IdempotencyKeyMiddlewareTest {
         // Second: putIfAbsent fails (key exists), cache replayed
         middleware.handle(postRequest("cas-key"), chain);
         assertThat(callCount.get()).isEqualTo(1);
+    }
+
+    @Test
+    void tooLongKeyIsIgnored() {
+        HttpRequest request = postRequest("x".repeat(257));
+
+        HttpResponse response = middleware.handle(request, chainReturning("{}", 200));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(callCount.get()).isEqualTo(1);
+        // No entry stored
+        assertThat(store.read("idempotency:" + "x".repeat(257))).isNull();
+    }
+
+    @Test
+    void keyPrefixIsolatesFromSessionStore() {
+        // Simulate a session key that matches the idempotency key value
+        store.write("user-session-id", new enkan.data.Session());
+
+        HttpRequest request = postRequest("user-session-id");
+        HttpResponse response = middleware.handle(request, chainReturning("{}", 201));
+
+        // Idempotency middleware should not interfere with session data
+        assertThat(response.getStatus()).isEqualTo(201);
+        assertThat(store.read("user-session-id")).isInstanceOf(enkan.data.Session.class);
+        assertThat(store.read("idempotency:user-session-id")).isInstanceOf(IdempotencyEntry.class);
     }
 
     @Test

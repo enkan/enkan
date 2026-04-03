@@ -44,6 +44,9 @@ import static enkan.util.BeanBuilder.builder;
 @Middleware(name = "idempotencyKey")
 public class IdempotencyKeyMiddleware implements WebMiddleware {
 
+    private static final String KEY_PREFIX = "idempotency:";
+    private static final int MAX_KEY_LENGTH = 256;
+
     @Inject
     private KeyValueStore store;
 
@@ -52,7 +55,7 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
-        if (!isTargetMethod(request)) {
+        if (store == null || !isTargetMethod(request)) {
             return castToHttpResponse(chain.next(request));
         }
 
@@ -61,26 +64,26 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
             return castToHttpResponse(chain.next(request));
         }
 
+        String storeKey = KEY_PREFIX + key;
+
         // Atomically claim the key. If putIfAbsent returns false, another
         // request already owns this key — check its state.
-        if (!store.putIfAbsent(key, IdempotencyEntry.inFlight())) {
-            IdempotencyEntry existing = (IdempotencyEntry) store.read(key);
+        if (!store.putIfAbsent(storeKey, IdempotencyEntry.inFlight())) {
+            IdempotencyEntry existing = (IdempotencyEntry) store.read(storeKey);
             if (existing == null) {
                 // Entry expired between putIfAbsent and read — retry claim
-                if (store.putIfAbsent(key, IdempotencyEntry.inFlight())) {
-                    return executeRequest(key, request, chain);
+                if (store.putIfAbsent(storeKey, IdempotencyEntry.inFlight())) {
+                    return executeRequest(storeKey, request, chain);
                 }
                 return conflictResponse();
             }
             return switch (existing.state()) {
                 case IN_FLIGHT -> conflictResponse();
-                case COMPLETED -> existing.hasBody()
-                        ? existing.toResponse()
-                        : executeRequest(key, request, chain);
+                case COMPLETED -> existing.toResponse();
             };
         }
 
-        return executeRequest(key, request, chain);
+        return executeRequest(storeKey, request, chain);
     }
 
     private <NNREQ, NNRES> HttpResponse executeRequest(String key, HttpRequest request,
@@ -108,7 +111,11 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
         try {
             SfItem item = StructuredFields.parseItem(raw);
             if (item.value() instanceof SfString s) {
-                return s.value();
+                String key = s.value();
+                if (key.isEmpty() || key.length() > MAX_KEY_LENGTH) {
+                    return null;
+                }
+                return key;
             }
             return null;
         } catch (SfParseException e) {
