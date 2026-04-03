@@ -83,6 +83,49 @@ class CookiesMiddlewareTest {
     }
 
     @Test
+    void hostPrefixCookieParsedByStrippedName() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    // Application should access by unprefixed name
+                    Cookie cookie = req.getCookies().get("token");
+                    assertThat(cookie).isNotNull();
+                    assertThat(cookie.getValue()).isEqualTo("abc123");
+                    // Prefixed name should not be a key
+                    assertThat(req.getCookies()).doesNotContainKey("__Host-token");
+                    return HttpResponse.of("ok");
+                });
+        request.getHeaders().put("Cookie", "__Host-token=abc123");
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void securePrefixCookieParsedByStrippedName() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    Cookie cookie = req.getCookies().get("sid");
+                    assertThat(cookie).isNotNull();
+                    assertThat(cookie.getValue()).isEqualTo("xyz");
+                    assertThat(req.getCookies()).doesNotContainKey("__Secure-sid");
+                    return HttpResponse.of("ok");
+                });
+        request.getHeaders().put("Cookie", "__Secure-sid=xyz");
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void plainCookieUnaffectedByPrefixStripping() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    Cookie cookie = req.getCookies().get("session");
+                    assertThat(cookie).isNotNull();
+                    assertThat(cookie.getValue()).isEqualTo("abc");
+                    return HttpResponse.of("ok");
+                });
+        request.getHeaders().put("Cookie", "session=abc");
+        middleware.handle(request, chain);
+    }
+
+    @Test
     void backslashIsNotConsumedAsCookieOctet() {
         // Backslash (%x5C) is not a valid cookie-octet (RFC 6265 §4.1.1).
         // RE_COOKIE requires the value to be followed by a delimiter or end-of-input,

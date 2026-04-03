@@ -39,6 +39,25 @@ public class CookiesMiddleware implements WebMiddleware {
         return value.replaceAll("^\"|\"$", "");
     }
 
+    private static final String HOST_PREFIX = "__Host-";
+    private static final String SECURE_PREFIX = "__Secure-";
+
+    /**
+     * Strips the {@code __Host-} or {@code __Secure-} prefix from a cookie name,
+     * returning the application-facing name.
+     *
+     * @param rawName the cookie name as sent by the browser
+     * @return the name without the prefix
+     */
+    protected String stripPrefix(String rawName) {
+        if (rawName.startsWith(HOST_PREFIX)) {
+            return rawName.substring(HOST_PREFIX.length());
+        } else if (rawName.startsWith(SECURE_PREFIX)) {
+            return rawName.substring(SECURE_PREFIX.length());
+        }
+        return rawName;
+    }
+
     /**
      * Parses the {@code Cookie} request header and returns a map of cookie name to
      * {@link Cookie} objects.
@@ -55,8 +74,11 @@ public class CookiesMiddleware implements WebMiddleware {
         Map<String, Cookie> cookies = new HashMap<>();
         Matcher m = RE_COOKIE.matcher(cookieHeader);
         while (m.find()) {
-            Cookie cookie = Cookie.create(m.group(1), stripQuotes(m.group(2)));
-            cookies.put(m.group(1), cookie);
+            String rawName = m.group(1);
+            String value = stripQuotes(m.group(2));
+            String key = stripPrefix(rawName);
+            Cookie cookie = Cookie.create(rawName, value);
+            cookies.put(key, cookie);
         }
         return cookies;
     }
