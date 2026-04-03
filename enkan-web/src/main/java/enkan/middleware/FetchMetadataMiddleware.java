@@ -6,7 +6,6 @@ import enkan.collection.Headers;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
 
-import java.util.HashSet;
 import java.util.Set;
 
 import static enkan.util.BeanBuilder.builder;
@@ -55,7 +54,7 @@ import static enkan.util.BeanBuilder.builder;
 @Middleware(name = "fetchMetadata")
 public class FetchMetadataMiddleware implements WebMiddleware {
 
-    private Set<String> allowedPaths = new HashSet<>();
+    private Set<String> allowedPaths = Set.of();
 
     /**
      * Applies the Resource Isolation Policy to the incoming request.
@@ -88,9 +87,11 @@ public class FetchMetadataMiddleware implements WebMiddleware {
      * @return {@code true} to allow; {@code false} to reject with 403
      */
     protected boolean isAllowed(HttpRequest request) {
-        // 1. Allow if Sec-Fetch-Site is absent: non-browser client or pre-Fetch-Metadata browser.
-        //    These clients cannot forge the header because they simply don't send it;
-        //    modern browsers always attach it.
+        // 1. Allow if Sec-Fetch-Site is absent: treat as an unknown client (non-browser, legacy
+        //    browser, or server-to-server) and allow by policy for compatibility.
+        //    Note: non-browser clients *can* set arbitrary headers. The security guarantee is
+        //    that browser JavaScript cannot set or modify Sec-Fetch-* headers — they are
+        //    Forbidden Headers injected only by the browser's network layer.
         Headers headers = request.getHeaders();
         if (headers == null) return true;
         String fetchSite = headers.get("sec-fetch-site");
@@ -129,6 +130,6 @@ public class FetchMetadataMiddleware implements WebMiddleware {
      * @param allowedPaths set of exact URIs, e.g. {@code Set.of("/api/public/feed")}
      */
     public void setAllowedPaths(Set<String> allowedPaths) {
-        this.allowedPaths = new HashSet<>(allowedPaths);
+        this.allowedPaths = Set.copyOf(allowedPaths);
     }
 }
