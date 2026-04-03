@@ -4,7 +4,9 @@ import enkan.util.HttpDateFormat;
 import enkan.util.ParsingUtils;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
@@ -16,8 +18,10 @@ import java.util.regex.Pattern;
  *
  * @author kawasima
  */
-public class Cookie implements Serializable {
+public sealed class Cookie implements Serializable permits HostCookie, SecureCookie {
     private static final long serialVersionUID = 1L;
+    private static final Logger LOG = Logger.getLogger(Cookie.class.getName());
+    private static final int MAX_COOKIE_SIZE = 4096;
 
     private static final Pattern RE_TOKEN = Pattern.compile(ParsingUtils.RE_TOKEN);
 
@@ -39,10 +43,19 @@ public class Cookie implements Serializable {
     private String sameSite;
 
     /**
-     * @deprecated Use {@link #create(String, String)} instead.
+     * @deprecated Use {@link #create(String, String)}, {@link HostCookie#create(String, String)},
+     *             or {@link SecureCookie#create(String, String)} instead.
      */
     @Deprecated
     public Cookie() {
+    }
+
+    /**
+     * Constructor for subclasses.
+     */
+    protected Cookie(String name, String value) {
+        setName(name);
+        setValue(value);
     }
 
     /**
@@ -143,6 +156,39 @@ public class Cookie implements Serializable {
      * @return the cookie string in RFC 6265 format
      */
     public String toHttpString() {
+        validatePrefixConstraints();
+        String result = buildHttpString();
+        warnIfOversized(result);
+        return result;
+    }
+
+    private void validatePrefixConstraints() {
+        String name = getName();
+        if (name == null) {
+            return;
+        }
+        if (name.startsWith("__Host-")) {
+            if (!isSecure()) {
+                throw new IllegalStateException("__Host- cookies must have the Secure attribute");
+            }
+            if (getDomain() != null) {
+                throw new IllegalStateException("__Host- cookies must not have a Domain attribute");
+            }
+            if (!"/".equals(getPath())) {
+                throw new IllegalStateException("__Host- cookies must have Path=/");
+            }
+        } else if (name.startsWith("__Secure-") && !isSecure()) {
+            throw new IllegalStateException("__Secure- cookies must have the Secure attribute");
+        }
+    }
+
+    /**
+     * Builds the {@code Set-Cookie} header value without size validation.
+     * Subclasses can use this to prepend a prefix before calling {@link #warnIfOversized(String)}.
+     *
+     * @return the cookie string in RFC 6265 format (without prefix)
+     */
+    protected String buildHttpString() {
         StringBuilder sb = new StringBuilder();
         String value = getValue();
         sb.append(getName()).append("=").append(value != null ? value : "");
@@ -168,5 +214,21 @@ public class Cookie implements Serializable {
             sb.append("; samesite=").append(getSameSite());
         }
         return sb.toString();
+    }
+
+    /**
+     * Logs a warning if the Set-Cookie header exceeds the 4096-byte limit.
+     *
+     * @param setCookieValue the complete Set-Cookie header value
+     */
+    protected void warnIfOversized(String setCookieValue) {
+        int byteLength = setCookieValue.getBytes(StandardCharsets.UTF_8).length;
+        if (byteLength > MAX_COOKIE_SIZE) {
+            int sep = setCookieValue.indexOf('=');
+            String effectiveName = sep >= 0 ? setCookieValue.substring(0, sep) : getName();
+            LOG.warning("Set-Cookie header for '" + effectiveName + "' is " + byteLength
+                    + " bytes, exceeding the " + MAX_COOKIE_SIZE
+                    + "-byte limit. Browsers may reject this cookie.");
+        }
     }
 }

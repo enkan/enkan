@@ -4,8 +4,10 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.collection.Multimap;
 import enkan.data.Cookie;
+import enkan.data.HostCookie;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import enkan.data.SecureCookie;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,8 +57,24 @@ public class CookiesMiddleware implements WebMiddleware {
         Map<String, Cookie> cookies = new HashMap<>();
         Matcher m = RE_COOKIE.matcher(cookieHeader);
         while (m.find()) {
-            Cookie cookie = Cookie.create(m.group(1), stripQuotes(m.group(2)));
-            cookies.put(m.group(1), cookie);
+            String rawName = m.group(1);
+            String value = stripQuotes(m.group(2));
+            Cookie cookie;
+            String key;
+            if (rawName.startsWith("__Host-")) {
+                cookie = HostCookie.parse(rawName, value);
+                key = cookie.getName();
+            } else if (rawName.startsWith("__Secure-")) {
+                cookie = SecureCookie.parse(rawName, value);
+                key = cookie.getName();
+            } else {
+                cookie = Cookie.create(rawName, value);
+                key = rawName;
+            }
+            // Prefixed cookies take precedence over plain cookies with the same name
+            if (!cookies.containsKey(key) || cookie instanceof HostCookie || cookie instanceof SecureCookie) {
+                cookies.put(key, cookie);
+            }
         }
         return cookies;
     }
