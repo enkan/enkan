@@ -10,7 +10,7 @@ import java.util.Map;
  *
  * @author kawasima
  */
-public record SfDictionary(LinkedHashMap<String, Object> members) {
+public record SfDictionary(LinkedHashMap<String, SfMember> members) {
 
     /**
      * Returns the member for the given key, cast to the expected type.
@@ -20,7 +20,7 @@ public record SfDictionary(LinkedHashMap<String, Object> members) {
      * @param <T>  the expected type
      * @return the member, or {@code null} if absent
      */
-    public <T> T get(String key, Class<T> type) {
+    public <T extends SfMember> T get(String key, Class<T> type) {
         return type.cast(members.get(key));
     }
 
@@ -28,7 +28,7 @@ public record SfDictionary(LinkedHashMap<String, Object> members) {
         return members.containsKey(key);
     }
 
-    public Map<String, Object> asMap() {
+    public Map<String, SfMember> asMap() {
         return Collections.unmodifiableMap(members);
     }
 

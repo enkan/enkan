@@ -1,5 +1,6 @@
 package enkan.util.sf;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -8,7 +9,11 @@ import java.util.List;
  *
  * @author kawasima
  */
-public record SfList(List<Object> members) {
+public record SfList(List<SfMember> members) {
+
+    public SfList {
+        members = Collections.unmodifiableList(members);
+    }
 
     /**
      * Returns the member at the given index, cast to the expected type.
@@ -18,7 +23,7 @@ public record SfList(List<Object> members) {
      * @param <T>   the expected type
      * @return the member at the given index
      */
-    public <T> T get(int index, Class<T> type) {
+    public <T extends SfMember> T get(int index, Class<T> type) {
         return type.cast(members.get(index));
     }
 

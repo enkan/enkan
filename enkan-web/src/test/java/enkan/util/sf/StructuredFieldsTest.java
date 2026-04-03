@@ -472,7 +472,7 @@ class StructuredFieldsTest {
 
         @Test
         void serializeDictionary() {
-            LinkedHashMap<String, Object> members = new LinkedHashMap<>();
+            LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
             members.put("a", new SfItem(new SfInteger(1)));
             members.put("b", new SfItem(new SfInteger(2)));
             SfDictionary dict = new SfDictionary(members);
@@ -481,7 +481,7 @@ class StructuredFieldsTest {
 
         @Test
         void serializeDictionaryBooleanTrueOmitsValue() {
-            LinkedHashMap<String, Object> members = new LinkedHashMap<>();
+            LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
             members.put("a", new SfItem(new SfBoolean(true)));
             SfDictionary dict = new SfDictionary(members);
             assertThat(StructuredFields.serializeDictionary(dict)).isEqualTo("a");
@@ -491,7 +491,7 @@ class StructuredFieldsTest {
         void serializeDictionaryBooleanTrueWithParams() {
             LinkedHashMap<String, SfValue> params = new LinkedHashMap<>();
             params.put("x", new SfInteger(1));
-            LinkedHashMap<String, Object> members = new LinkedHashMap<>();
+            LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
             members.put("a", new SfItem(new SfBoolean(true), new SfParameters(params)));
             SfDictionary dict = new SfDictionary(members);
             assertThat(StructuredFields.serializeDictionary(dict)).isEqualTo("a;x=1");
@@ -551,6 +551,50 @@ class StructuredFieldsTest {
             SfDictionary parsed = StructuredFields.parseDictionary(original);
             String serialized = StructuredFields.serializeDictionary(parsed);
             assertThat(serialized).isEqualTo(original);
+        }
+    }
+
+    // ============================
+    // Edge cases
+    // ============================
+
+    @Nested
+    class EdgeCases {
+
+        @Test
+        void byteSequenceEquals() {
+            SfByteSequence a = new SfByteSequence("hello".getBytes());
+            SfByteSequence b = new SfByteSequence("hello".getBytes());
+            assertThat(a).isEqualTo(b);
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        void byteSequenceNotEquals() {
+            SfByteSequence a = new SfByteSequence("hello".getBytes());
+            SfByteSequence b = new SfByteSequence("world".getBytes());
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        void serializeNegativeZeroDecimal() {
+            SfItem item = new SfItem(new SfDecimal(-0.0));
+            assertThat(StructuredFields.serializeItem(item)).isEqualTo("-0.0");
+        }
+
+        @Test
+        void serializeSmallNegativeDecimalRoundedToZero() {
+            // -0.0004 rounds to -0.0 at 3 decimal places
+            SfItem item = new SfItem(new SfDecimal(-0.0004));
+            String result = StructuredFields.serializeItem(item);
+            assertThat(result).isEqualTo("-0.0");
+        }
+
+        @Test
+        void listMembersAreUnmodifiable() {
+            SfList list = StructuredFields.parseList("1, 2");
+            assertThatThrownBy(() -> list.members().add(new SfItem(new SfInteger(3))))
+                    .isInstanceOf(UnsupportedOperationException.class);
         }
     }
 }

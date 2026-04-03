@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @author kawasima
  */
-public record SfInnerList(List<SfItem> items, SfParameters parameters) {
+public record SfInnerList(List<SfItem> items, SfParameters parameters) implements SfMember {
 
     public SfInnerList(List<SfItem> items) {
         this(items, SfParameters.EMPTY);

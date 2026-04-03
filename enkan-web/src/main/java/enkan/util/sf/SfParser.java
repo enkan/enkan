@@ -29,7 +29,7 @@ final class SfParser {
 
     SfList parseList() {
         skipSP();
-        List<Object> members = new ArrayList<>();
+        List<SfMember> members = new ArrayList<>();
         while (pos < input.length()) {
             members.add(parseItemOrInnerList());
             skipOWS();
@@ -47,10 +47,10 @@ final class SfParser {
 
     SfDictionary parseDictionary() {
         skipSP();
-        LinkedHashMap<String, Object> members = new LinkedHashMap<>();
+        LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
         while (pos < input.length()) {
             String key = parseKey();
-            Object member;
+            SfMember member;
             if (pos < input.length() && peek() == '=') {
                 advance();
                 member = parseItemOrInnerList();
@@ -82,7 +82,7 @@ final class SfParser {
 
     // --- Item or Inner List ---
 
-    private Object parseItemOrInnerList() {
+    private SfMember parseItemOrInnerList() {
         if (pos < input.length() && peek() == '(') {
             return parseInnerList();
         }

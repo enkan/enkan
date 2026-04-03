@@ -1,5 +1,6 @@
 package enkan.util.sf;
 
+import java.util.Arrays;
 import java.util.Base64;
 
 /**
@@ -18,6 +19,16 @@ public sealed interface SfValue {
     record SfToken(String value) implements SfValue {}
 
     record SfByteSequence(byte[] value) implements SfValue {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof SfByteSequence other && Arrays.equals(value, other.value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(value);
+        }
+
         @Override
         public String toString() {
             return "SfByteSequence[:" + Base64.getEncoder().encodeToString(value) + ":]";

@@ -21,9 +21,9 @@ final class SfSerializer {
 
     static String serializeList(SfList list) {
         StringBuilder sb = new StringBuilder();
-        Iterator<Object> it = list.members().iterator();
+        Iterator<SfMember> it = list.members().iterator();
         while (it.hasNext()) {
-            Object member = it.next();
+            SfMember member = it.next();
             serializeItemOrInnerList(sb, member);
             if (it.hasNext()) {
                 sb.append(", ");
@@ -36,11 +36,11 @@ final class SfSerializer {
 
     static String serializeDictionary(SfDictionary dict) {
         StringBuilder sb = new StringBuilder();
-        Iterator<Map.Entry<String, Object>> it = dict.members().entrySet().iterator();
+        Iterator<Map.Entry<String, SfMember>> it = dict.members().entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<String, Object> entry = it.next();
+            Map.Entry<String, SfMember> entry = it.next();
             sb.append(entry.getKey());
-            Object member = entry.getValue();
+            SfMember member = entry.getValue();
             if (member instanceof SfItem item && item.value() instanceof SfBoolean b && b.value()) {
                 serializeParameters(sb, item.parameters());
             } else {
@@ -65,12 +65,13 @@ final class SfSerializer {
 
     // --- Item or Inner List ---
 
-    private static void serializeItemOrInnerList(StringBuilder sb, Object member) {
-        if (member instanceof SfInnerList innerList) {
-            serializeInnerList(sb, innerList);
-        } else if (member instanceof SfItem item) {
-            serializeBareItem(sb, item.value());
-            serializeParameters(sb, item.parameters());
+    private static void serializeItemOrInnerList(StringBuilder sb, SfMember member) {
+        switch (member) {
+            case SfInnerList innerList -> serializeInnerList(sb, innerList);
+            case SfItem item -> {
+                serializeBareItem(sb, item.value());
+                serializeParameters(sb, item.parameters());
+            }
         }
     }
 
@@ -134,6 +135,10 @@ final class SfSerializer {
         long intPart = rounded / 1000;
         long fracPart = Math.abs(rounded % 1000);
 
+        // Preserve negative sign for -0.xxx values where intPart rounds to 0
+        if (intPart == 0 && Double.doubleToRawLongBits(value) < 0) {
+            sb.append('-');
+        }
         sb.append(intPart);
         sb.append('.');
         if (fracPart == 0) {
@@ -165,18 +170,19 @@ final class SfSerializer {
     private static void serializeDisplayString(StringBuilder sb, String value) {
         sb.append('%');
         sb.append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c == '%' || c == '"' || c < 0x20 || c > 0x7e) {
-                // Percent-encode
-                byte[] bytes = String.valueOf(c).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        for (int i = 0; i < value.length(); ) {
+            int cp = value.codePointAt(i);
+            i += Character.charCount(cp);
+            if (cp == '%' || cp == '"' || cp < 0x20 || cp > 0x7e) {
+                // Percent-encode the UTF-8 bytes of the code point
+                byte[] bytes = new String(Character.toChars(cp)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
                 for (byte b : bytes) {
                     sb.append('%');
                     sb.append(Character.toUpperCase(Character.forDigit((b >> 4) & 0xf, 16)));
                     sb.append(Character.toUpperCase(Character.forDigit(b & 0xf, 16)));
                 }
             } else {
-                sb.append(c);
+                sb.appendCodePoint(cp);
             }
         }
         sb.append('"');

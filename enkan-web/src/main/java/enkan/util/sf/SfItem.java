@@ -6,7 +6,7 @@ package enkan.util.sf;
  *
  * @author kawasima
  */
-public record SfItem(SfValue value, SfParameters parameters) {
+public record SfItem(SfValue value, SfParameters parameters) implements SfMember {
 
     public SfItem(SfValue value) {
         this(value, SfParameters.EMPTY);
