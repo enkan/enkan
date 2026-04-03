@@ -61,8 +61,14 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
             return castToHttpResponse(chain.next(request));
         }
 
-        IdempotencyEntry existing = (IdempotencyEntry) store.read(key);
-        if (existing != null) {
+        // Atomically claim the key. If putIfAbsent returns false, another
+        // request already owns this key — check its state.
+        if (!store.putIfAbsent(key, IdempotencyEntry.inFlight())) {
+            IdempotencyEntry existing = (IdempotencyEntry) store.read(key);
+            if (existing == null) {
+                // Entry expired between putIfAbsent and read — re-execute
+                return executeAndCache(key, request, chain);
+            }
             return switch (existing.state()) {
                 case IN_FLIGHT -> conflictResponse();
                 case COMPLETED -> existing.hasBody()
@@ -71,12 +77,17 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
             };
         }
 
-        return executeAndCache(key, request, chain);
+        return executeRequest(key, request, chain);
     }
 
     private <NNREQ, NNRES> HttpResponse executeAndCache(String key, HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         store.write(key, IdempotencyEntry.inFlight());
+        return executeRequest(key, request, chain);
+    }
+
+    private <NNREQ, NNRES> HttpResponse executeRequest(String key, HttpRequest request,
+            MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         try {
             HttpResponse response = castToHttpResponse(chain.next(request));
             store.write(key, IdempotencyEntry.completed(response));

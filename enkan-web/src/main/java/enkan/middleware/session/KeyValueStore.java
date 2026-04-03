@@ -41,4 +41,26 @@ public interface KeyValueStore {
      * @return a String contains a store key
      */
     String delete(String key);
+
+    /**
+     * Atomically writes the value only if no entry exists for the given key.
+     * Used by {@link enkan.middleware.IdempotencyKeyMiddleware} to prevent
+     * race conditions between concurrent requests with the same idempotency key.
+     *
+     * <p>The default implementation is not atomic (read-then-write).
+     * Implementations backed by {@code ConcurrentHashMap} or Redis should
+     * override this with a truly atomic operation.
+     *
+     * @param key   the store key
+     * @param value the value to write
+     * @return {@code true} if the value was written (key was absent),
+     *         {@code false} if the key already existed
+     */
+    default boolean putIfAbsent(String key, Serializable value) {
+        if (read(key) != null) {
+            return false;
+        }
+        write(key, value);
+        return true;
+    }
 }
