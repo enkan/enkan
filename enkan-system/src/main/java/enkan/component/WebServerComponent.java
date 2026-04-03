@@ -35,6 +35,11 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
     private KeyStore keystore;
     private String keystorePassword;
 
+    // preStopDelay is used by Component.stop(), not passed to the Adapter via buildOptionMap().
+    // stopTimeout is passed to the Adapter via buildOptionMap() to configure the server's drain timeout.
+    private long preStopDelay = 0;
+    private long stopTimeout = 30000;
+
     private File truststoreFile;
     private KeyStore truststore;
     private String truststorePassword;
@@ -164,6 +169,43 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
         this.truststorePassword = truststorePassword;
     }
 
+    public long getPreStopDelay() {
+        return preStopDelay;
+    }
+
+    /**
+     * Set the delay in milliseconds before the server stops accepting new connections.
+     * During this delay, the server continues to serve requests while health status
+     * reports STOPPING, allowing load balancers and Kubernetes Endpoints to propagate
+     * the change.
+     *
+     * @param preStopDelay delay in milliseconds (default 0)
+     */
+    public void setPreStopDelay(long preStopDelay) {
+        if (preStopDelay < 0) {
+            throw new MisconfigurationException("core.INVALID_ARGUMENT", "preStopDelay", preStopDelay);
+        }
+        this.preStopDelay = preStopDelay;
+    }
+
+    public long getStopTimeout() {
+        return stopTimeout;
+    }
+
+    /**
+     * Set the timeout in milliseconds to wait for in-flight requests to complete
+     * after the server stops accepting new connections. After this timeout, the
+     * server is forcefully stopped.
+     *
+     * @param stopTimeout timeout in milliseconds (default 30000)
+     */
+    public void setStopTimeout(long stopTimeout) {
+        if (stopTimeout < 0) {
+            throw new MisconfigurationException("core.INVALID_ARGUMENT", "stopTimeout", stopTimeout);
+        }
+        this.stopTimeout = stopTimeout;
+    }
+
     protected OptionMap buildOptionMap() {
         if (isSsl && keystoreFile == null && keystore == null) {
             throw new MisconfigurationException("core.SSL_KEYSTORE_REQUIRED");
@@ -174,7 +216,8 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
                 "ssl?",  isSsl,
                 "port",  port,
                 "host",  host,
-                "sslPort", sslPort);
+                "sslPort", sslPort,
+                "stopTimeout", stopTimeout);
 
         KeyStore keystore = getKeystore();
         if (keystore != null) options.put("keystore", keystore);

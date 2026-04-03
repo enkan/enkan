@@ -165,7 +165,7 @@ public class JettyAdapter {
         }
         try {
             server.setStopAtShutdown(true);
-            server.setStopTimeout(3000);
+            server.setStopTimeout(options.getLong("stopTimeout", 30000));
             server.start();
             if (options.getBoolean("join?", true)) {
                 server.join();

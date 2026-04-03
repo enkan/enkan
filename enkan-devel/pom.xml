@@ -6,7 +6,7 @@
     <parent>
         <groupId>net.unit8.enkan</groupId>
         <artifactId>enkan-parent</artifactId>
-        <version>0.14.1</version>
+        <version>0.14.2-SNAPSHOT</version>
     </parent>
 
     <artifactId>enkan-devel</artifactId>

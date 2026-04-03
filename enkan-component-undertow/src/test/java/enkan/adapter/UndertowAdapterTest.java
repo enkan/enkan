@@ -9,7 +9,7 @@ import enkan.exception.ServiceUnavailableException;
 import enkan.exception.UnreachableException;
 import enkan.middleware.WebMiddleware;
 import enkan.util.Predicates;
-import io.undertow.Undertow;
+import enkan.adapter.UndertowAdapter.UndertowServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -27,12 +27,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class UndertowAdapterTest {
 
-    private Undertow server;
+    private UndertowServer server;
 
     @AfterEach
     void tearDown() {
         if (server != null) {
-            server.stop();
+            server.undertow().stop();
             server = null;
         }
     }
@@ -50,7 +50,7 @@ class UndertowAdapterTest {
         return app;
     }
 
-    private Undertow start(WebMiddleware endpoint, int port) {
+    private UndertowServer start(WebMiddleware endpoint, int port) {
         OptionMap options = OptionMap.of("http?", true, "port", port, "host", "127.0.0.1");
         server = new UndertowAdapter().runUndertow(appWith(endpoint), options);
         return server;

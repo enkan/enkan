@@ -112,6 +112,55 @@ class WebServerComponentTest {
                 .hasMessageContaining("CANT_READ_TRUSTSTORE_FILE");
     }
 
+    // ------------------------------------------------ graceful shutdown config
+
+    @Test
+    void defaultPreStopDelayIsZero() {
+        assertThat(component.getPreStopDelay()).isEqualTo(0);
+    }
+
+    @Test
+    void defaultStopTimeoutIs30Seconds() {
+        assertThat(component.getStopTimeout()).isEqualTo(30000);
+    }
+
+    @Test
+    void preStopDelayAcceptsZero() {
+        component.setPreStopDelay(0);
+        assertThat(component.getPreStopDelay()).isEqualTo(0);
+    }
+
+    @Test
+    void preStopDelayAcceptsPositiveValue() {
+        component.setPreStopDelay(5000);
+        assertThat(component.getPreStopDelay()).isEqualTo(5000);
+    }
+
+    @Test
+    void preStopDelayRejectsNegativeValue() {
+        assertThatThrownBy(() -> component.setPreStopDelay(-1))
+                .hasMessageContaining("INVALID_ARGUMENT");
+    }
+
+    @Test
+    void stopTimeoutAcceptsZero() {
+        component.setStopTimeout(0);
+        assertThat(component.getStopTimeout()).isEqualTo(0);
+    }
+
+    @Test
+    void stopTimeoutRejectsNegativeValue() {
+        assertThatThrownBy(() -> component.setStopTimeout(-1))
+                .hasMessageContaining("INVALID_ARGUMENT");
+    }
+
+    @Test
+    void stopTimeoutIsIncludedInOptionMap() {
+        component.setStopTimeout(15000);
+        OptionMap options = component.getOptionMap();
+        assertThat(options.getLong("stopTimeout")).isEqualTo(15000);
+    }
+
     private static class TestWebServerComponent extends WebServerComponent<TestWebServerComponent> {
         public OptionMap getOptionMap() {
             return buildOptionMap();
