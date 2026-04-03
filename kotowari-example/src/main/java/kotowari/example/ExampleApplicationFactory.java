@@ -20,6 +20,7 @@ import enkan.security.backend.SessionBackend;
 import enkan.system.inject.ComponentInjector;
 import enkan.util.HttpResponseUtils;
 import kotowari.example.controller.*;
+import kotowari.example.controller.api.SseController;
 import kotowari.example.controller.api.TodoApiController;
 import kotowari.example.controller.guestbook.GuestbookController;
 import kotowari.example.controller.guestbook.LoginController;
@@ -72,6 +73,10 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
             r.resource(CustomerController.class);
             r.get("/customer/list").to(CustomerController.class, "list");
             r.post("/customer/validate").to(CustomerController.class, "validate");
+
+            // SSE API
+            r.get("/api/sse/countdown").to(SseController.class, "countdown");
+            r.get("/api/sse/tick").to(SseController.class, "tick");
 
             // JSON API
             r.get("/api/todo").to(TodoApiController.class, "list");

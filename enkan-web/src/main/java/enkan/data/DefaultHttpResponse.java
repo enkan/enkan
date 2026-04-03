@@ -23,6 +23,7 @@ public class DefaultHttpResponse implements HttpResponse {
     private String bodyString;
     private InputStream bodyStream;
     private File bodyFile;
+    private StreamingBody bodyStreaming;
 
     private final Map<String, Object> extensions;
 
@@ -66,7 +67,9 @@ public class DefaultHttpResponse implements HttpResponse {
 
     @Override
     public Object getBody() {
-        if (bodyString != null) {
+        if (bodyStreaming != null) {
+            return bodyStreaming;
+        } else if (bodyString != null) {
             return bodyString;
         } else if (bodyStream != null) {
             return bodyStream;
@@ -120,13 +123,15 @@ public class DefaultHttpResponse implements HttpResponse {
         this.bodyString = body;
         bodyStream = null;
         bodyFile = null;
+        bodyStreaming = null;
     }
 
     @Override
     public void setBody(InputStream body) {
         this.bodyStream = body;
         bodyString = null;
-        bodyFile =null;
+        bodyFile = null;
+        bodyStreaming = null;
     }
 
     @Override
@@ -134,12 +139,23 @@ public class DefaultHttpResponse implements HttpResponse {
         this.bodyFile = body;
         bodyString = null;
         bodyStream = null;
+        bodyStreaming = null;
+    }
+
+    @Override
+    public void setBody(StreamingBody body) {
+        this.bodyStreaming = body;
+        bodyString = null;
+        bodyStream = null;
+        bodyFile = null;
     }
 
     @Override
     public String toString() {
         String b;
-        if (bodyStream != null) {
+        if (bodyStreaming != null) {
+            b = bodyStreaming.toString();
+        } else if (bodyStream != null) {
             b = bodyStream.toString();
         } else if (bodyFile != null) {
             b = bodyFile.toString();

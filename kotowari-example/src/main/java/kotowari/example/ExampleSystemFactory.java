@@ -4,6 +4,7 @@ import enkan.Env;
 import enkan.collection.OptionMap;
 import enkan.component.*;
 import enkan.component.builtin.HmacEncoder;
+import enkan.component.LocalJobExecutor;
 import enkan.component.doma2.DomaProvider;
 import enkan.component.flyway.FlywayMigration;
 import enkan.component.freemarker.FreemarkerTemplateEngine;
@@ -48,6 +49,7 @@ public class ExampleSystemFactory implements EnkanSystemFactory {
                                         .addSpanProcessor(SimpleSpanProcessor.create(new Slf4jSpanExporter()))
                                         .build())
                                 .buildAndRegisterGlobal()),
+                "jobExecutor", new LocalJobExecutor(),
                 "datasource", new HikariCPComponent(OptionMap.of("uri", "jdbc:h2:mem:test")),
                 "app", new ApplicationComponent<>("kotowari.example.ExampleApplicationFactory"),
                 "http", builder(new UndertowComponent())
@@ -59,7 +61,7 @@ public class ExampleSystemFactory implements EnkanSystemFactory {
                         .build()
         ).relationships(
                 component("http").using("app"),
-                component("app").using("datasource", "template", "doma", "jackson", "metrics", "opentelemetry", "hmac"),
+                component("app").using("datasource", "template", "doma", "jackson", "opentelemetry", "hmac", "jobExecutor"),
                 component("doma").using("datasource", "flyway"),
                 component("flyway").using("datasource")
         );

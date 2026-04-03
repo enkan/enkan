@@ -68,6 +68,19 @@ public interface HttpResponse extends HasBody, HasStatus, HasHeaders,
         return response;
     }
 
+    /**
+     * Creates HttpResponse with the given StreamingBody.
+     *
+     * @param body streaming body
+     * @return the response object
+     */
+    static HttpResponse of(StreamingBody body) {
+        HttpResponse response = new DefaultHttpResponse(200,
+                Headers.empty());
+        response.setBody(body);
+        return response;
+    }
+
 
     Multimap<String, Cookie> getCookies();
     void setCookies(Multimap<String, Cookie> cookies);
@@ -93,4 +106,5 @@ public interface HttpResponse extends HasBody, HasStatus, HasHeaders,
     void setBody(String body);
     void setBody(InputStream body);
     void setBody(File body);
+    void setBody(StreamingBody body);
 }
