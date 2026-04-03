@@ -29,6 +29,9 @@ public class CookiesMiddleware implements WebMiddleware {
     // non cookie-octet chars after the value (e.g. backslash) prevent a match entirely.
     private static final Pattern RE_COOKIE = Pattern.compile("\\s*(" + RE_TOKEN + ")=(" + RE_COOKIE_VALUE.pattern() + ")\\s*(?:[;,]|$)");
 
+    private static final String HOST_PREFIX = "__Host-";
+    private static final String SECURE_PREFIX = "__Secure-";
+
     /**
      * Strip quotes from argument string.
      *
@@ -38,9 +41,6 @@ public class CookiesMiddleware implements WebMiddleware {
     protected String stripQuotes(String value) {
         return value.replaceAll("^\"|\"$", "");
     }
-
-    private static final String HOST_PREFIX = "__Host-";
-    private static final String SECURE_PREFIX = "__Secure-";
 
     /**
      * Strips the {@code __Host-} or {@code __Secure-} prefix from a cookie name,
@@ -77,7 +77,7 @@ public class CookiesMiddleware implements WebMiddleware {
             String rawName = m.group(1);
             String value = stripQuotes(m.group(2));
             String key = stripPrefix(rawName);
-            Cookie cookie = Cookie.create(rawName, value);
+            Cookie cookie = Cookie.create(key, value);
             cookies.put(key, cookie);
         }
         return cookies;

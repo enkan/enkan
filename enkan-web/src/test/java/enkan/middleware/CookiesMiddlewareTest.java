@@ -113,6 +113,34 @@ class CookiesMiddlewareTest {
     }
 
     @Test
+    void parsedCookieNameIsPrefixStripped() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    Cookie cookie = req.getCookies().get("token");
+                    assertThat(cookie).isNotNull();
+                    // getName() should return the unprefixed name
+                    assertThat(cookie.getName()).isEqualTo("token");
+                    return HttpResponse.of("ok");
+                });
+        request.getHeaders().put("Cookie", "__Host-token=abc123");
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void prefixedAndPlainCookieCollisionLastWins() {
+        // When both __Host-token and token exist, last one in the header wins (HashMap put)
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    Cookie cookie = req.getCookies().get("token");
+                    assertThat(cookie).isNotNull();
+                    assertThat(cookie.getValue()).isEqualTo("plain");
+                    return HttpResponse.of("ok");
+                });
+        request.getHeaders().put("Cookie", "__Host-token=prefixed; token=plain");
+        middleware.handle(request, chain);
+    }
+
+    @Test
     void plainCookieUnaffectedByPrefixStripping() {
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
                 (Endpoint<HttpRequest, HttpResponse>) req -> {
