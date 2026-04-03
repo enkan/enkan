@@ -16,6 +16,7 @@ import enkan.exception.MisconfigurationException;
 import jakarta.inject.Inject;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static enkan.util.BeanBuilder.builder;
 
@@ -155,7 +156,7 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
     public void setMethods(Set<String> methods) {
         this.methods = methods.stream()
                 .map(m -> m.toUpperCase(Locale.ENGLISH))
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
