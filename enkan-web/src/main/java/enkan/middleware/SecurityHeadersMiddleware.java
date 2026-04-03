@@ -29,6 +29,7 @@ import static enkan.util.HttpResponseUtils.header;
  *   <li>{@code Cross-Origin-Resource-Policy: same-origin}</li>
  *   <li>{@code Cross-Origin-Embedder-Policy: require-corp}</li>
  *   <li>{@code Permissions-Policy} — disabled by default (no safe universal default exists)</li>
+ *   <li>{@code Reporting-Endpoints} — disabled by default (endpoint URLs are deployment-specific)</li>
  * </ul>
  *
  * <h2>Usage</h2>
@@ -66,6 +67,8 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
     private String crossOriginEmbedderPolicy = "require-corp";
     /** Disabled by default — no safe universal default exists. */
     private String permissionsPolicy;
+    /** Disabled by default — endpoint URLs are deployment-specific. */
+    private String reportingEndpoints = null;
 
     /**
      * Passes the request through the chain and applies all enabled security
@@ -91,13 +94,26 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
         applyIfEnabled(response, "Cross-Origin-Resource-Policy", crossOriginResourcePolicy);
         applyIfEnabled(response, "Cross-Origin-Embedder-Policy", crossOriginEmbedderPolicy);
         applyIfEnabled(response, "Permissions-Policy", permissionsPolicy);
+        applyIfEnabled(response, "Reporting-Endpoints", reportingEndpoints);
 
         return response;
     }
 
     private void applyIfEnabled(HttpResponse response, String name, String value) {
-        if (value != null) {
-            header(response, name, value);
+        if (value == null) return;
+        // Defense-in-depth: also checked in setters so misconfiguration is caught at startup.
+        requireNoCrlf(name, value);
+        header(response, name, value);
+    }
+
+    /**
+     * Validates that {@code value} does not contain CR or LF characters, which would
+     * allow HTTP response splitting. Throws {@link IllegalArgumentException} if violated.
+     */
+    private static void requireNoCrlf(String headerName, String value) {
+        if (value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException(
+                    headerName + " header value must not contain CR or LF characters");
         }
     }
 
@@ -108,8 +124,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable this header.
      *
      * @param contentSecurityPolicy CSP directive string, e.g. {@code "default-src 'self'"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setContentSecurityPolicy(String contentSecurityPolicy) {
+        if (contentSecurityPolicy != null) requireNoCrlf("Content-Security-Policy", contentSecurityPolicy);
         this.contentSecurityPolicy = contentSecurityPolicy;
     }
 
@@ -118,8 +136,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable this header (e.g. during local development).
      *
      * @param strictTransportSecurity HSTS directive string, e.g. {@code "max-age=15552000; includeSubDomains"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setStrictTransportSecurity(String strictTransportSecurity) {
+        if (strictTransportSecurity != null) requireNoCrlf("Strict-Transport-Security", strictTransportSecurity);
         this.strictTransportSecurity = strictTransportSecurity;
     }
 
@@ -128,8 +148,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param contentTypeOptions typically {@code "nosniff"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setContentTypeOptions(String contentTypeOptions) {
+        if (contentTypeOptions != null) requireNoCrlf("X-Content-Type-Options", contentTypeOptions);
         this.contentTypeOptions = contentTypeOptions;
     }
 
@@ -139,8 +161,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param frameOptions frame options value
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setFrameOptions(String frameOptions) {
+        if (frameOptions != null) requireNoCrlf("X-Frame-Options", frameOptions);
         this.frameOptions = frameOptions;
     }
 
@@ -150,8 +174,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to omit the header entirely.
      *
      * @param xssProtection header value
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setXssProtection(String xssProtection) {
+        if (xssProtection != null) requireNoCrlf("X-XSS-Protection", xssProtection);
         this.xssProtection = xssProtection;
     }
 
@@ -160,8 +186,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param referrerPolicy policy value, e.g. {@code "strict-origin-when-cross-origin"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setReferrerPolicy(String referrerPolicy) {
+        if (referrerPolicy != null) requireNoCrlf("Referrer-Policy", referrerPolicy);
         this.referrerPolicy = referrerPolicy;
     }
 
@@ -170,8 +198,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param crossOriginOpenerPolicy policy value, e.g. {@code "same-origin"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setCrossOriginOpenerPolicy(String crossOriginOpenerPolicy) {
+        if (crossOriginOpenerPolicy != null) requireNoCrlf("Cross-Origin-Opener-Policy", crossOriginOpenerPolicy);
         this.crossOriginOpenerPolicy = crossOriginOpenerPolicy;
     }
 
@@ -180,8 +210,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param crossOriginResourcePolicy policy value, e.g. {@code "same-origin"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setCrossOriginResourcePolicy(String crossOriginResourcePolicy) {
+        if (crossOriginResourcePolicy != null) requireNoCrlf("Cross-Origin-Resource-Policy", crossOriginResourcePolicy);
         this.crossOriginResourcePolicy = crossOriginResourcePolicy;
     }
 
@@ -192,8 +224,10 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param crossOriginEmbedderPolicy policy value, e.g. {@code "require-corp"} or {@code "credentialless"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setCrossOriginEmbedderPolicy(String crossOriginEmbedderPolicy) {
+        if (crossOriginEmbedderPolicy != null) requireNoCrlf("Cross-Origin-Embedder-Policy", crossOriginEmbedderPolicy);
         this.crossOriginEmbedderPolicy = crossOriginEmbedderPolicy;
     }
 
@@ -205,8 +239,28 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * Pass {@code null} to disable.
      *
      * @param permissionsPolicy policy value, e.g. {@code "camera=(), geolocation=(self)"}
+     * @throws IllegalArgumentException if the value contains CR or LF characters
      */
     public void setPermissionsPolicy(String permissionsPolicy) {
+        if (permissionsPolicy != null) requireNoCrlf("Permissions-Policy", permissionsPolicy);
         this.permissionsPolicy = permissionsPolicy;
+    }
+
+    /**
+     * Sets the {@code Reporting-Endpoints} header value.
+     * Pass {@code null} to disable (default).
+     *
+     * <p>Example: {@code "main=\"https://example.com/reports\""}
+     *
+     * <p>This header declares named endpoints for receiving CSP violation reports and other
+     * browser-generated reports. Pair with the CSP {@code report-to} directive.
+     * The value must be a valid Structured Field (RFC 8941) dictionary.
+     *
+     * @param reportingEndpoints structured field value per the W3C Reporting API
+     * @throws IllegalArgumentException if the value contains CR or LF characters
+     */
+    public void setReportingEndpoints(String reportingEndpoints) {
+        if (reportingEndpoints != null) requireNoCrlf("Reporting-Endpoints", reportingEndpoints);
+        this.reportingEndpoints = reportingEndpoints;
     }
 }
