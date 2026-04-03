@@ -47,6 +47,10 @@ import static enkan.util.BeanBuilder.builder;
  *       — combine with CSRF tokens for defence against those clients.</li>
  *   <li>{@link #setAllowedPaths} performs exact URI matching only. For pattern-based
  *       exclusions, subclass this middleware and override {@link #isAllowed}.</li>
+ *   <li>When used together with {@code CorsMiddleware}, CORS-enabled paths must also be
+ *       added to {@link #setAllowedPaths allowedPaths}; otherwise cross-origin preflight
+ *       requests ({@code OPTIONS}, {@code Sec-Fetch-Mode: cors}) will be rejected with
+ *       403 before {@code CorsMiddleware} can respond to them.</li>
  * </ul>
  *
  * @author kawasima
@@ -109,7 +113,7 @@ public class FetchMetadataMiddleware implements WebMiddleware {
         //    because cross-origin form submissions can be used for CSRF.
         String fetchMode = headers.get("sec-fetch-mode");
         if (("navigate".equals(fetchMode) || "nested-navigate".equals(fetchMode))
-                && "GET".equalsIgnoreCase(request.getRequestMethod())) return true;
+                && "GET".equals(request.getRequestMethod())) return true;
 
         // 4. Allow paths that are explicitly opted in to cross-origin access
         //    (e.g. public REST API endpoints).
