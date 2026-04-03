@@ -44,8 +44,8 @@ public interface KeyValueStore {
 
     /**
      * Atomically writes the value only if no entry exists for the given key.
-     * Used by {@link enkan.middleware.IdempotencyKeyMiddleware} to prevent
-     * race conditions between concurrent requests with the same idempotency key.
+     * Useful for implementing compare-and-set patterns where only the first
+     * writer should succeed (e.g., idempotency key processing).
      *
      * <p>The default implementation is not atomic (read-then-write).
      * Implementations backed by {@code ConcurrentHashMap} or Redis should

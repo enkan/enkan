@@ -173,6 +173,20 @@ class IdempotencyKeyMiddlewareTest {
     }
 
     @Test
+    void putIfAbsentPreventsDoubleExecution() {
+        // Simulate: first request completes, second should replay cache
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = chainReturning("{\"id\":1}", 201);
+
+        // First: putIfAbsent succeeds, handler runs
+        middleware.handle(postRequest("cas-key"), chain);
+        assertThat(callCount.get()).isEqualTo(1);
+
+        // Second: putIfAbsent fails (key exists), cache replayed
+        middleware.handle(postRequest("cas-key"), chain);
+        assertThat(callCount.get()).isEqualTo(1);
+    }
+
+    @Test
     void invalidHeaderIsIgnored() {
         HttpRequest request = postRequest(null);
         // Set a malformed Idempotency-Key (not a valid SF Item)

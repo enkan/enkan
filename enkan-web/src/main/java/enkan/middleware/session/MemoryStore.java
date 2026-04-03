@@ -74,7 +74,17 @@ public class MemoryStore implements KeyValueStore, Closeable {
 
     @Override
     public boolean putIfAbsent(String key, Serializable value) {
-        long expiresAt = System.currentTimeMillis() + ttlSeconds * 1000L;
-        return sessionMap.putIfAbsent(key, new Entry(value, expiresAt)) == null;
+        long now = System.currentTimeMillis();
+        long expiresAt = now + ttlSeconds * 1000L;
+        Entry newEntry = new Entry(value, expiresAt);
+        Entry existing = sessionMap.putIfAbsent(key, newEntry);
+        if (existing == null) {
+            return true;
+        }
+        // If existing entry is expired, replace it
+        if (now > existing.expiresAt()) {
+            return sessionMap.replace(key, existing, newEntry);
+        }
+        return false;
     }
 }

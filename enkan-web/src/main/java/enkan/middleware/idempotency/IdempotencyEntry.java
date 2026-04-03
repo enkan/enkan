@@ -19,6 +19,12 @@ import static enkan.util.BeanBuilder.builder;
 public record IdempotencyEntry(State state, int status, Map<String, List<String>> headers, String body)
         implements Serializable {
 
+    public IdempotencyEntry {
+        var copy = new LinkedHashMap<String, List<String>>();
+        headers.forEach((k, v) -> copy.put(k, List.copyOf(v)));
+        headers = Map.copyOf(copy);
+    }
+
     public enum State { IN_FLIGHT, COMPLETED }
 
     /**
