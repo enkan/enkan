@@ -303,6 +303,65 @@ class ForwardedMiddlewareTest {
     }
 
     @Test
+    void handlesMultiValueForwardedHeader() {
+        // Multiple Forwarded headers stored as a List in Headers — must join with ", " not toString()
+        Headers headers = Headers.empty();
+        headers.put("Forwarded", "for=192.0.2.1;proto=https");
+        headers.put("Forwarded", "for=198.51.100.17;proto=http");
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setScheme, "http")
+                .set(HttpRequest::setHeaders, headers)
+                .build();
+
+        middleware.handle(request, chain);
+
+        // leftmost (original client) must be used, not "[for=..., for=...]"
+        assertThat(request.getRemoteAddr()).isEqualTo("192.0.2.1");
+        assertThat(request.getScheme()).isEqualTo("https");
+    }
+
+    @Test
+    void ignoresCommaInsideQuotedForwardedValue() {
+        // A quoted host value containing a comma must not be treated as a hop separator
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setScheme, "http")
+                .set(HttpRequest::setHeaders, Headers.of("Forwarded", "for=192.0.2.1;host=\"example.com,alt\";proto=https"))
+                .build();
+
+        middleware.handle(request, chain);
+
+        assertThat(request.getRemoteAddr()).isEqualTo("192.0.2.1");
+        assertThat(request.getScheme()).isEqualTo("https");
+        assertThat(request.getServerName()).isEqualTo("example.com,alt");
+    }
+
+    @Test
+    void ignoresMalformedIpv6ForValueWithMissingClosingBracket() {
+        // "[::1" without closing ']' must not throw StringIndexOutOfBoundsException
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setScheme, "http")
+                .set(HttpRequest::setHeaders, Headers.of("Forwarded", "for=\"[::1\";proto=https"))
+                .build();
+
+        middleware.handle(request, chain);
+
+        // malformed for= is skipped; remoteAddr unchanged, proto still applied
+        assertThat(request.getRemoteAddr()).isEqualTo("127.0.0.1");
+        assertThat(request.getScheme()).isEqualTo("https");
+    }
+
+    @Test
+    void rejectsHexOnlyHostnameInCidr() {
+        // "cafe" passes old isNumericIp but must be rejected — no '.' or ':'
+        assertThatThrownBy(() -> middleware.setTrustedProxies(List.of("cafe/32")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("numeric");
+    }
+
+    @Test
     void ipv4MappedRemoteAddrMatchesIpv4Cidr() {
         // Servlet containers on dual-stack servers may provide remoteAddr as ::ffff:x.x.x.x.
         // normalizeToIpv4IfMapped must be applied so it still matches an IPv4 CIDR.

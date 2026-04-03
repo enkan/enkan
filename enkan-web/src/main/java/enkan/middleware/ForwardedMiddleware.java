@@ -2,6 +2,7 @@ package enkan.middleware;
 
 import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
+import enkan.collection.Headers;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
 
@@ -62,12 +63,15 @@ public class ForwardedMiddleware implements WebMiddleware {
     }
 
     private void applyForwardedHeaders(HttpRequest request) {
-        if (request.getHeaders() == null) return;
+        Headers headers = request.getHeaders();
+        if (headers == null) return;
 
-        String forwarded = request.getHeaders().get("forwarded");
-        String xForwardedFor = request.getHeaders().get("x-forwarded-for");
-        String xForwardedProto = request.getHeaders().get("x-forwarded-proto");
-        String xForwardedHost = request.getHeaders().get("x-forwarded-host");
+        // Use getList() to correctly handle multi-value headers (RFC 7230 §3.2.2).
+        // Multiple instances of the same header are joined with ", " before parsing.
+        String forwarded = joinHeader(headers, "forwarded");
+        String xForwardedFor = joinHeader(headers, "x-forwarded-for");
+        String xForwardedProto = joinHeader(headers, "x-forwarded-proto");
+        String xForwardedHost = joinHeader(headers, "x-forwarded-host");
 
         boolean hasStandard = forwarded != null;
         boolean hasLegacy = xForwardedFor != null || xForwardedProto != null || xForwardedHost != null;
@@ -82,12 +86,23 @@ public class ForwardedMiddleware implements WebMiddleware {
     }
 
     /**
+     * Returns the combined value of all instances of the given header, joined with {@code ", "},
+     * or {@code null} if the header is absent. Uses {@link Headers#getList} to handle
+     * multi-value headers (RFC 7230 §3.2.2) without stringifying a {@code List} as {@code [v1, v2]}.
+     */
+    private static String joinHeader(Headers headers, String name) {
+        List<String> values = headers.getList(name);
+        return values.isEmpty() ? null : String.join(", ", values);
+    }
+
+    /**
      * Parses RFC 7239 {@code Forwarded} header and updates the request.
      * Takes the leftmost entry (original client) when multiple hops are present.
      */
     private void applyRfc7239(HttpRequest request, String forwarded) {
-        // Multiple proxies: "for=a, for=b" — leftmost is the original client
-        int commaIdx = forwarded.indexOf(',');
+        // Multiple proxies: "for=a, for=b" — leftmost is the original client.
+        // Use quote-aware search so commas inside quoted values are not misread as separators.
+        int commaIdx = indexOfUnquoted(forwarded, ',', 0);
         String firstEntry = commaIdx >= 0 ? forwarded.substring(0, commaIdx) : forwarded;
 
         String forValue = null;
@@ -97,7 +112,8 @@ public class ForwardedMiddleware implements WebMiddleware {
         int start = 0;
         int len = firstEntry.length();
         while (start < len) {
-            int end = firstEntry.indexOf(';', start);
+            // Use quote-aware search for ';' so semicolons inside quoted values are ignored.
+            int end = indexOfUnquoted(firstEntry, ';', start);
             if (end < 0) end = len;
             String part = firstEntry.substring(start, end);
             int eq = part.indexOf('=');
@@ -120,7 +136,12 @@ public class ForwardedMiddleware implements WebMiddleware {
                 forValue = null;
             } else if (forValue.startsWith("[")) {
                 // IPv6 addresses are wrapped in brackets: "[::1]:51348" → "::1", "[::1]" → "::1"
-                forValue = forValue.substring(1, forValue.lastIndexOf(']'));
+                int closingBracket = forValue.lastIndexOf(']');
+                if (closingBracket > 0) {
+                    forValue = forValue.substring(1, closingBracket);
+                } else {
+                    forValue = null; // malformed — no closing bracket, skip safely
+                }
             } else {
                 // IPv4 may carry a port: "192.0.2.1:51348" → "192.0.2.1"
                 // Distinguish from bare IPv6 (multiple colons) by counting colons.
@@ -142,6 +163,24 @@ public class ForwardedMiddleware implements WebMiddleware {
         if (hostValue != null) {
             request.setServerName(hostValue);
         }
+    }
+
+    /**
+     * Returns the index of the first occurrence of {@code target} in {@code value} starting
+     * at {@code fromIndex} that is not inside a quoted-string (RFC 7230 §3.2.6).
+     * Returns {@code -1} if no such character is found.
+     */
+    private static int indexOfUnquoted(String value, char target, int fromIndex) {
+        boolean inQuotes = false;
+        boolean escaped = false;
+        for (int i = fromIndex; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (escaped) { escaped = false; continue; }
+            if (inQuotes && ch == '\\') { escaped = true; continue; }
+            if (ch == '"') { inQuotes = !inQuotes; continue; }
+            if (!inQuotes && ch == target) return i;
+        }
+        return -1;
     }
 
     /**
@@ -169,7 +208,7 @@ public class ForwardedMiddleware implements WebMiddleware {
         }
     }
 
-    private String stripQuotes(String value) {
+    private static String stripQuotes(String value) {
         if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
             return value.substring(1, value.length() - 1);
         }
@@ -233,16 +272,9 @@ public class ForwardedMiddleware implements WebMiddleware {
     /**
      * If the address is an IPv4-mapped IPv6 address (::ffff:x.x.x.x), returns the 4-byte
      * IPv4 representation. Otherwise returns the original address bytes unchanged.
-     *
-     * <p>Made static so it can be used both in {@link #isTrustedProxy} and {@link #parseCidrs},
-     * ensuring the same normalization is applied to both sides of the CIDR match.
      */
     private static byte[] normalizeToIpv4IfMapped(InetAddress addr) {
         byte[] bytes = addr.getAddress();
-        return normalizeToIpv4IfMapped(bytes);
-    }
-
-    private static byte[] normalizeToIpv4IfMapped(byte[] bytes) {
         if (bytes.length == 16) {
             boolean mapped = true;
             for (int i = 0; i < 10; i++) {
@@ -283,8 +315,8 @@ public class ForwardedMiddleware implements WebMiddleware {
                 throw new IllegalArgumentException("CIDR address part must not be empty: \"" + cidr + "\"");
             }
 
-            // Reject hostnames: getByName() performs DNS for non-numeric strings.
-            // Check before calling getByName to avoid any network I/O.
+            // Reject hostnames before calling getByName to avoid any DNS I/O.
+            // A valid numeric IP must contain at least one '.' (IPv4) or ':' (IPv6).
             if (!isNumericIp(address)) {
                 throw new IllegalArgumentException(
                         "CIDR address must be a numeric IP, not a hostname: \"" + cidr + "\"");
@@ -314,15 +346,31 @@ public class ForwardedMiddleware implements WebMiddleware {
 
     /**
      * Returns {@code true} if {@code s} looks like a numeric IPv4 or IPv6 address.
-     * Accepts only digits, dots (IPv4), hex digits, and colons (IPv6).
-     * Rejects hostnames, which may contain letters outside {@code [a-fA-F]}.
+     *
+     * <p>Requires at least one separator character ({@code '.'} for IPv4-like inputs or
+     * {@code ':'} for IPv6-like inputs) so hexadecimal hostnames such as {@code cafe} or
+     * {@code deadbeef} are rejected before reaching {@link InetAddress#getByName(String)}.
      */
     private static boolean isNumericIp(String s) {
+        boolean hasColon = s.indexOf(':') >= 0;
+        boolean hasDot = s.indexOf('.') >= 0;
+
+        if (!hasColon && !hasDot) {
+            return false; // neither IPv4 nor IPv6 — could be a hostname like "cafe"
+        }
+
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if ((c >= '0' && c <= '9') || c == '.' || c == ':') continue;
-            if ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) continue;
-            return false;
+            if (hasColon) {
+                // IPv6: allow hex digits, colons, and dots (for IPv4-in-IPv6 notation)
+                if ((c >= '0' && c <= '9') || c == ':' || c == '.') continue;
+                if ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) continue;
+                return false;
+            } else {
+                // IPv4: allow digits and dots only
+                if ((c >= '0' && c <= '9') || c == '.') continue;
+                return false;
+            }
         }
         return true;
     }
