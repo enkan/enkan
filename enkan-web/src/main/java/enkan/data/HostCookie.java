@@ -48,6 +48,19 @@ public final class HostCookie extends Cookie {
     }
 
     /**
+     * Parses a {@code __Host-} cookie received in a request {@code Cookie} header.
+     * The prefix is stripped from the raw name to produce the application-facing name.
+     *
+     * @param rawName the cookie name as sent by the browser (including {@code __Host-} prefix)
+     * @param value   the cookie value
+     * @return a new HostCookie instance with the prefix stripped
+     */
+    public static HostCookie parse(String rawName, String value) {
+        String name = rawName.startsWith(PREFIX) ? rawName.substring(PREFIX.length()) : rawName;
+        return new HostCookie(name, value);
+    }
+
+    /**
      * Not supported — {@code __Host-} cookies must not have a {@code Domain} attribute.
      * Setting {@code null} is permitted (no-op since domain is always null).
      *

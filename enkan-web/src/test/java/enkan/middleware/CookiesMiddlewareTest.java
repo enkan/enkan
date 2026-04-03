@@ -6,8 +6,10 @@ import enkan.chain.DefaultMiddlewareChain;
 import enkan.collection.Headers;
 import enkan.data.Cookie;
 import enkan.data.DefaultHttpRequest;
+import enkan.data.HostCookie;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import enkan.data.SecureCookie;
 import enkan.predicate.AnyPredicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,12 +85,12 @@ class CookiesMiddlewareTest {
     }
 
     @Test
-    void hostPrefixCookiePreservesRawName() {
+    void hostPrefixCookieParsedAsHostCookie() {
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
                 (Endpoint<HttpRequest, HttpResponse>) req -> {
-                    Cookie cookie = req.getCookies().get("__Host-token");
-                    assertThat(cookie).isNotNull();
-                    assertThat(cookie.getName()).isEqualTo("__Host-token");
+                    Cookie cookie = req.getCookies().get("token");
+                    assertThat(cookie).isInstanceOf(HostCookie.class);
+                    assertThat(cookie.getName()).isEqualTo("token");
                     assertThat(cookie.getValue()).isEqualTo("abc123");
                     return HttpResponse.of("ok");
                 });
@@ -97,18 +99,44 @@ class CookiesMiddlewareTest {
     }
 
     @Test
-    void prefixedAndPlainCookiesAreDistinct() {
+    void securePrefixCookieParsedAsSecureCookie() {
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
                 (Endpoint<HttpRequest, HttpResponse>) req -> {
-                    Cookie prefixed = req.getCookies().get("__Host-token");
-                    Cookie plain = req.getCookies().get("token");
-                    assertThat(prefixed).isNotNull();
-                    assertThat(prefixed.getValue()).isEqualTo("prefixed");
-                    assertThat(plain).isNotNull();
-                    assertThat(plain.getValue()).isEqualTo("plain");
+                    Cookie cookie = req.getCookies().get("sid");
+                    assertThat(cookie).isInstanceOf(SecureCookie.class);
+                    assertThat(cookie.getName()).isEqualTo("sid");
+                    assertThat(cookie.getValue()).isEqualTo("xyz");
                     return HttpResponse.of("ok");
                 });
-        request.getHeaders().put("Cookie", "__Host-token=prefixed; token=plain");
+        request.getHeaders().put("Cookie", "__Secure-sid=xyz");
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void prefixedCookieTakesPrecedenceOverPlain() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    Cookie cookie = req.getCookies().get("token");
+                    assertThat(cookie).isInstanceOf(HostCookie.class);
+                    assertThat(cookie.getValue()).isEqualTo("secure");
+                    return HttpResponse.of("ok");
+                });
+        // Plain cookie appears first, then prefixed — prefixed should win
+        request.getHeaders().put("Cookie", "token=plain; __Host-token=secure");
+        middleware.handle(request, chain);
+    }
+
+    @Test
+    void prefixedCookieTakesPrecedenceEvenWhenFirst() {
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    Cookie cookie = req.getCookies().get("token");
+                    assertThat(cookie).isInstanceOf(HostCookie.class);
+                    assertThat(cookie.getValue()).isEqualTo("secure");
+                    return HttpResponse.of("ok");
+                });
+        // Prefixed cookie appears first, then plain — prefixed should still win
+        request.getHeaders().put("Cookie", "__Host-token=secure; token=plain");
         middleware.handle(request, chain);
     }
 

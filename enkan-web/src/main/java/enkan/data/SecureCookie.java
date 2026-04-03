@@ -44,6 +44,19 @@ public final class SecureCookie extends Cookie {
     }
 
     /**
+     * Parses a {@code __Secure-} cookie received in a request {@code Cookie} header.
+     * The prefix is stripped from the raw name to produce the application-facing name.
+     *
+     * @param rawName the cookie name as sent by the browser (including {@code __Secure-} prefix)
+     * @param value   the cookie value
+     * @return a new SecureCookie instance with the prefix stripped
+     */
+    public static SecureCookie parse(String rawName, String value) {
+        String name = rawName.startsWith(PREFIX) ? rawName.substring(PREFIX.length()) : rawName;
+        return new SecureCookie(name, value);
+    }
+
+    /**
      * Not supported — {@code __Secure-} cookies must always be secure.
      *
      * @throws UnsupportedOperationException if {@code secure} is {@code false}
