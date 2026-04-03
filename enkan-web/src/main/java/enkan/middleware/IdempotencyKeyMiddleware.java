@@ -49,6 +49,7 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
 
     private static final String KEY_PREFIX = "idempotency:";
     private static final int MAX_KEY_LENGTH = 256;
+    private static final int MAX_CAS_RETRIES = 3;
 
     @Inject
     private KeyValueStore store;
@@ -73,7 +74,7 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
         // Atomically claim the key. If another request already owns it,
         // re-read until we observe a stable state so that a completed
         // response is replayed instead of incorrectly returning 409.
-        while (true) {
+        for (int attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
             if (store.putIfAbsent(storeKey, IdempotencyEntry.inFlight())) {
                 return executeRequest(storeKey, request, chain);
             }
@@ -94,6 +95,8 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
                 case COMPLETED -> existing.toResponse();
             };
         }
+        // Exhausted retries — treat as conflict to avoid silent failure
+        return conflictResponse();
     }
 
     private <NNREQ, NNRES> HttpResponse executeRequest(String storeKey, HttpRequest request,
