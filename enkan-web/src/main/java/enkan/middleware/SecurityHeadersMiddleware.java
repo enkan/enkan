@@ -61,6 +61,7 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
     private String referrerPolicy = "strict-origin-when-cross-origin";
     private String crossOriginOpenerPolicy = "same-origin";
     private String crossOriginResourcePolicy = "same-origin";
+    private String reportingEndpoints = null;
 
     /**
      * Passes the request through the chain and applies all enabled security
@@ -84,14 +85,18 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
         applyIfEnabled(response, "Referrer-Policy", referrerPolicy);
         applyIfEnabled(response, "Cross-Origin-Opener-Policy", crossOriginOpenerPolicy);
         applyIfEnabled(response, "Cross-Origin-Resource-Policy", crossOriginResourcePolicy);
+        applyIfEnabled(response, "Reporting-Endpoints", reportingEndpoints);
 
         return response;
     }
 
     private void applyIfEnabled(HttpResponse response, String name, String value) {
-        if (value != null) {
-            header(response, name, value);
+        if (value == null) return;
+        if (value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException(
+                    name + " header value must not contain CR or LF characters");
         }
+        header(response, name, value);
     }
 
     // --- setters (pass null to disable the header) ---
@@ -176,5 +181,27 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      */
     public void setCrossOriginResourcePolicy(String crossOriginResourcePolicy) {
         this.crossOriginResourcePolicy = crossOriginResourcePolicy;
+    }
+
+    /**
+     * Sets the {@code Reporting-Endpoints} header value.
+     * Pass {@code null} to disable (default).
+     *
+     * <p>Example: {@code "main=\"https://example.com/reports\""}
+     *
+     * <p>This header declares named endpoints for receiving CSP violation reports and other
+     * browser-generated reports. Pair with the CSP {@code report-to} directive.
+     * The value must be a valid Structured Field (RFC 8941) dictionary.
+     *
+     * @param reportingEndpoints structured field value per the W3C Reporting API
+     * @throws IllegalArgumentException if the value contains CR or LF characters
+     */
+    public void setReportingEndpoints(String reportingEndpoints) {
+        if (reportingEndpoints != null
+                && (reportingEndpoints.indexOf('\r') >= 0 || reportingEndpoints.indexOf('\n') >= 0)) {
+            throw new IllegalArgumentException(
+                    "Reporting-Endpoints value must not contain CR or LF characters");
+        }
+        this.reportingEndpoints = reportingEndpoints;
     }
 }

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import static enkan.util.BeanBuilder.builder;
 import static enkan.util.HttpResponseUtils.getHeader;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SecurityHeadersMiddlewareTest {
     private HttpRequest request;
@@ -73,5 +74,47 @@ class SecurityHeadersMiddlewareTest {
         HttpResponse response = middleware.handle(request, chain);
 
         assertThat((String) getHeader(response, "X-Frame-Options")).isEqualTo("DENY");
+    }
+
+    @Test
+    void reportingEndpointsIsAbsentByDefault() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat(response.getHeaders().containsKey("Reporting-Endpoints")).isFalse();
+    }
+
+    @Test
+    void reportingEndpointsHeaderIsEmittedWhenConfigured() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setReportingEndpoints("main=\"https://example.com/reports\"");
+
+        HttpResponse response = middleware.handle(request, chain);
+
+        assertThat((String) getHeader(response, "Reporting-Endpoints"))
+                .isEqualTo("main=\"https://example.com/reports\"");
+    }
+
+    @Test
+    void reportingEndpointsRejectsCrlfInjection() {
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+
+        assertThatThrownBy(() -> middleware.setReportingEndpoints("main=\"https://evil.com\"\r\nX-Injected: bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> middleware.setReportingEndpoints("main=\"https://evil.com\"\nX-Injected: bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void crlfInAnyHeaderValueIsRejectedAtRequestTime() {
+        // applyIfEnabled protects ALL headers uniformly, not just Reporting-Endpoints.
+        // setContentSecurityPolicy has no setter-level CRLF guard, so the value is accepted
+        // at configuration time but rejected when handle() calls applyIfEnabled.
+        SecurityHeadersMiddleware middleware = new SecurityHeadersMiddleware();
+        middleware.setContentSecurityPolicy("default-src 'self'\r\nX-Injected: evil");
+
+        assertThatThrownBy(() -> middleware.handle(request, chain))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Content-Security-Policy");
     }
 }
