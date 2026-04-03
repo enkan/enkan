@@ -12,30 +12,54 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A compiler implementation that delegates to {@code mvn compile} via
  * {@link ProcessBuilder}.
  *
- * <p>Requires either {@code MAVEN_HOME} or {@code M2_HOME} environment
- * variable to be set, or Maven installed at {@code /opt/maven}.</p>
+ * <p>When {@code MAVEN_HOME} or {@code M2_HOME} is set, Maven is resolved
+ * from that directory. Otherwise, {@code mvn} is resolved from {@code PATH}.</p>
  *
  * @author kawasima
  */
 public class MavenCompiler implements Compiler {
+    private static final boolean IS_WINDOWS =
+            System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("win");
+
+    private static final long COMPILE_TIMEOUT_MINUTES = 10L;
+
     private String projectDirectory = ".";
 
     @Override
     public CompileResult execute(Transport t) {
-        File mavenHome = new File(Env.getString("MAVEN_HOME",
-                Env.getString("M2_HOME", "/opt/maven")));
-        if (!mavenHome.exists()) {
-            throw new MisconfigurationException("devel.MAVEN_HOME_NOT_SET");
+        String mavenHomeEnv = Env.getString("MAVEN_HOME", Env.getString("M2_HOME", null));
+        if (mavenHomeEnv != null && mavenHomeEnv.isBlank()) {
+            mavenHomeEnv = null;
         }
 
-        String mvnCommand = new File(mavenHome, "bin/mvn").getAbsolutePath();
+        String mvnCommand;
+        if (mavenHomeEnv != null) {
+            File mavenHome = new File(mavenHomeEnv);
+            String mvnBin = IS_WINDOWS ? "bin/mvn.cmd" : "bin/mvn";
+            File mvnExec = new File(mavenHome, mvnBin);
+            if (!mvnExec.canExecute()) {
+                throw new MisconfigurationException("devel.MAVEN_HOME_NOT_SET");
+            }
+            mvnCommand = mvnExec.getAbsolutePath();
+        } else {
+            mvnCommand = IS_WINDOWS ? "mvn.cmd" : "mvn";
+        }
+
+        File projectDir = new File(projectDirectory);
+        File pomFile = new File(projectDir, "pom.xml");
+        if (!pomFile.exists()) {
+            return CompileResult.failure(new IllegalStateException(
+                    "pom.xml not found in project directory: " + projectDirectory));
+        }
+
         ProcessBuilder pb = new ProcessBuilder(mvnCommand, "compile");
-        pb.directory(new File(projectDirectory));
+        pb.directory(projectDir);
         pb.redirectErrorStream(false);
 
         try {
@@ -50,7 +74,7 @@ public class MavenCompiler implements Compiler {
                         t.send(ReplResponse.withOut(line));
                     }
                 } catch (IOException e) {
-                    // Process ended — stop reading
+                    t.send(ReplResponse.withErr("I/O error reading process stdout: " + e.getMessage()));
                 }
             });
 
@@ -62,17 +86,30 @@ public class MavenCompiler implements Compiler {
                         t.send(ReplResponse.withErr(line));
                     }
                 } catch (IOException e) {
-                    // Process ended — stop reading
+                    t.send(ReplResponse.withErr("I/O error reading process stderr: " + e.getMessage()));
                 }
             });
 
-            int exitCode = process.waitFor();
-            stdoutReader.join();
-            stderrReader.join();
-
-            if (exitCode != 0) {
-                return CompileResult.failure(new IllegalStateException(
-                        "Maven compile failed with exit code " + exitCode));
+            try {
+                boolean finished = process.waitFor(COMPILE_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+                if (!finished) {
+                    return CompileResult.failure(new IllegalStateException(
+                            "Maven compile timed out after " + COMPILE_TIMEOUT_MINUTES + " minutes"));
+                }
+                int exitCode = process.exitValue();
+                if (exitCode != 0) {
+                    return CompileResult.failure(new IllegalStateException(
+                            "Maven compile failed with exit code " + exitCode));
+                }
+            } finally {
+                // no-op if process already exited; ensures cleanup on error/timeout paths
+                process.destroyForcibly();
+                try {
+                    stdoutReader.join(5_000);
+                    stderrReader.join(5_000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
             }
         } catch (IOException e) {
             return CompileResult.failure(e);
