@@ -24,7 +24,8 @@ import static enkan.util.BeanBuilder.builder;
  * <ol>
  *   <li>No {@code Sec-Fetch-Site} header → <b>allow</b> (non-browser or pre-Fetch-Metadata browser)</li>
  *   <li>{@code Sec-Fetch-Site: same-origin}, {@code same-site}, or {@code none} → <b>allow</b></li>
- *   <li>{@code Sec-Fetch-Mode: navigate} on a {@code GET} request → <b>allow</b> (top-level navigation)</li>
+ *   <li>{@code Sec-Fetch-Mode: navigate} or {@code nested-navigate} on a {@code GET} request → <b>allow</b>
+ *       (top-level navigation and cross-origin iframe navigation)</li>
  *   <li>URI matches the configured {@link #setAllowedPaths allow-list} → <b>allow</b> (public APIs)</li>
  *   <li>Everything else → <b>403 Forbidden</b></li>
  * </ol>
@@ -102,16 +103,17 @@ public class FetchMetadataMiddleware implements WebMiddleware {
         if ("same-origin".equals(fetchSite) || "same-site".equals(fetchSite)
                 || "none".equals(fetchSite)) return true;
 
-        // 3. Allow simple top-level GET navigation (user clicked a cross-origin link).
-        //    POST navigations (e.g. cross-origin form submissions) are intentionally excluded
-        //    because they can be used for CSRF.
+        // 3. Allow top-level GET navigation (user clicked a cross-origin link) and cross-origin
+        //    iframe navigation (nested-navigate). POST navigations are intentionally excluded
+        //    because cross-origin form submissions can be used for CSRF.
         String fetchMode = headers.get("sec-fetch-mode");
-        if ("navigate".equals(fetchMode)
+        if (("navigate".equals(fetchMode) || "nested-navigate".equals(fetchMode))
                 && "GET".equalsIgnoreCase(request.getRequestMethod())) return true;
 
         // 4. Allow paths that are explicitly opted in to cross-origin access
         //    (e.g. public REST API endpoints).
-        if (allowedPaths.contains(request.getUri())) return true;
+        String uri = request.getUri();
+        if (uri != null && allowedPaths.contains(uri)) return true;
 
         // 5. Reject all other cross-site requests (cors, no-cors, websocket, etc.)
         return false;

@@ -90,6 +90,36 @@ class FetchMetadataMiddlewareTest {
     }
 
     @Test
+    void crossSiteNestedNavigateGetIsAllowed() {
+        // Browser navigating a cross-origin iframe sends nested-navigate — must be allowed.
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "sec-fetch-site", "cross-site",
+                        "sec-fetch-mode", "nested-navigate"))
+                .set(HttpRequest::setRequestMethod, "GET")
+                .build();
+
+        HttpResponse response = new FetchMetadataMiddleware().handle(request, chain);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void crossSiteNestedNavigatePostIsRejected() {
+        // POST nested-navigate is not a browser-initiated navigation — reject.
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of(
+                        "sec-fetch-site", "cross-site",
+                        "sec-fetch-mode", "nested-navigate"))
+                .set(HttpRequest::setRequestMethod, "POST")
+                .build();
+
+        HttpResponse response = new FetchMetadataMiddleware().handle(request, chain);
+
+        assertThat(response.getStatus()).isEqualTo(403);
+    }
+
+    @Test
     void allowedPathPermitsCrossOrigin() {
         FetchMetadataMiddleware middleware = new FetchMetadataMiddleware();
         middleware.setAllowedPaths(Set.of("/api/public/feed"));
