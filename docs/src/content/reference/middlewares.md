@@ -400,15 +400,35 @@ app.use(new ValidateBodyMiddleware());
 app.use(new CorsMiddleware());
 ```
 
-### ForwardedScheme
+### Forwarded
 
-`ForwardedSchemeMiddleware` detects the original request scheme from `X-Forwarded-Proto` header and sets it on the request.
+`ForwardedMiddleware` applies forwarded-address information from trusted reverse proxies.
+It supports both the standard `Forwarded` header (RFC 7239) and the legacy `X-Forwarded-For`,
+`X-Forwarded-Proto`, and `X-Forwarded-Host` headers. Headers are only trusted when the
+direct connection's remote address matches a configured trusted proxy CIDR range,
+preventing header spoofing by untrusted clients.
+
+When headers are trusted, the middleware updates `remoteAddr`, `scheme`, and `serverName`
+on the request.
 
 #### Usage
 
 ```java
-app.use(new ForwardedSchemeMiddleware());
+// Default — trusts loopback only (127.0.0.0/8 and ::1/128)
+app.use(new ForwardedMiddleware());
+
+// With a custom trusted proxy range
+ForwardedMiddleware fw = new ForwardedMiddleware();
+fw.setTrustedProxies(List.of("10.0.0.0/8", "172.16.0.0/12", "127.0.0.0/8", "::1/128"));
+app.use(fw);
 ```
+
+#### Configuration
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `trustedProxies` | `List<String>` | `["127.0.0.0/8", "::1/128"]` | CIDR ranges of trusted proxies |
+| `preferStandard` | `boolean` | `true` | Prefer RFC 7239 `Forwarded` over legacy `X-Forwarded-*` when both are present |
 
 ### CacheControl
 
