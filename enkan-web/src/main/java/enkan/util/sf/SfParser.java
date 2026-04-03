@@ -3,6 +3,10 @@ package enkan.util.sf;
 import enkan.util.sf.SfValue.*;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -30,7 +34,7 @@ final class SfParser {
     // --- Top-level parse methods ---
 
     SfList parseList() {
-        skipSP();
+        skipOWS();
         List<SfMember> members = new ArrayList<>();
         while (pos < input.length()) {
             members.add(parseItemOrInnerList());
@@ -48,7 +52,7 @@ final class SfParser {
     }
 
     SfDictionary parseDictionary() {
-        skipSP();
+        skipOWS();
         LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
         while (pos < input.length()) {
             String key = parseKey();
@@ -75,10 +79,10 @@ final class SfParser {
     }
 
     SfItem parseItem() {
-        skipSP();
+        skipOWS();
         SfValue bareItem = parseBareItem();
         SfParameters params = parseParameters();
-        skipSP();
+        skipOWS();
         return new SfItem(bareItem, params);
     }
 
@@ -348,9 +352,9 @@ final class SfParser {
                 }
                 pendingBytes.write((hexVal(h1) << 4) | hexVal(h2));
             } else {
-                // Flush accumulated percent-encoded bytes as UTF-8
+                // Flush accumulated percent-encoded bytes as strict UTF-8
                 if (pendingBytes.size() > 0) {
-                    sb.append(pendingBytes.toString(StandardCharsets.UTF_8));
+                    flushUtf8Bytes(pendingBytes, sb);
                     pendingBytes.reset();
                 }
                 if (c == '"') {
@@ -390,8 +394,20 @@ final class SfParser {
 
     // --- Character helpers ---
 
+    private void flushUtf8Bytes(ByteArrayOutputStream bytes, StringBuilder sb) {
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        try {
+            CharBuffer decoded = decoder.decode(ByteBuffer.wrap(bytes.toByteArray()));
+            sb.append(decoded);
+        } catch (java.nio.charset.CharacterCodingException e) {
+            throw fail("Invalid UTF-8 in Display String percent-encoding");
+        }
+    }
+
     void ensureEmpty() {
-        skipSP();
+        skipOWS();
         if (pos < input.length()) {
             throw fail("Unexpected trailing characters");
         }

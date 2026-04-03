@@ -19,6 +19,15 @@ public sealed interface SfValue {
     record SfToken(String value) implements SfValue {}
 
     record SfByteSequence(byte[] value) implements SfValue {
+        public SfByteSequence {
+            value = value.clone();
+        }
+
+        @Override
+        public byte[] value() {
+            return value.clone();
+        }
+
         @Override
         public boolean equals(Object o) {
             return o instanceof SfByteSequence other && Arrays.equals(value, other.value);

@@ -39,6 +39,7 @@ final class SfSerializer {
         Iterator<Map.Entry<String, SfMember>> it = dict.members().entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, SfMember> entry = it.next();
+            validateKey(entry.getKey());
             sb.append(entry.getKey());
             SfMember member = entry.getValue();
             if (member instanceof SfItem item && item.value() instanceof SfBoolean b && b.value()) {
@@ -98,6 +99,7 @@ final class SfSerializer {
         if (params.isEmpty()) return;
         for (Map.Entry<String, SfValue> entry : params.map().entrySet()) {
             sb.append(';');
+            validateKey(entry.getKey());
             sb.append(entry.getKey());
             SfValue value = entry.getValue();
             if (!(value instanceof SfBoolean b && b.value())) {
@@ -114,7 +116,10 @@ final class SfSerializer {
             case SfInteger v -> sb.append(v.value());
             case SfDecimal v -> serializeDecimal(sb, v.value());
             case SfString v -> serializeString(sb, v.value());
-            case SfToken v -> sb.append(v.value());
+            case SfToken v -> {
+                validateToken(v.value());
+                sb.append(v.value());
+            }
             case SfByteSequence v -> {
                 sb.append(':');
                 sb.append(Base64.getEncoder().encodeToString(v.value()));
@@ -190,5 +195,62 @@ final class SfSerializer {
             }
         }
         sb.append('"');
+    }
+
+    // --- Validation helpers ---
+
+    // RFC 8941 §3.1.2: key = ( lcalpha / "*" ) *( lcalpha / DIGIT / "_" / "-" / "." / "*" )
+    private static void validateKey(String key) {
+        if (key == null || key.isEmpty()) {
+            throw new IllegalArgumentException("Dictionary/parameter key must not be empty");
+        }
+        char first = key.charAt(0);
+        if (!isLcAlpha(first) && first != '*') {
+            throw new IllegalArgumentException("Invalid key: must start with lcalpha or '*': " + key);
+        }
+        for (int i = 1; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (!isLcAlpha(c) && !isDigit(c) && c != '_' && c != '-' && c != '.' && c != '*') {
+                throw new IllegalArgumentException("Invalid character in key: '" + c + "' in " + key);
+            }
+        }
+    }
+
+    // RFC 8941 §3.3.4: token = ( ALPHA / "*" ) *( tchar / ":" / "/" )
+    private static void validateToken(String token) {
+        if (token == null || token.isEmpty()) {
+            throw new IllegalArgumentException("Token must not be empty");
+        }
+        char first = token.charAt(0);
+        if (!isAlpha(first) && first != '*') {
+            throw new IllegalArgumentException("Invalid token: must start with ALPHA or '*': " + token);
+        }
+        for (int i = 1; i < token.length(); i++) {
+            char c = token.charAt(i);
+            if (!isTchar(c) && c != ':' && c != '/') {
+                throw new IllegalArgumentException("Invalid character in token: '" + c + "' in " + token);
+            }
+        }
+    }
+
+    private static boolean isDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
+    private static boolean isAlpha(char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    }
+
+    private static boolean isLcAlpha(char c) {
+        return c >= 'a' && c <= 'z';
+    }
+
+    // RFC 7230 tchar
+    private static boolean isTchar(char c) {
+        if (isAlpha(c) || isDigit(c)) return true;
+        return switch (c) {
+            case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~' -> true;
+            default -> false;
+        };
     }
 }

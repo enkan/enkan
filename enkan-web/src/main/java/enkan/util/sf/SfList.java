@@ -1,6 +1,5 @@
 package enkan.util.sf;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -12,7 +11,7 @@ import java.util.List;
 public record SfList(List<SfMember> members) {
 
     public SfList {
-        members = Collections.unmodifiableList(members);
+        members = List.copyOf(members);
     }
 
     /**

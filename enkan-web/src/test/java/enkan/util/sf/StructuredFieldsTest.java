@@ -135,7 +135,7 @@ class StructuredFieldsTest {
             SfItem item = StructuredFields.parseItem(":cHJldHR5IG1hY2hpbmU=:");
             assertThat(item.value()).isInstanceOf(SfByteSequence.class);
             byte[] decoded = ((SfByteSequence) item.value()).value();
-            assertThat(new String(decoded)).isEqualTo("pretty machine");
+            assertThat(new String(decoded, java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("pretty machine");
         }
 
         @Test
