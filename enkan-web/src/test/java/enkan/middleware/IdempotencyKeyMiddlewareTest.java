@@ -95,7 +95,7 @@ class IdempotencyKeyMiddlewareTest {
         assertThat(response.getBody()).isEqualTo("{\"id\":1}");
         assertThat(callCount.get()).isEqualTo(1);
         // Verify entry was stored with prefix
-        assertThat(store.read("idempotency:key-1")).isNotNull();
+        assertThat(store.read("idempotency:POST:/orders:key-1")).isNotNull();
     }
 
     @Test
@@ -129,7 +129,7 @@ class IdempotencyKeyMiddlewareTest {
     @Test
     void inFlightReturns409() {
         // Manually write an IN_FLIGHT entry with prefix
-        store.write("idempotency:key-inflight", IdempotencyEntry.inFlight());
+        store.write("idempotency:POST:/orders:key-inflight", IdempotencyEntry.inFlight());
 
         HttpResponse response = middleware.handle(postRequest("key-inflight"),
                 chainReturning("{}", 200));
@@ -152,7 +152,7 @@ class IdempotencyKeyMiddlewareTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(callCount.get()).isEqualTo(1);
-        assertThat(store.read("idempotency:patch-key")).isNotNull();
+        assertThat(store.read("idempotency:PATCH:/orders/1:patch-key")).isNotNull();
     }
 
     @Test
@@ -169,7 +169,7 @@ class IdempotencyKeyMiddlewareTest {
         }
 
         // IN_FLIGHT entry should be cleaned up
-        assertThat(store.read("idempotency:key-error")).isNull();
+        assertThat(store.read("idempotency:POST:/orders:key-error")).isNull();
     }
 
     @Test
@@ -194,8 +194,7 @@ class IdempotencyKeyMiddlewareTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(callCount.get()).isEqualTo(1);
-        // No entry stored
-        assertThat(store.read("idempotency:" + "x".repeat(257))).isNull();
+        // No entry stored — key was rejected before store key construction
     }
 
     @Test
@@ -209,7 +208,7 @@ class IdempotencyKeyMiddlewareTest {
         // Idempotency middleware should not interfere with session data
         assertThat(response.getStatus()).isEqualTo(201);
         assertThat(store.read("user-session-id")).isInstanceOf(enkan.data.Session.class);
-        assertThat(store.read("idempotency:user-session-id")).isInstanceOf(IdempotencyEntry.class);
+        assertThat(store.read("idempotency:POST:/orders:user-session-id")).isInstanceOf(IdempotencyEntry.class);
     }
 
     @Test

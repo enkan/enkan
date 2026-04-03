@@ -43,7 +43,7 @@ public interface KeyValueStore {
     String delete(String key);
 
     /**
-     * Atomically writes the value only if no entry exists for the given key.
+     * Attempts to write the value only if no entry exists for the given key.
      * Useful for implementing compare-and-set patterns where only the first
      * writer should succeed (e.g., idempotency key processing).
      *

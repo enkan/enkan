@@ -31,6 +31,9 @@ import static enkan.util.BeanBuilder.builder;
  * </ul>
  *
  * <p>Requires a {@link KeyValueStore} to be injected via the enkan component system.
+ * The TTL for idempotency entries is determined by the store implementation
+ * (e.g., {@link enkan.middleware.session.MemoryStore#setTtlSeconds(long)}).
+ * A dedicated store instance with appropriate TTL (typically 24 hours) is recommended.
  *
  * <h2>Usage</h2>
  * <pre>{@code
@@ -64,37 +67,48 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
             return castToHttpResponse(chain.next(request));
         }
 
-        String storeKey = KEY_PREFIX + key;
+        // Scope the store key by method + URI to prevent cross-endpoint collisions
+        String storeKey = KEY_PREFIX + request.getRequestMethod() + ":" + request.getUri() + ":" + key;
 
-        // Atomically claim the key. If putIfAbsent returns false, another
-        // request already owns this key — check its state.
-        if (!store.putIfAbsent(storeKey, IdempotencyEntry.inFlight())) {
-            IdempotencyEntry existing = (IdempotencyEntry) store.read(storeKey);
-            if (existing == null) {
-                // Entry expired between putIfAbsent and read — retry claim
-                if (store.putIfAbsent(storeKey, IdempotencyEntry.inFlight())) {
-                    return executeRequest(storeKey, request, chain);
-                }
-                return conflictResponse();
+        // Atomically claim the key. If another request already owns it,
+        // re-read until we observe a stable state so that a completed
+        // response is replayed instead of incorrectly returning 409.
+        while (true) {
+            if (store.putIfAbsent(storeKey, IdempotencyEntry.inFlight())) {
+                return executeRequest(storeKey, request, chain);
             }
+
+            Object raw = store.read(storeKey);
+            if (raw == null) {
+                // Entry expired or was evicted between putIfAbsent and read — retry
+                continue;
+            }
+            if (!(raw instanceof IdempotencyEntry existing)) {
+                // Unexpected data in store — overwrite
+                store.delete(storeKey);
+                continue;
+            }
+
             return switch (existing.state()) {
                 case IN_FLIGHT -> conflictResponse();
                 case COMPLETED -> existing.toResponse();
             };
         }
-
-        return executeRequest(storeKey, request, chain);
     }
 
-    private <NNREQ, NNRES> HttpResponse executeRequest(String key, HttpRequest request,
+    private <NNREQ, NNRES> HttpResponse executeRequest(String storeKey, HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         try {
             HttpResponse response = castToHttpResponse(chain.next(request));
-            store.write(key, IdempotencyEntry.completed(response));
+            if (response == null) {
+                store.delete(storeKey);
+                return null;
+            }
+            store.write(storeKey, IdempotencyEntry.completed(response));
             return response;
-        } catch (RuntimeException e) {
-            store.delete(key);
-            throw e;
+        } catch (Throwable t) {
+            store.delete(storeKey);
+            throw t;
         }
     }
 
@@ -136,7 +150,9 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
      * @param methods the set of HTTP methods (e.g., "POST", "PATCH")
      */
     public void setMethods(Set<String> methods) {
-        this.methods = Set.copyOf(methods);
+        this.methods = methods.stream()
+                .map(m -> m.toUpperCase(Locale.ENGLISH))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     /**

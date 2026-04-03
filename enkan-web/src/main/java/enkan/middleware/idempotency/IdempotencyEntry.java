@@ -38,7 +38,8 @@ public record IdempotencyEntry(State state, int status, Map<String, List<String>
 
     /**
      * Creates a COMPLETED entry from an HTTP response.
-     * Only String bodies are cached; other body types result in {@code null} body.
+     * String bodies are cached as-is; other body types (InputStream, File)
+     * are stored as an empty string so that status and headers can still be replayed.
      *
      * @param response the HTTP response to cache
      * @return a completed entry
