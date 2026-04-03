@@ -7,13 +7,14 @@ import java.util.Map;
 /**
  * A Dictionary in an RFC 8941 Structured Field (§3.2).
  * Members are keyed by string and are either {@link SfItem} or {@link SfInnerList}.
+ * The member map preserves insertion order and is unmodifiable.
  *
  * @author kawasima
  */
-public record SfDictionary(LinkedHashMap<String, SfMember> members) {
+public record SfDictionary(Map<String, SfMember> members) {
 
-    public SfDictionary {
-        members = new LinkedHashMap<>(members);
+    public SfDictionary(Map<String, SfMember> members) {
+        this.members = Collections.unmodifiableMap(new LinkedHashMap<>(members));
     }
 
     /**
@@ -30,10 +31,6 @@ public record SfDictionary(LinkedHashMap<String, SfMember> members) {
 
     public boolean containsKey(String key) {
         return members.containsKey(key);
-    }
-
-    public Map<String, SfMember> asMap() {
-        return Collections.unmodifiableMap(members);
     }
 
     public int size() {

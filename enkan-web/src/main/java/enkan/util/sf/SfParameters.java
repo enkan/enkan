@@ -6,13 +6,14 @@ import java.util.Map;
 
 /**
  * Ordered parameters attached to an Item or Inner List (RFC 8941 §3.1.2).
+ * The parameter map preserves insertion order and is unmodifiable.
  *
  * @author kawasima
  */
-public record SfParameters(LinkedHashMap<String, SfValue> map) {
+public record SfParameters(Map<String, SfValue> map) {
 
-    public SfParameters {
-        map = new LinkedHashMap<>(map);
+    public SfParameters(Map<String, SfValue> map) {
+        this.map = Collections.unmodifiableMap(new LinkedHashMap<>(map));
     }
 
     /** Empty parameters singleton — avoids allocation for parameter-less items. */
@@ -24,10 +25,6 @@ public record SfParameters(LinkedHashMap<String, SfValue> map) {
 
     public SfValue get(String key) {
         return map.get(key);
-    }
-
-    public Map<String, SfValue> asMap() {
-        return Collections.unmodifiableMap(map);
     }
 
     public int size() {
