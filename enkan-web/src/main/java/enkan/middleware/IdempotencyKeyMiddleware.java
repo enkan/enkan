@@ -12,6 +12,7 @@ import enkan.util.sf.SfParseException;
 import enkan.util.sf.SfValue.SfString;
 import enkan.util.sf.StructuredFields;
 
+import enkan.exception.MisconfigurationException;
 import jakarta.inject.Inject;
 import java.util.Locale;
 import java.util.Set;
@@ -129,6 +130,9 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
      * @param store the store to use
      */
     public void setStore(KeyValueStore store) {
+        if (store == null) {
+            throw new MisconfigurationException("core.NULL_ARGUMENT", "store");
+        }
         this.store = store;
     }
 }

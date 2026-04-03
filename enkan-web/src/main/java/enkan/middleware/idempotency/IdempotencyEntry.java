@@ -4,7 +4,9 @@ import enkan.collection.Headers;
 import enkan.data.HttpResponse;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static enkan.util.BeanBuilder.builder;
@@ -14,7 +16,7 @@ import static enkan.util.BeanBuilder.builder;
  *
  * @author kawasima
  */
-public record IdempotencyEntry(State state, int status, Map<String, String> headers, String body)
+public record IdempotencyEntry(State state, int status, Map<String, List<String>> headers, String body)
         implements Serializable {
 
     public enum State { IN_FLIGHT, COMPLETED }
@@ -37,10 +39,10 @@ public record IdempotencyEntry(State state, int status, Map<String, String> head
      */
     public static IdempotencyEntry completed(HttpResponse response) {
         int status = response.getStatus();
-        Map<String, String> hdrs = new LinkedHashMap<>();
+        Map<String, List<String>> hdrs = new LinkedHashMap<>();
         if (response.getHeaders() != null) {
             response.getHeaders().forEachHeader((name, value) ->
-                    hdrs.put(name, value.toString()));
+                    hdrs.computeIfAbsent(name, _ -> new ArrayList<>()).add(value.toString()));
         }
         Object responseBody = response.getBody();
         String body = responseBody instanceof String s ? s : null;
@@ -54,7 +56,7 @@ public record IdempotencyEntry(State state, int status, Map<String, String> head
      */
     public HttpResponse toResponse() {
         Headers responseHeaders = Headers.empty();
-        headers.forEach(responseHeaders::put);
+        headers.forEach((name, values) -> values.forEach(v -> responseHeaders.put(name, v)));
         return builder(HttpResponse.of(body != null ? body : ""))
                 .set(HttpResponse::setStatus, status)
                 .set(HttpResponse::setHeaders, responseHeaders)
