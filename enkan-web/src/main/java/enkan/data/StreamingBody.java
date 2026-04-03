@@ -14,8 +14,7 @@ import java.io.OutputStream;
  *
  * <p>Usage:</p>
  * <pre>{@code
- * HttpResponse response = HttpResponse.of("");
- * response.setBody((StreamingBody) out -> {
+ * HttpResponse response = HttpResponse.of((StreamingBody) out -> {
  *     out.write("data: hello\n\n".getBytes());
  *     out.flush();
  * });

@@ -119,13 +119,20 @@ public class SseEmitter implements StreamingBody {
             while (true) {
                 SseEvent event = queue.take();
                 if (event == COMPLETION_SENTINEL) {
-                    // Drain any events enqueued by a racing send() after the sentinel
-                    SseEvent trailing;
-                    while ((trailing = queue.poll()) != null) {
-                        if (trailing != COMPLETION_SENTINEL) {
-                            trailing.writeTo(out);
-                            out.flush();
+                    // Drain any events enqueued by a racing send() after the sentinel.
+                    // If the client has already disconnected, IOException is expected
+                    // and we simply stop writing — no cleanup needed because
+                    // completed is already true at this point.
+                    try {
+                        SseEvent trailing;
+                        while ((trailing = queue.poll()) != null) {
+                            if (trailing != COMPLETION_SENTINEL) {
+                                trailing.writeTo(out);
+                                out.flush();
+                            }
                         }
+                    } catch (IOException ignored) {
+                        // Client disconnected during trailing drain — safe to discard
                     }
                     break;
                 }
