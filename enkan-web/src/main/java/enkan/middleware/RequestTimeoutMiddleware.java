@@ -7,6 +7,7 @@ import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 
+import java.io.Closeable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -57,10 +58,9 @@ import static enkan.util.BeanBuilder.builder;
  * @author kawasima
  */
 @Middleware(name = "requestTimeout")
-public class RequestTimeoutMiddleware implements WebMiddleware {
+public class RequestTimeoutMiddleware implements WebMiddleware, Closeable {
 
-    private static final ExecutorService VIRTUAL_THREAD_EXECUTOR =
-            Executors.newVirtualThreadPerTaskExecutor();
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     private long timeoutMillis = 30_000;
     private int  timeoutStatus = 504;
@@ -68,7 +68,7 @@ public class RequestTimeoutMiddleware implements WebMiddleware {
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
-        Future<HttpResponse> future = VIRTUAL_THREAD_EXECUTOR.submit(
+        Future<HttpResponse> future = executor.submit(
                 () -> castToHttpResponse(chain.next(request)));
         try {
             return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
@@ -113,5 +113,15 @@ public class RequestTimeoutMiddleware implements WebMiddleware {
      */
     public void setTimeoutStatus(int timeoutStatus) {
         this.timeoutStatus = timeoutStatus;
+    }
+
+    /**
+     * Shuts down the internal virtual thread executor.
+     * Call this when the middleware is no longer needed (e.g., on application shutdown)
+     * to allow in-flight virtual threads to complete and release resources.
+     */
+    @Override
+    public void close() {
+        executor.shutdown();
     }
 }
