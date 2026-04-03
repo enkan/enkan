@@ -6,12 +6,20 @@ import enkan.system.ReplResponse;
 import enkan.system.Transport;
 import enkan.system.devel.CompileResult;
 import enkan.system.devel.Compiler;
-import org.apache.maven.shared.invoker.*;
-import org.apache.maven.shared.utils.cli.CommandLineException;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 
 /**
+ * A compiler implementation that delegates to {@code mvn compile} via
+ * {@link ProcessBuilder}.
+ *
+ * <p>Requires either {@code MAVEN_HOME} or {@code M2_HOME} environment
+ * variable to be set, or Maven installed at {@code /opt/maven}.</p>
+ *
  * @author kawasima
  */
 public class MavenCompiler implements Compiler {
@@ -19,33 +27,58 @@ public class MavenCompiler implements Compiler {
 
     @Override
     public CompileResult execute(Transport t) {
-        final File mavenHome = new File(Env.getString("MAVEN_HOME",
+        File mavenHome = new File(Env.getString("MAVEN_HOME",
                 Env.getString("M2_HOME", "/opt/maven")));
         if (!mavenHome.exists()) {
             throw new MisconfigurationException("devel.MAVEN_HOME_NOT_SET");
         }
 
-        final InvocationRequest request = new DefaultInvocationRequest();
-        request.setPomFile(new File(projectDirectory, "pom.xml"));
-        request.addArg("compile");
-        request.setBaseDirectory(new File(projectDirectory));
-        request.setMavenHome(mavenHome);
-        request.setOutputHandler(line -> t.send(ReplResponse.withOut(line)));
-        request.setErrorHandler(line -> t.send(ReplResponse.withErr(line)));
-
-        final Invoker invoker = new DefaultInvoker();
+        String mvnCommand = new File(mavenHome, "bin/mvn").getAbsolutePath();
+        ProcessBuilder pb = new ProcessBuilder(mvnCommand, "compile");
+        pb.directory(new File(projectDirectory));
+        pb.redirectErrorStream(false);
 
         try {
-            InvocationResult invocationResult = invoker.execute(request);
-            CommandLineException clEx = invocationResult.getExecutionException();
-            if (clEx != null) {
-                return CompileResult.failure(clEx);
-            } else if (invocationResult.getExitCode() != 0) {
+            Process process = pb.start();
+
+            // Stream stdout and stderr to Transport in parallel
+            Thread stdoutReader = Thread.ofVirtual().start(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        t.send(ReplResponse.withOut(line));
+                    }
+                } catch (IOException e) {
+                    // Process ended — stop reading
+                }
+            });
+
+            Thread stderrReader = Thread.ofVirtual().start(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        t.send(ReplResponse.withErr(line));
+                    }
+                } catch (IOException e) {
+                    // Process ended — stop reading
+                }
+            });
+
+            int exitCode = process.waitFor();
+            stdoutReader.join();
+            stderrReader.join();
+
+            if (exitCode != 0) {
                 return CompileResult.failure(new IllegalStateException(
-                        "Maven compile failed with exit code " + invocationResult.getExitCode()));
+                        "Maven compile failed with exit code " + exitCode));
             }
-        } catch (MavenInvocationException ex) {
-            return CompileResult.failure(ex);
+        } catch (IOException e) {
+            return CompileResult.failure(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return CompileResult.failure(e);
         }
         return CompileResult.success();
     }
