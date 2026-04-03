@@ -4,6 +4,7 @@ import enkan.collection.Headers;
 import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import enkan.data.StreamingBody;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.UnreachableException;
 
@@ -98,6 +99,10 @@ public class ServletUtils {
                 try (InputStream in = new FileInputStream(file)) {
                     setBody(servletResponse, in);
                 }
+            }
+            case StreamingBody streaming -> {
+                servletResponse.flushBuffer();
+                streaming.writeTo(servletResponse.getOutputStream());
             }
             default -> throw new UnreachableException();
         }

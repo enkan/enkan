@@ -5,6 +5,7 @@ import enkan.collection.Headers;
 import enkan.collection.OptionMap;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import enkan.data.StreamingBody;
 import enkan.exception.ServiceUnavailableException;
 import enkan.exception.UnreachableException;
 import enkan.middleware.WebMiddleware;
@@ -146,7 +147,7 @@ class UndertowAdapterTest {
     void unsupportedBodyTypeThrowsUnreachableException() throws Exception {
         UndertowAdapter adapter = new UndertowAdapter();
         java.lang.reflect.Method m = UndertowAdapter.class.getDeclaredMethod("setBody",
-                io.undertow.io.Sender.class, Object.class);
+                io.undertow.server.HttpServerExchange.class, Object.class);
         m.setAccessible(true);
         assertThatThrownBy(() -> {
             try {
@@ -155,6 +156,26 @@ class UndertowAdapterTest {
                 throw e.getCause();
             }
         }).isInstanceOf(UnreachableException.class);
+    }
+
+    @Test
+    void streamingBodyIsStreamed() throws Exception {
+        int port = findFreePort();
+        start(new WebMiddleware() {
+            @Override
+            public <NNREQ, NNRES> HttpResponse handle(HttpRequest req, enkan.MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+                StreamingBody body = out -> out.write("streamed-content".getBytes(StandardCharsets.UTF_8));
+                HttpResponse res = HttpResponse.of(body);
+                res.setHeaders(Headers.of("Content-Type", "text/event-stream"));
+                return res;
+            }
+        }, port);
+
+        HttpURLConnection conn = connect(port, "/");
+        assertThat(conn.getResponseCode()).isEqualTo(200);
+        assertThat(conn.getHeaderField("Content-Type")).isEqualTo("text/event-stream");
+        assertThat(new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8))
+                .isEqualTo("streamed-content");
     }
 
     // ---------------------------------------------------------------- status

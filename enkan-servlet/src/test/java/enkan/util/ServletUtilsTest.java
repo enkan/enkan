@@ -3,6 +3,7 @@ package enkan.util;
 import enkan.collection.Headers;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import enkan.data.StreamingBody;
 import enkan.exception.UnreachableException;
 import org.junit.jupiter.api.Test;
 
@@ -64,6 +65,7 @@ class ServletUtilsTest {
 
     private static class StubServletResponse {
         int status;
+        boolean flushed;
         final Map<String, List<String>> headers = new LinkedHashMap<>();
         final StringWriter writerCapture = new StringWriter();
         final ByteArrayOutputStream outputCapture = new ByteArrayOutputStream();
@@ -91,6 +93,7 @@ class ServletUtilsTest {
                             @Override public void write(int b) { outputCapture.write(b); }
                             @Override public void write(byte[] b, int off, int len) { outputCapture.write(b, off, len); }
                         };
+                        case "flushBuffer" -> { flushed = true; yield null; }
                         default -> null;
                     });
         }
@@ -309,6 +312,21 @@ class ServletUtilsTest {
 
         assertThat(stub.writerCapture.toString()).isEmpty();
         assertThat(stub.outputCapture.size()).isZero();
+    }
+
+    @Test
+    void updateServletResponseStreamingBodyFlushesAndWrites() throws IOException {
+        StubServletResponse stub = stubResponse();
+
+        StreamingBody streaming = out -> out.write("streamed".getBytes(StandardCharsets.UTF_8));
+        HttpResponse response = builder(HttpResponse.of(streaming))
+                .set(HttpResponse::setHeaders, Headers.empty())
+                .build();
+
+        ServletUtils.updateServletResponse(stub.proxy(), response);
+
+        assertThat(stub.flushed).as("flushBuffer should be called before writeTo").isTrue();
+        assertThat(stub.outputCapture.toString(StandardCharsets.UTF_8)).isEqualTo("streamed");
     }
 
     // ---------------------------------------------------------------- Helper interface

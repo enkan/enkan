@@ -5,6 +5,7 @@ import enkan.collection.Headers;
 import enkan.collection.OptionMap;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import enkan.data.StreamingBody;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.ServiceUnavailableException;
 import enkan.exception.UnreachableException;
@@ -56,13 +57,18 @@ public class UndertowAdapter {
         }
     };
 
-    private static void setBody(Sender sender, Object body) throws IOException {
+    private static void setBody(HttpServerExchange exchange, Object body) throws IOException {
         switch (body) {
             case null -> {
                 // Do nothing
             }
-            case String s -> sender.send(s);
+            case StreamingBody streaming -> {
+                exchange.getOutputStream().flush();
+                streaming.writeTo(exchange.getOutputStream());
+            }
+            case String s -> exchange.getResponseSender().send(s);
             case InputStream inputStream -> {
+                Sender sender = exchange.getResponseSender();
                 try (ReadableByteChannel chan = Channels.newChannel(inputStream)) {
                     ByteBuffer buf = ByteBuffer.allocate(4096);
                     for (; ; ) {
@@ -76,6 +82,7 @@ public class UndertowAdapter {
                 }
             }
             case File file -> {
+                Sender sender = exchange.getResponseSender();
                 try (FileInputStream fis = new FileInputStream(file);
                      FileChannel chan = fis.getChannel()) {
                     ByteBuffer buf = ByteBuffer.allocate(4096);
@@ -91,7 +98,6 @@ public class UndertowAdapter {
             }
             default -> throw new UnreachableException();
         }
-
     }
 
     private void setResponseHeaders(Headers headers, HttpServerExchange exchange) {
@@ -149,7 +155,7 @@ public class UndertowAdapter {
                     setResponseHeaders(response.getHeaders(), exchange);
 
                     exchange.startBlocking();
-                    setBody(exchange.getResponseSender(), response.getBody());
+                    setBody(exchange, response.getBody());
                 } catch (ServiceUnavailableException ex) {
                     exchange.setStatusCode(503);
                 } finally {
