@@ -354,6 +354,21 @@ class ForwardedMiddlewareTest {
     }
 
     @Test
+    void doesNotSetRemoteAddrForEmptyForValue() {
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setRemoteAddr, "127.0.0.1")
+                .set(HttpRequest::setScheme, "http")
+                .set(HttpRequest::setHeaders, Headers.of("Forwarded", "for=\"\";proto=https"))
+                .build();
+
+        middleware.handle(request, chain);
+
+        // for="" is an empty value — remoteAddr must not be overwritten with ""
+        assertThat(request.getRemoteAddr()).isEqualTo("127.0.0.1");
+        assertThat(request.getScheme()).isEqualTo("https");
+    }
+
+    @Test
     void rejectsHexOnlyHostnameInCidr() {
         // "cafe" passes old isNumericIp but must be rejected — no '.' or ':'
         assertThatThrownBy(() -> middleware.setTrustedProxies(List.of("cafe/32")))

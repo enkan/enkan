@@ -49,9 +49,9 @@ public class ForwardedMiddleware implements WebMiddleware {
     /** Pre-parsed representation of a CIDR range for efficient repeated matching. */
     private record ParsedCidr(byte[] networkBytes, int prefixLength) {}
 
-    // volatile ensures visibility of setTrustedProxies() updates across threads
+    // volatile ensures visibility of setter updates across threads
     private volatile List<ParsedCidr> parsedTrustedProxies = parseCidrs(List.of("127.0.0.0/8", "::1/128"));
-    private boolean preferStandard = true;
+    private volatile boolean preferStandard = true;
 
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
@@ -87,12 +87,18 @@ public class ForwardedMiddleware implements WebMiddleware {
 
     /**
      * Returns the combined value of all instances of the given header, joined with {@code ", "},
-     * or {@code null} if the header is absent. Uses {@link Headers#getList} to handle
-     * multi-value headers (RFC 7230 §3.2.2) without stringifying a {@code List} as {@code [v1, v2]}.
+     * or {@code null} if the header is absent.
+     *
+     * <p>Uses {@link enkan.collection.Parameters#getRawType} to avoid allocating a wrapper list
+     * for the common single-value case. If multiple values are stored as a {@code List}
+     * (RFC 7230 §3.2.2), they are joined with {@code ", "} before parsing.
      */
+    @SuppressWarnings("unchecked")
     private static String joinHeader(Headers headers, String name) {
-        List<String> values = headers.getList(name);
-        return values.isEmpty() ? null : String.join(", ", values);
+        Object raw = headers.getRawType(name);
+        if (raw == null) return null;
+        if (raw instanceof List<?> list) return String.join(", ", (List<String>) list);
+        return raw.toString();
     }
 
     /**
@@ -154,7 +160,7 @@ public class ForwardedMiddleware implements WebMiddleware {
                 }
             }
         }
-        if (forValue != null) {
+        if (forValue != null && !forValue.isEmpty()) {
             request.setRemoteAddr(forValue);
         }
         if ("http".equalsIgnoreCase(protoValue) || "https".equalsIgnoreCase(protoValue)) {
