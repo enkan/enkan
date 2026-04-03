@@ -2,6 +2,8 @@ package enkan.util.sf;
 
 import enkan.util.sf.SfValue.*;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -332,6 +334,7 @@ final class SfParser {
         expect('%');
         expect('"');
         StringBuilder sb = new StringBuilder();
+        ByteArrayOutputStream pendingBytes = new ByteArrayOutputStream();
         while (pos < input.length()) {
             char c = advance();
             if (c == '%') {
@@ -343,13 +346,20 @@ final class SfParser {
                 if (!isHexDigit(h1) || !isHexDigit(h2)) {
                     throw fail("Invalid percent-encoding in Display String");
                 }
-                sb.append((char) (hexVal(h1) << 4 | hexVal(h2)));
-            } else if (c == '"') {
-                return new SfDisplayString(sb.toString());
-            } else if (c < 0x20 || c > 0x7e) {
-                throw fail("Invalid character in Display String: 0x" + Integer.toHexString(c));
+                pendingBytes.write((hexVal(h1) << 4) | hexVal(h2));
             } else {
-                sb.append(c);
+                // Flush accumulated percent-encoded bytes as UTF-8
+                if (pendingBytes.size() > 0) {
+                    sb.append(pendingBytes.toString(StandardCharsets.UTF_8));
+                    pendingBytes.reset();
+                }
+                if (c == '"') {
+                    return new SfDisplayString(sb.toString());
+                } else if (c < 0x20 || c > 0x7e) {
+                    throw fail("Invalid character in Display String: 0x" + Integer.toHexString(c));
+                } else {
+                    sb.append(c);
+                }
             }
         }
         throw fail("Unterminated Display String");

@@ -10,6 +10,10 @@ import java.util.List;
  */
 public record SfInnerList(List<SfItem> items, SfParameters parameters) implements SfMember {
 
+    public SfInnerList {
+        items = List.copyOf(items);
+    }
+
     public SfInnerList(List<SfItem> items) {
         this(items, SfParameters.EMPTY);
     }

@@ -12,6 +12,10 @@ import java.util.Map;
  */
 public record SfDictionary(LinkedHashMap<String, SfMember> members) {
 
+    public SfDictionary {
+        members = new LinkedHashMap<>(members);
+    }
+
     /**
      * Returns the member for the given key, cast to the expected type.
      *

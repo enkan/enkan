@@ -159,6 +159,10 @@ final class SfSerializer {
         sb.append('"');
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
+            if (c < 0x20 || c > 0x7e) {
+                throw new IllegalArgumentException(
+                        "SfString contains character outside VCHAR/SP range: 0x" + Integer.toHexString(c));
+            }
             if (c == '\\' || c == '"') {
                 sb.append('\\');
             }

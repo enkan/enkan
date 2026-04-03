@@ -596,5 +596,50 @@ class StructuredFieldsTest {
             assertThatThrownBy(() -> list.members().add(new SfItem(new SfInteger(3))))
                     .isInstanceOf(UnsupportedOperationException.class);
         }
+
+        @Test
+        void dictionaryMembersAreDefensivelyCopied() {
+            LinkedHashMap<String, SfMember> members = new LinkedHashMap<>();
+            members.put("a", new SfItem(new SfInteger(1)));
+            SfDictionary dict = new SfDictionary(members);
+            // Mutate the original map — should not affect the dictionary
+            members.put("b", new SfItem(new SfInteger(2)));
+            assertThat(dict.size()).isEqualTo(1);
+        }
+
+        @Test
+        void parametersAreDefensivelyCopied() {
+            LinkedHashMap<String, SfValue> map = new LinkedHashMap<>();
+            map.put("q", new SfDecimal(0.5));
+            SfParameters params = new SfParameters(map);
+            // Mutate the original map — should not affect the parameters
+            map.put("x", new SfInteger(1));
+            assertThat(params.size()).isEqualTo(1);
+        }
+
+        @Test
+        void innerListItemsAreUnmodifiable() {
+            SfList list = StructuredFields.parseList("(1 2)");
+            SfInnerList inner = list.get(0, SfInnerList.class);
+            assertThatThrownBy(() -> inner.items().add(new SfItem(new SfInteger(3))))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @Test
+        void displayStringMultiByteUtf8RoundTrip() {
+            // é = U+00E9 = UTF-8 bytes C3 A9
+            SfItem item = new SfItem(new SfDisplayString("café"));
+            String serialized = StructuredFields.serializeItem(item);
+            assertThat(serialized).isEqualTo("%\"caf%C3%A9\"");
+            SfItem reparsed = StructuredFields.parseItem(serialized);
+            assertThat(reparsed.value()).isEqualTo(new SfDisplayString("café"));
+        }
+
+        @Test
+        void serializeStringRejectsNonVchar() {
+            SfItem item = new SfItem(new SfString("hello\u0000world"));
+            assertThatThrownBy(() -> StructuredFields.serializeItem(item))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 }

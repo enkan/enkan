@@ -11,6 +11,10 @@ import java.util.Map;
  */
 public record SfParameters(LinkedHashMap<String, SfValue> map) {
 
+    public SfParameters {
+        map = new LinkedHashMap<>(map);
+    }
+
     /** Empty parameters singleton — avoids allocation for parameter-less items. */
     public static final SfParameters EMPTY = new SfParameters(new LinkedHashMap<>(0));
 
