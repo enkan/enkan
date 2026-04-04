@@ -76,11 +76,16 @@ public class ContentDigestHandler extends Handler.Wrapper {
         @Override
         public void write(boolean last, ByteBuffer byteBuffer, Callback callback) {
             if (byteBuffer != null && byteBuffer.hasRemaining()) {
-                // Copy into buffer without consuming the original ByteBuffer's position
+                // Copy bytes without advancing the caller's ByteBuffer position
                 ByteBuffer slice = byteBuffer.duplicate();
-                byte[] bytes = new byte[slice.remaining()];
-                slice.get(bytes);
-                buffer.write(bytes, 0, bytes.length);
+                int remaining = slice.remaining();
+                if (slice.hasArray()) {
+                    buffer.write(slice.array(), slice.arrayOffset() + slice.position(), remaining);
+                } else {
+                    byte[] bytes = new byte[remaining];
+                    slice.get(bytes);
+                    buffer.write(bytes, 0, bytes.length);
+                }
             }
 
             if (last) {

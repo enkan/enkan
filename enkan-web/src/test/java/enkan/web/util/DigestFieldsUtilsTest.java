@@ -120,6 +120,19 @@ class DigestFieldsUtilsTest {
                 .isEqualTo("sha-512");
     }
 
+    @Test
+    void malformedWantHeaderFallsBackToDefault() {
+        // Malformed SF value — must not throw; fall back to defaultAlgorithm
+        assertThat(DigestFieldsUtils.negotiateAlgorithm("!!!not valid SF!!!", "sha-256"))
+                .isEqualTo("sha-256");
+    }
+
+    @Test
+    void malformedWantHeaderWithNullDefaultReturnsNull() {
+        assertThat(DigestFieldsUtils.negotiateAlgorithm("!!!not valid SF!!!", null))
+                .isNull();
+    }
+
     // ----------------------------------------------------------- toJcaAlgorithm
 
     @Test

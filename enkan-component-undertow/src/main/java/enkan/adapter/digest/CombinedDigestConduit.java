@@ -52,9 +52,14 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
     @Override
     public int write(ByteBuffer src) throws IOException {
         int remaining = src.remaining();
-        byte[] bytes = new byte[remaining];
-        src.get(bytes);
-        buffer.write(bytes, 0, bytes.length);
+        if (src.hasArray()) {
+            buffer.write(src.array(), src.arrayOffset() + src.position(), remaining);
+            src.position(src.position() + remaining);
+        } else {
+            byte[] bytes = new byte[remaining];
+            src.get(bytes);
+            buffer.write(bytes, 0, bytes.length);
+        }
         return remaining;
     }
 
