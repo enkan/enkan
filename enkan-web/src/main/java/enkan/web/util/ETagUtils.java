@@ -12,14 +12,6 @@ import java.util.HexFormat;
  */
 public final class ETagUtils {
 
-    private static final ThreadLocal<MessageDigest> SHA256 = ThreadLocal.withInitial(() -> {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new AssertionError("SHA-256 not available", e);
-        }
-    });
-
     private static final HexFormat HEX = HexFormat.of();
 
     private ETagUtils() {}
@@ -32,6 +24,10 @@ public final class ETagUtils {
      *
      * <p>The Content-Encoding is included in the hash to produce distinct ETags
      * for differently encoded representations (RFC 9110 §8.8.3.3).
+     *
+     * <p>A new {@link MessageDigest} instance is created per call. SHA-256
+     * instantiation is cheap, and this avoids {@code ThreadLocal} state which
+     * is problematic under virtual threads.
      *
      * @param body            the response body
      * @param contentEncoding the Content-Encoding header value, or null
@@ -47,8 +43,12 @@ public final class ETagUtils {
             return null;
         }
 
-        MessageDigest digest = SHA256.get();
-        digest.reset();
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError("SHA-256 not available", e);
+        }
         if (contentEncoding != null) {
             digest.update(contentEncoding.getBytes(StandardCharsets.UTF_8));
             digest.update((byte) 0);

@@ -35,7 +35,7 @@ public class StartCommand implements SystemCommand {
                         .ifPresent(web -> {
                             try {
                                 Desktop.getDesktop().browse(URI.create("http://localhost:" + web.getPort() + "/" + args[0].replaceAll("^/", "")));
-                            } catch (IOException ignore) {
+                            } catch (IOException _) {
                                 // ignore
                             }
                         });

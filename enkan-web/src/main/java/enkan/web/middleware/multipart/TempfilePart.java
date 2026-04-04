@@ -58,7 +58,7 @@ public class TempfilePart extends MimePart {
     public void close() {
         try {
             getBody().close();
-        } catch (IOException ignore) {
+        } catch (IOException _) {
             // ignore
         }
     }

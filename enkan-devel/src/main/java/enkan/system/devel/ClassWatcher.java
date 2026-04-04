@@ -58,7 +58,8 @@ public class ClassWatcher implements Runnable, Closeable {
             try {
                 key = watchService.poll(10, TimeUnit.SECONDS);
                 if (key == null) continue;
-            } catch (InterruptedException ex) {
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
                 return;
             }
 

@@ -201,7 +201,7 @@ public class Parameters implements Map<String, Object>, Serializable {
         } else {
             try {
                 i = Integer.parseInt((key.toString()));
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException _) {
                 return null;
             }
         }
@@ -290,7 +290,7 @@ public class Parameters implements Map<String, Object>, Serializable {
         } else {
             try {
                 return Long.parseLong(value.toString());
-            } catch (NumberFormatException ex) {
+            } catch (NumberFormatException _) {
                 return null;
             }
         }

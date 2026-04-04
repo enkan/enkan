@@ -69,7 +69,7 @@ public class CodecUtils {
             }
             m.appendTail(sb);
             return sb.toString();
-        } catch (UnsupportedEncodingException e) {
+        } catch (UnsupportedEncodingException _) {
             return unencoded;
         }
     }
@@ -138,7 +138,7 @@ public class CodecUtils {
             return URLDecoder.decode(encoded, encoding);
         } catch (UnsupportedEncodingException e) {
             throw new MisconfigurationException("core.UNSUPPORTED_ENCODING", encoding, e);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return encoded;
         }
     }
