@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 
 import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 
 import static enkan.util.BeanBuilder.builder;
 import static org.assertj.core.api.Assertions.assertThat;

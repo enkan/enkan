@@ -120,7 +120,9 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
      *     .addWebSocket("/ws/notify", new NotifyHandler())
      * }</pre>
      *
-     * @param path    the URL path to serve WebSocket connections on
+     * @param path    the URL path to serve WebSocket connections on; follows Jetty path-mapping
+     *                syntax — exact match (e.g. {@code /ws/echo}) or wildcard prefix
+     *                (e.g. {@code /ws/*})
      * @param handler the handler for WebSocket lifecycle events
      * @return {@code this} for chaining
      */

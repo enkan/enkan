@@ -153,12 +153,12 @@ public class JettyAdapter {
         return runJetty(application, OptionMap.of());
     }
 
-    @SuppressWarnings("unchecked")
     public Server runJetty(WebApplication application, OptionMap options) {
         Server server = createServer(options);
         ServletContextHandler contextHandler = new ServletContextHandler();
         contextHandler.addServlet(new ServletHolder(new ProxyServlet(application)), "/*");
 
+        @SuppressWarnings("unchecked")
         Map<String, WebSocketHandler> wsHandlers = (Map<String, WebSocketHandler>) options.get("wsHandlers");
         if (wsHandlers != null && !wsHandlers.isEmpty()) {
             JettyWebSocketServletContainerInitializer.configure(contextHandler, (servletContext, container) -> {

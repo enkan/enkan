@@ -44,7 +44,7 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
         // Copy the payload before calling callback.succeed() — Jetty may recycle
         // the underlying buffer once the callback completes.
         ByteBuffer copy = ByteBuffer.allocate(payload.remaining());
-        copy.put(payload.duplicate());
+        copy.put(payload);
         copy.flip();
         handler.onBinary(session, copy);
         callback.succeed();
