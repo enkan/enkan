@@ -1,7 +1,10 @@
 package kotowari.graalvm;
 
+import enkan.application.WebApplication;
 import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
+import enkan.data.WebSessionAvailable;
+import enkan.middleware.SessionMiddleware;
 import kotowari.graalvm.controller.SimpleController;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
@@ -220,5 +223,20 @@ class KotowariFeatureTest {
                         new SimpleController(), new Object[0]);
 
         assertThat(result).isEqualTo("index");
+    }
+
+    // --- mixin pre-generation ---
+
+    @Test
+    void buildRequestFactory_pregeneratesMixinForSessionMiddleware() {
+        WebApplication app = new WebApplication();
+        app.use(new SessionMiddleware());
+
+        // Trigger mixin pre-generation — same path as KotowariFeature.pregenerateMixinClasses()
+        HttpRequest request = app.createRequest();
+
+        assertThat(request)
+                .as("Expected app.createRequest() to return a request implementing WebSessionAvailable")
+                .isInstanceOf(WebSessionAvailable.class);
     }
 }

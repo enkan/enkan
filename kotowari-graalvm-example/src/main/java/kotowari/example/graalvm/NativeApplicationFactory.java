@@ -11,6 +11,7 @@ import enkan.data.HttpResponse;
 import enkan.middleware.*;
 import enkan.system.inject.ComponentInjector;
 import jakarta.ws.rs.ext.MessageBodyWriter;
+import kotowari.example.graalvm.controller.SessionController;
 import kotowari.example.graalvm.controller.TodoController;
 import kotowari.example.graalvm.jaxrs.JsonBodyReader;
 import kotowari.example.graalvm.jaxrs.JsonBodyWriter;
@@ -36,19 +37,21 @@ public class NativeApplicationFactory implements ApplicationFactory<HttpRequest,
             r.get("/todos").to(TodoController.class, "list");
             r.get("/todos/:id").to(TodoController.class, "show");
             r.post("/todos").to(TodoController.class, "create");
+            r.get("/session").to(SessionController.class, "visit");
         }).compile();
     }
 
     /**
      * Builds the full {@link WebApplication} middleware stack.
-     * Called by {@code KotowariFeature} at native-image build time to trigger
-     * mixin class pre-generation via {@link enkan.util.MixinUtils#createFactory}.
-     * The {@code injector} parameter is {@code null} at build time — only the
-     * middleware registrations matter for mixin inference.
+     *
+     * <p>Called by {@code KotowariFeature} at native-image build time (with
+     * {@code injector = null}) to trigger mixin class pre-generation via
+     * {@link enkan.util.MixinUtils#createFactory}. At runtime it is invoked
+     * by {@link #create} with the real {@link ComponentInjector}.
+     *
+     * @param injector the component injector, or {@code null} at build time
      */
-    public static WebApplication buildApp() {
-        WebApplication app = new WebApplication();
-
+    public static WebApplication buildApp(ComponentInjector injector) {
         ObjectMapper mapper = JsonMapper.builder()
                 .enable(DeserializationFeature.UNWRAP_SINGLE_VALUE_ARRAYS)
                 .disable(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES)
@@ -57,47 +60,17 @@ public class NativeApplicationFactory implements ApplicationFactory<HttpRequest,
 
         Routes routes = routes();
 
-        app.use(new DefaultCharsetMiddleware());
-        app.use(new ContentTypeMiddleware());
-        app.use(new ParamsMiddleware());
-        app.use(new CookiesMiddleware());
-        app.use(builder(new ContentNegotiationMiddleware())
-                .set(ContentNegotiationMiddleware::setAllowedTypes, Set.of("application/json"))
-                .build());
-        app.use(new ResourceMiddleware());
-        app.use(new RoutingMiddleware(routes));
-        app.use(builder(new SerDesMiddleware<>())
-                .set(SerDesMiddleware::setBodyWriters,
-                        new MessageBodyWriter[]{
-                                new ToStringBodyWriter(),
-                                new JsonBodyWriter<>(mapper)})
-                .set(SerDesMiddleware::setBodyReaders,
-                        new JsonBodyReader<>(mapper))
-                .build());
-        app.use(new NativeControllerInvokerMiddleware<>(null));
+        if (injector != null) {
+            // Register routes in the runtime registry when a real injector is available.
+            RouteRegistry.register(routes);
+        }
 
-        return app;
-    }
-
-    @Override
-    public Application<HttpRequest, HttpResponse> create(ComponentInjector injector) {
         WebApplication app = new WebApplication();
-
-        ObjectMapper mapper = JsonMapper.builder()
-                .enable(DeserializationFeature.UNWRAP_SINGLE_VALUE_ARRAYS)
-                .disable(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES)
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .build();
-
-        Routes routes = routes();
-
-        // Register routes for KotowariFeature build-time discovery
-        RouteRegistry.register(routes);
-
         app.use(new DefaultCharsetMiddleware());
         app.use(new ContentTypeMiddleware());
         app.use(new ParamsMiddleware());
         app.use(new CookiesMiddleware());
+        app.use(new SessionMiddleware());
         app.use(builder(new ContentNegotiationMiddleware())
                 .set(ContentNegotiationMiddleware::setAllowedTypes, Set.of("application/json"))
                 .build());
@@ -114,5 +87,20 @@ public class NativeApplicationFactory implements ApplicationFactory<HttpRequest,
         app.use(new NativeControllerInvokerMiddleware<>(injector));
 
         return app;
+    }
+
+    /**
+     * Build-time entry point called by {@code KotowariFeature} and
+     * {@code GenerateMixinConfig} to trigger mixin class pre-generation.
+     * Delegates to {@link #buildApp(ComponentInjector)} with a {@code null}
+     * injector.
+     */
+    public static WebApplication buildApp() {
+        return buildApp(null);
+    }
+
+    @Override
+    public Application<HttpRequest, HttpResponse> create(ComponentInjector injector) {
+        return buildApp(injector);
     }
 }
