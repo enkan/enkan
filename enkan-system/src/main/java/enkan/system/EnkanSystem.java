@@ -5,7 +5,12 @@ import enkan.component.LifecycleManager;
 import enkan.component.SystemComponent;
 import enkan.exception.MisconfigurationException;
 
+import org.crac.Context;
+import org.crac.Core;
+import org.crac.Resource;
+
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -36,7 +41,7 @@ public class EnkanSystem {
     private final Map<String, SystemComponent<?>> components;
     private final LinkedList<String> componentsOrder;
     private volatile boolean started = false;
-    private final java.util.concurrent.atomic.AtomicBoolean cracRegistered = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final AtomicBoolean cracRegistered = new AtomicBoolean(false);
 
     private EnkanSystem() {
         components = new HashMap<>();
@@ -193,7 +198,7 @@ public class EnkanSystem {
      * }</pre>
      */
     public void registerCrac() {
-        registerCrac(org.crac.Core.getGlobalContext());
+        registerCrac(Core.getGlobalContext());
     }
 
     /**
@@ -202,21 +207,21 @@ public class EnkanSystem {
      *
      * @param context the CRaC context to register with
      */
-    void registerCrac(org.crac.Context<org.crac.Resource> context) {
+    void registerCrac(Context<Resource> context) {
         if (!cracRegistered.compareAndSet(false, true)) {
             return;
         }
         try {
-            context.register(new org.crac.Resource() {
+            context.register(new Resource() {
                 @Override
-                public void beforeCheckpoint(org.crac.Context<? extends org.crac.Resource> ctx) {
+                public void beforeCheckpoint(Context<? extends Resource> ctx) {
                     if (isStarted()) {
                         stop();
                     }
                 }
 
                 @Override
-                public void afterRestore(org.crac.Context<? extends org.crac.Resource> ctx) {
+                public void afterRestore(Context<? extends Resource> ctx) {
                     if (!isStarted()) {
                         start();
                     }
