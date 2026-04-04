@@ -1,7 +1,7 @@
 package benchmark.enkan.controller;
 
 import enkan.collection.Parameters;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.data.Session;
 
 import java.time.Instant;

@@ -1,7 +1,7 @@
 package kotowari.inject.parameter;
 
 import enkan.data.Flash;
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
 import java.io.Serializable;

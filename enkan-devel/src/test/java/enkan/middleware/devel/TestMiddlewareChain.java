@@ -2,8 +2,8 @@ package enkan.middleware.devel;
 
 import enkan.Middleware;
 import enkan.MiddlewareChain;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 
 import java.util.function.Function;
 import java.util.function.Predicate;

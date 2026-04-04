@@ -1,12 +1,12 @@
 package kotowari.routing;
 
 import enkan.collection.OptionMap;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.Test;
 
-import static enkan.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
+import static enkan.web.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 

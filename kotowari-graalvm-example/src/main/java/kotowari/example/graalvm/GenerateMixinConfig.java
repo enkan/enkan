@@ -1,6 +1,6 @@
 package kotowari.example.graalvm;
 
-import enkan.application.WebApplication;
+import enkan.web.application.WebApplication;
 import enkan.util.MixinUtils;
 
 import java.nio.file.Files;

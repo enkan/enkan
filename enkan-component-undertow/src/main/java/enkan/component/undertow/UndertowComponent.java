@@ -2,7 +2,7 @@ package enkan.component.undertow;
 
 import enkan.adapter.UndertowAdapter;
 import enkan.adapter.UndertowAdapter.UndertowServer;
-import enkan.application.WebApplication;
+import enkan.web.application.WebApplication;
 import enkan.collection.OptionMap;
 import enkan.component.ApplicationComponent;
 import enkan.component.ComponentLifecycle;

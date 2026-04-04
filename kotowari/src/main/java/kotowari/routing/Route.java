@@ -1,10 +1,10 @@
 package kotowari.routing;
 
 import enkan.collection.OptionMap;
-import enkan.data.ContentNegotiable;
-import enkan.data.HttpRequest;
-import enkan.util.CodecUtils;
-import enkan.util.HttpRequestUtils;
+import enkan.web.data.ContentNegotiable;
+import enkan.web.data.HttpRequest;
+import enkan.web.util.CodecUtils;
+import enkan.web.util.HttpRequestUtils;
 import kotowari.routing.segment.DividerSegment;
 
 import jakarta.ws.rs.core.MediaType;

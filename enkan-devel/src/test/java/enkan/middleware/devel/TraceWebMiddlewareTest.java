@@ -1,8 +1,8 @@
 package enkan.middleware.devel;
 
-import enkan.collection.Headers;
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.collection.Headers;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;

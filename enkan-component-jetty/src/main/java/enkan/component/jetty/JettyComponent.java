@@ -1,15 +1,15 @@
 package enkan.component.jetty;
 
 import enkan.adapter.JettyAdapter;
-import enkan.application.WebApplication;
+import enkan.web.application.WebApplication;
 import enkan.collection.OptionMap;
 import enkan.component.ApplicationComponent;
 import enkan.component.ComponentLifecycle;
 import enkan.component.HealthCheckable;
 import enkan.component.HealthStatus;
 import enkan.component.WebServerComponent;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
 import org.eclipse.jetty.server.Connector;

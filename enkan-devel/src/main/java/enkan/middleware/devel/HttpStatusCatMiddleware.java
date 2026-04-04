@@ -2,18 +2,18 @@ package enkan.middleware.devel;
 
 import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 
-import enkan.middleware.WebMiddleware;
-import enkan.util.HttpResponseUtils;
+import enkan.web.middleware.WebMiddleware;
+import enkan.web.util.HttpResponseUtils;
 import net.unit8.moshas.MoshasEngine;
 import net.unit8.moshas.Template;
 import net.unit8.moshas.context.Context;
 
 import java.io.StringWriter;
 
-import static enkan.util.HttpResponseUtils.*;
+import static enkan.web.util.HttpResponseUtils.*;
 import static net.unit8.moshas.RenderUtils.*;
 
 /**

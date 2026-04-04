@@ -1,6 +1,6 @@
 package enkan.middleware.opentelemetry;
 
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 import io.opentelemetry.context.propagation.TextMapGetter;
 
 import java.util.Collections;

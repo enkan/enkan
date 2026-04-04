@@ -1,8 +1,8 @@
 package kotowari.routing.recognizer;
 
 import enkan.collection.OptionMap;
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpRequest;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpRequest;
 import kotowari.routing.Routes;
 import kotowari.routing.controller.ExampleController;
 import org.junit.jupiter.api.Test;

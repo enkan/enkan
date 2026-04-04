@@ -3,7 +3,7 @@ package kotowari.example.controller;
 import enkan.collection.Parameters;
 import enkan.component.BeansConverter;
 import enkan.component.doma2.DomaProvider;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import kotowari.component.TemplateEngine;
 import kotowari.example.dao.CustomerDao;
 import kotowari.example.entity.Customer;
@@ -15,7 +15,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.util.List;
 
-import static enkan.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
+import static enkan.web.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
 import static kotowari.routing.UrlRewriter.redirect;
 
 

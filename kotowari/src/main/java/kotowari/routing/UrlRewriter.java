@@ -1,9 +1,9 @@
 package kotowari.routing;
 
-import enkan.collection.Headers;
+import enkan.web.collection.Headers;
 import enkan.collection.OptionMap;
-import enkan.data.HttpResponse;
-import enkan.util.HttpResponseUtils;
+import enkan.web.data.HttpResponse;
+import enkan.web.util.HttpResponseUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;

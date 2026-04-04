@@ -1,0 +1,234 @@
+package enkan.web.data;
+
+import enkan.web.util.HttpDateFormat;
+import enkan.web.util.ParsingUtils;
+
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
+
+/**
+ * Represents an HTTP cookie (RFC 6265).
+ *
+ * <p>Use {@link #create(String, String)} to build a cookie, configure
+ * optional attributes, then call {@link #toHttpString()} to produce
+ * the {@code Set-Cookie} header value.</p>
+ *
+ * @author kawasima
+ */
+public sealed class Cookie implements Serializable permits HostCookie, SecureCookie {
+    private static final long serialVersionUID = 1L;
+    private static final Logger LOG = Logger.getLogger(Cookie.class.getName());
+    private static final int MAX_COOKIE_SIZE = 4096;
+
+    private static final Pattern RE_TOKEN = Pattern.compile(ParsingUtils.RE_TOKEN);
+
+    // RFC 6265 §4.1.1 defines:
+    //   cookie-value = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+    //   cookie-octet = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+    // This implementation intentionally supports only the unquoted *cookie-octet form
+    // and rejects values containing DQUOTE (i.e., it does not accept the quoted form).
+    private static final Pattern RE_COOKIE_VALUE = Pattern.compile("[\\x21\\x23-\\x2B\\x2D-\\x3A\\x3C-\\x5B\\x5D-\\x7E]*");
+
+    private String name;
+    private String value;
+    private String domain;
+    private Integer maxAge;
+    private String path;
+    private Date expires;
+    private boolean secure;
+    private boolean httpOnly;
+    private String sameSite;
+
+    /**
+     * @deprecated Use {@link #create(String, String)}, {@link HostCookie#create(String, String)},
+     *             or {@link SecureCookie#create(String, String)} instead.
+     */
+    @Deprecated
+    public Cookie() {
+    }
+
+    /**
+     * Constructor for subclasses.
+     */
+    protected Cookie(String name, String value) {
+        setName(name);
+        setValue(value);
+    }
+
+    /**
+     * Creates a cookie with the given name and value.
+     *
+     * @param name  the cookie name
+     * @param value the cookie value
+     * @return a new cookie instance
+     */
+    public static Cookie create(String name, String value) {
+        Cookie cookie = new Cookie();
+        cookie.setName(name);
+        cookie.setValue(value);
+        return cookie;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        if (name == null || !RE_TOKEN.matcher(name).matches()) {
+            throw new IllegalArgumentException("Invalid cookie name");
+        }
+        this.name = name;
+    }
+
+    public String getValue() {
+        return value;
+    }
+
+    public void setValue(String value) {
+        if (value != null && !RE_COOKIE_VALUE.matcher(value).matches()) {
+            throw new IllegalArgumentException("Invalid cookie value");
+        }
+        this.value = value;
+    }
+
+    public String getDomain() {
+        return domain;
+    }
+
+    public void setDomain(String domain) {
+        this.domain = domain;
+    }
+
+    public Integer getMaxAge() {
+        return maxAge;
+    }
+
+    public void setMaxAge(Integer maxAge) {
+        this.maxAge = maxAge;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public void setPath(String path) {
+        this.path = path;
+    }
+
+    public Date getExpires() {
+        return expires;
+    }
+
+    public void setExpires(Date expires) {
+        this.expires = expires;
+    }
+
+    public boolean isSecure() {
+        return secure;
+    }
+
+    public void setSecure(boolean secure) {
+        this.secure = secure;
+    }
+
+    public boolean isHttpOnly() {
+        return httpOnly;
+    }
+
+    public void setHttpOnly(boolean httpOnly) {
+        this.httpOnly = httpOnly;
+    }
+
+    public String getSameSite() {
+        return sameSite;
+    }
+
+    public void setSameSite(String sameSite) {
+        this.sameSite = sameSite;
+    }
+
+    /**
+     * Serializes this cookie to a {@code Set-Cookie} header value.
+     *
+     * @return the cookie string in RFC 6265 format
+     */
+    public String toHttpString() {
+        validatePrefixConstraints();
+        String result = buildHttpString();
+        warnIfOversized(result);
+        return result;
+    }
+
+    private void validatePrefixConstraints() {
+        String name = getName();
+        if (name == null) {
+            return;
+        }
+        if (name.startsWith("__Host-")) {
+            if (!isSecure()) {
+                throw new IllegalStateException("__Host- cookies must have the Secure attribute");
+            }
+            if (getDomain() != null) {
+                throw new IllegalStateException("__Host- cookies must not have a Domain attribute");
+            }
+            if (!"/".equals(getPath())) {
+                throw new IllegalStateException("__Host- cookies must have Path=/");
+            }
+        } else if (name.startsWith("__Secure-") && !isSecure()) {
+            throw new IllegalStateException("__Secure- cookies must have the Secure attribute");
+        }
+    }
+
+    /**
+     * Builds the {@code Set-Cookie} header value without size validation.
+     * Subclasses can use this to prepend a prefix before calling {@link #warnIfOversized(String)}.
+     *
+     * @return the cookie string in RFC 6265 format (without prefix)
+     */
+    protected String buildHttpString() {
+        StringBuilder sb = new StringBuilder();
+        String value = getValue();
+        sb.append(getName()).append("=").append(value != null ? value : "");
+        if (getDomain() != null) {
+            sb.append("; domain=").append(getDomain());
+        }
+        if (getPath() != null) {
+            sb.append("; path=").append(getPath());
+        }
+        if (getExpires() != null) {
+            sb.append("; expires=").append(HttpDateFormat.RFC1123.format(getExpires()));
+        }
+        if (getMaxAge() != null) {
+            sb.append("; max-age=").append(getMaxAge());
+        }
+        if (isHttpOnly()) {
+            sb.append("; httponly");
+        }
+        if (isSecure()) {
+            sb.append("; secure");
+        }
+        if (getSameSite() != null) {
+            sb.append("; samesite=").append(getSameSite());
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Logs a warning if the Set-Cookie header exceeds the 4096-byte limit.
+     *
+     * @param setCookieValue the complete Set-Cookie header value
+     */
+    protected void warnIfOversized(String setCookieValue) {
+        int byteLength = setCookieValue.getBytes(StandardCharsets.UTF_8).length;
+        if (byteLength > MAX_COOKIE_SIZE) {
+            int sep = setCookieValue.indexOf('=');
+            String effectiveName = sep >= 0 ? setCookieValue.substring(0, sep) : getName();
+            LOG.warning("Set-Cookie header for '" + effectiveName + "' is " + byteLength
+                    + " bytes, exceeding the " + MAX_COOKIE_SIZE
+                    + "-byte limit. Browsers may reject this cookie.");
+        }
+    }
+}

@@ -112,6 +112,9 @@ public class KotowariFeature implements Feature {
                 return;
             }
             Object app = buildAppMethod.invoke(null);
+            if (app == null) {
+                return;
+            }
             // Trigger buildRequestFactory() -> MixinUtils.createFactory().
             // The resulting Supplier is cached in MixinUtils.factoryCache and will be
             // reused at runtime (no duplicate defineClass call needed).
@@ -270,15 +273,43 @@ public class KotowariFeature implements Feature {
     }
 
     /**
-     * Returns {@code true} for types that do not need manual reflection registration:
-     * JDK types, framework types (enkan.* and known kotowari framework sub-packages).
+     * Returns {@code true} for types that do not need manual reflection registration
+     * (JDK, Jakarta EE, and Enkan/Kotowari framework types).
      *
-     * <p>Note: only specific kotowari framework sub-packages are listed here rather than
-     * the entire {@code kotowari.} namespace, so that application types under
-     * {@code kotowari.example.*} or similar are correctly auto-registered. If new
-     * framework sub-packages are added to kotowari they must be listed here explicitly.
+     * <p>When JPMS is active (named modules), the decision is made by module-name prefix:
+     * {@code java.*}, {@code jdk.*}, {@code enkan.*}, {@code kotowari} / {@code kotowari.*},
+     * {@code jakarta.*}, {@code org.slf4j}, and {@code org.graalvm} are all skipped.
+     * Application types in their own named module (prefix does not match any of the above)
+     * are <em>not</em> skipped and will be registered for reflection.
+     *
+     * <p>When JPMS is not active (unnamed module — classpath builds or
+     * {@code USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM} not set), the same decision is
+     * made by class-name prefix: JDK ({@code java.*}, {@code javax.*}, {@code jdk.*},
+     * {@code sun.*}, {@code com.sun.*}), Jakarta EE ({@code jakarta.*}), and all Enkan/
+     * Kotowari framework packages ({@code enkan.*}, {@code kotowari.*}) are skipped.
+     * Any application class whose name does not match these prefixes is registered.
      */
     static boolean shouldSkipType(Class<?> type) {
+        Module m = type.getModule();
+        if (m.isNamed()) {
+            // Named module: skip JDK, Jakarta EE, Enkan and Kotowari framework modules.
+            // Any new enkan.* or kotowari.* module is automatically covered without
+            // having to update this method.
+            String moduleName = m.getName();
+            return moduleName.startsWith("java.")
+                || moduleName.startsWith("jdk.")
+                || moduleName.startsWith("sun.")
+                || moduleName.startsWith("enkan.")
+                || moduleName.equals("kotowari") || moduleName.startsWith("kotowari.")
+                || moduleName.startsWith("jakarta.")
+                || moduleName.startsWith("org.slf4j")
+                || moduleName.startsWith("org.graalvm");
+        }
+        // Unnamed module (classpath, or JPMS disabled at native-image build time):
+        // fall back to package-prefix checks covering JDK, Jakarta EE, and all
+        // Enkan/Kotowari framework packages.  This preserves the pre-JPMS behaviour
+        // so that a caller who does not set USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM
+        // still gets correct filtering.
         String name = type.getName();
         return name.startsWith("java.")
             || name.startsWith("javax.")
@@ -287,16 +318,7 @@ public class KotowariFeature implements Feature {
             || name.startsWith("sun.")
             || name.startsWith("com.sun.")
             || name.startsWith("enkan.")
-            || name.startsWith("kotowari.graalvm.")
-            || name.startsWith("kotowari.routing.")
-            || name.startsWith("kotowari.middleware.")
-            || name.startsWith("kotowari.inject.")
-            || name.startsWith("kotowari.data.")
-            || name.startsWith("kotowari.component.")
-            || name.startsWith("kotowari.io.")
-            || name.startsWith("kotowari.scope.")
-            || name.startsWith("kotowari.system.")
-            || name.startsWith("kotowari.util.");
+            || name.startsWith("kotowari.");
     }
 
     /**

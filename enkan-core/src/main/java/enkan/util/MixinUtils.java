@@ -52,7 +52,7 @@ public class MixinUtils {
     private static final ConcurrentHashMap<List<Class<?>>, Class<?>[]> interfaceArrayCache = new ConcurrentHashMap<>();
     /** Cache: class → all implemented interfaces (avoids repeated class hierarchy traversal). */
     private static final ConcurrentHashMap<Class<?>, Class<?>[]> allInterfacesCache = new ConcurrentHashMap<>();
-    /** Cache: interface array cache key → Proxy constructor MethodHandle (avoids Proxy.getProxyClass + getConstructor per call). */
+    /** Cache: interface array cache key → Proxy constructor MethodHandle (avoids Proxy.newProxyInstance + getConstructor per call). */
     private static final ConcurrentHashMap<List<Class<?>>, MethodHandle> proxyCtorCache = new ConcurrentHashMap<>();
 
     /**
@@ -62,6 +62,10 @@ public class MixinUtils {
     private static MethodHandle lookupSpecial(Method m) {
         Class<?> declaringClass = m.getDeclaringClass();
         MethodHandle mh = tryReflection(() -> {
+            // privateLookupIn requires the caller module to read the target module.
+            // Establish the read edge dynamically so this works when declaringClass
+            // is in a different named module (e.g. enkan.web calling from enkan.core).
+            MixinUtils.class.getModule().addReads(declaringClass.getModule());
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(declaringClass, MethodHandles.lookup());
             return lookup.unreflectSpecial(m, declaringClass);
         });
@@ -81,6 +85,8 @@ public class MixinUtils {
             mh = MethodHandles.publicLookup().unreflect(m);
         } catch (IllegalAccessException e) {
             mh = tryReflection(() -> {
+                // privateLookupIn requires the caller module to read the target module.
+                MixinUtils.class.getModule().addReads(m.getDeclaringClass().getModule());
                 MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(
                         m.getDeclaringClass(), MethodHandles.lookup());
                 return lookup.unreflect(m);
@@ -209,12 +215,16 @@ public class MixinUtils {
         MethodHandle ctor = proxyCtorCache.computeIfAbsent(cacheKey, k -> {
             try {
                 ClassLoader cl = Thread.currentThread().getContextClassLoader();
-                // Proxy.getProxyClass is deprecated since Java 9; obtain the proxy class
-                // via newProxyInstance and extract its Class to look up the constructor.
+                // Create a temporary proxy instance only to capture the generated proxy class;
+                // the instance itself is discarded immediately.
                 Class<?> proxyClass = Proxy.newProxyInstance(cl, classes,
                         (p, m, a) -> null).getClass();
                 Constructor<?> cons = proxyClass.getConstructor(InvocationHandler.class);
-                return MethodHandles.lookup().unreflectConstructor(cons)
+                // Use publicLookup() so that enkan.core can unreflect the constructor of
+                // jdk.proxy2.$ProxyN without needing the caller module to read jdk.proxy2.
+                // (privateLookupIn would require a read edge that cannot be established here.)
+                return MethodHandles.publicLookup()
+                        .unreflectConstructor(cons)
                         .asType(MethodType.methodType(Object.class, InvocationHandler.class));
             } catch (ReflectiveOperationException e) {
                 throw new RuntimeException("Failed to create proxy constructor handle", e);
@@ -347,6 +357,8 @@ public class MixinUtils {
 
         String generatedName = superClass.getName() + "$Mixin" + id;
         try {
+            // privateLookupIn requires the caller module to read the target module.
+            MixinUtils.class.getModule().addReads(superClass.getModule());
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(
                     superClass, MethodHandles.lookup());
             // Store bytes so KotowariFeature (or GenerateMixinConfig) can retrieve them

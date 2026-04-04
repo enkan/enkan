@@ -1,12 +1,12 @@
 package enkan.adapter;
 
-import enkan.application.WebApplication;
+import enkan.web.application.WebApplication;
 import enkan.collection.OptionMap;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
-import enkan.util.ServletUtils;
+import enkan.servlet.util.ServletUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.compression.gzip.GzipCompression;

@@ -1,7 +1,7 @@
 package kotowari.inject.parameter;
 
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpRequest;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpRequest;
 import enkan.util.MixinUtils;
 import kotowari.data.BodyDeserializable;
 import org.junit.jupiter.api.Test;

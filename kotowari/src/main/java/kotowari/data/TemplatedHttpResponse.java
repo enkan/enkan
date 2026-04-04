@@ -1,7 +1,7 @@
 package kotowari.data;
 
-import enkan.collection.Headers;
-import enkan.data.DefaultHttpResponse;
+import enkan.web.collection.Headers;
+import enkan.web.data.DefaultHttpResponse;
 import enkan.exception.MisconfigurationException;
 
 import java.util.HashMap;

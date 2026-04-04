@@ -175,6 +175,12 @@
                             <metadataRepository>
                                 <enabled>true</enabled>
                             </metadataRepository>
+                            <environment>
+                                <!-- Enable JPMS so that named-module classes report isNamed()=true
+                                     at native-image build time, allowing KotowariFeature.shouldSkipType()
+                                     to distinguish framework types from application types by module name. -->
+                                <USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM>true</USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM>
+                            </environment>
                         </configuration>
                     </plugin>
                 </plugins>

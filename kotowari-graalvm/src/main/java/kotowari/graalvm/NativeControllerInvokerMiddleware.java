@@ -2,7 +2,7 @@ package kotowari.graalvm;
 
 import enkan.Middleware;
 import enkan.MiddlewareChain;
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 import enkan.data.Routable;
 import enkan.exception.MisconfigurationException;
 import enkan.system.inject.ComponentInjector;

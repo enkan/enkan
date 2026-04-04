@@ -1,7 +1,7 @@
 package kotowari.routing;
 
 import enkan.collection.OptionMap;
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 
 import java.util.List;
 

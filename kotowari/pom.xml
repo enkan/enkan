@@ -14,6 +14,25 @@
 
     <name>kotowari</name>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>
+                        ${surefire.argLine.common}
+                        --add-opens kotowari/kotowari.middleware=ALL-UNNAMED
+                        --add-opens kotowari/kotowari.middleware=org.hibernate.validator
+                        --add-opens kotowari/kotowari.test.form=ALL-UNNAMED
+                        --add-opens kotowari/kotowari.test.dto=ALL-UNNAMED
+                        --add-opens kotowari/kotowari.test.controller=ALL-UNNAMED
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
         <dependency>
             <groupId>net.unit8.enkan</groupId>

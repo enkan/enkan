@@ -2,9 +2,9 @@ package enkan.endpoint.devel;
 
 import enkan.Endpoint;
 import enkan.collection.OptionMap;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
-import enkan.util.HttpResponseUtils;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
+import enkan.web.util.HttpResponseUtils;
 
 import java.util.Map;
 

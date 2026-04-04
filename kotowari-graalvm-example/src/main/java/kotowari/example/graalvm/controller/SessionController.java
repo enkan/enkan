@@ -1,6 +1,6 @@
 package kotowari.example.graalvm.controller;
 
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 import enkan.data.Session;
 
 import java.io.Serializable;

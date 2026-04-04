@@ -1,9 +1,9 @@
 package kotowari.routing;
 
 import enkan.collection.OptionMap;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
-import enkan.util.CodecUtils;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
+import enkan.web.util.CodecUtils;
 import kotowari.routing.controller.ExampleController;
 import org.junit.jupiter.api.Test;
 

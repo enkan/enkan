@@ -1,7 +1,7 @@
 package kotowari.example.controller;
 
 import enkan.collection.Parameters;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.data.Session;
 import kotowari.component.TemplateEngine;
 import jakarta.inject.Inject;
@@ -9,7 +9,7 @@ import jakarta.inject.Inject;
 import java.io.File;
 
 import static enkan.util.BeanBuilder.builder;
-import static enkan.util.HttpResponseUtils.response;
+import static enkan.web.util.HttpResponseUtils.response;
 
 /**
  * @author kawasima

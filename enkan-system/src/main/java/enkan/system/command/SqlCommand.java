@@ -101,8 +101,5 @@ public class SqlCommand implements SystemCommand {
     }
 
     private record ColumnMeta(String name, int dispSize) {
-        @java.beans.ConstructorProperties({"name", "dispSize"})
-        private ColumnMeta {
-        }
     }
 }

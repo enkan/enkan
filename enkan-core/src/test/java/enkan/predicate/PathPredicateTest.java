@@ -14,7 +14,6 @@ public class PathPredicateTest {
         private String uri;
         private String requestMethod;
 
-        @java.beans.ConstructorProperties({"uri", "requestMethod"})
         public Request(String uri, String requestMethod) {
             this.uri = uri;
             this.requestMethod = requestMethod;

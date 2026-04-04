@@ -5,7 +5,7 @@ import enkan.component.SystemComponent;
 import enkan.component.jackson.JacksonBeansConverter;
 import enkan.system.EnkanSystem;
 import enkan.system.inject.ComponentInjector;
-import enkan.util.CodecUtils;
+import enkan.web.util.CodecUtils;
 import kotowari.test.dto.TestDto;
 import org.junit.jupiter.api.Test;
 

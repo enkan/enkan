@@ -4,10 +4,12 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.component.BeansConverter;
 import enkan.data.*;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.UnreachableException;
 
-import enkan.middleware.WebMiddleware;
+import enkan.web.middleware.WebMiddleware;
 import enkan.util.MixinUtils;
 import kotowari.data.BodyDeserializable;
 import kotowari.inject.ParameterInjector;

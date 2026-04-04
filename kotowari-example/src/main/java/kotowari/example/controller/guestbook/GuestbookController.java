@@ -2,7 +2,7 @@ package kotowari.example.controller.guestbook;
 
 import enkan.collection.Parameters;
 import enkan.component.doma2.DomaProvider;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.security.UserPrincipal;
 import kotowari.component.TemplateEngine;
 import kotowari.example.dao.GuestbookDao;
@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static enkan.util.BeanBuilder.builder;
-import static enkan.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
+import static enkan.web.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
 import static kotowari.routing.UrlRewriter.redirect;
 
 /**

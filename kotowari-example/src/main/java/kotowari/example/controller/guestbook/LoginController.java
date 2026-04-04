@@ -2,9 +2,9 @@ package kotowari.example.controller.guestbook;
 
 import enkan.collection.Parameters;
 import enkan.component.doma2.DomaProvider;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.data.Session;
-import enkan.util.HttpResponseUtils;
+import enkan.web.util.HttpResponseUtils;
 import kotowari.component.TemplateEngine;
 import kotowari.example.dao.CustomerDao;
 import kotowari.example.entity.Customer;

@@ -1,6 +1,6 @@
 package kotowari.example.controller;
 
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.exception.UnreachableException;
 import kotowari.component.TemplateEngine;
 import jakarta.inject.Inject;

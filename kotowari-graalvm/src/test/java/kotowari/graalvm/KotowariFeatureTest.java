@@ -1,13 +1,13 @@
 package kotowari.graalvm;
 
-import enkan.application.WebApplication;
+import enkan.web.application.WebApplication;
 import app.example.Address;
 import app.example.BaseForm;
 import app.example.SimpleForm;
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpRequest;
-import enkan.data.WebSessionAvailable;
-import enkan.middleware.SessionMiddleware;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.WebSessionAvailable;
+import enkan.web.middleware.SessionMiddleware;
 import kotowari.graalvm.controller.SimpleController;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
@@ -17,6 +17,8 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -234,26 +236,46 @@ class KotowariFeatureTest {
     // --- collectReachableTypes ---
 
     @Test
-    void collectReachableTypes_includesAppClassAndFieldTypesTransitively() {
-        // SimpleForm extends BaseForm which has an Address field —
-        // Address must be collected by traversing the superclass chain
-        Set<Class<?>> result = new LinkedHashSet<>();
-        feature.collectReachableTypes(SimpleForm.class, result);
-        assertThat(result).contains(SimpleForm.class, BaseForm.class, Address.class);
+    void collectReachableTypes_includesAppClassAndFieldTypesTransitively() throws Exception {
+        // Load SimpleForm via URLClassLoader so it lands in the unnamed module,
+        // matching the real native-image build environment where app classes are on
+        // the classpath.  SimpleForm extends BaseForm (which has an Address field),
+        // so traversal should collect SimpleForm, BaseForm, and Address transitively.
+        URL[] urls = {SimpleForm.class.getProtectionDomain().getCodeSource().getLocation()};
+        try (URLClassLoader ucl = new URLClassLoader(urls, null)) {
+            Class<?> simpleFormClass = ucl.loadClass(SimpleForm.class.getName());
+            assertThat(simpleFormClass.getModule().isNamed()).isFalse();
+
+            Set<Class<?>> result = new LinkedHashSet<>();
+            feature.collectReachableTypes(simpleFormClass, result);
+
+            // SimpleForm itself, its superclass BaseForm, and BaseForm's Address field type
+            // are all in the unnamed module and must be collected.
+            assertThat(result)
+                    .as("Traversal should collect SimpleForm, BaseForm, and Address transitively")
+                    .anyMatch(c -> c.getName().equals(SimpleForm.class.getName()))
+                    .anyMatch(c -> c.getName().equals(BaseForm.class.getName()))
+                    .anyMatch(c -> c.getName().equals(Address.class.getName()));
+        }
     }
 
     @Test
     void collectReachableTypes_traversesGenericTypeArguments() throws Exception {
-        // listAddresses() returns List<Address> — Address must be collected via generic arg
+        // SimpleController.listAddresses() returns List<Address>, which is a ParameterizedType.
+        // collectReachableTypes() must traverse into the type argument (Address).
+        // Both java.util.List (java.base) and Address (kotowari.graalvm) are in named framework
+        // modules and are filtered out, so the result must be empty.
         Method m = SimpleController.class.getMethod("listAddresses");
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(m.getGenericReturnType(), result);
-        assertThat(result).contains(Address.class);
+        assertThat(result)
+                .as("List<Address>: both List (java.base) and Address (kotowari.graalvm) are in named modules and must be filtered")
+                .isEmpty();
     }
 
     @Test
     void collectReachableTypes_excludesEnkanFrameworkTypes() {
-        // DefaultHttpRequest is in enkan.* — must be excluded
+        // DefaultHttpRequest is in the named enkan.web module — must be excluded
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(DefaultHttpRequest.class, result);
         assertThat(result).doesNotContain(DefaultHttpRequest.class);
@@ -262,9 +284,10 @@ class KotowariFeatureTest {
     // --- shouldSkipType ---
 
     @Test
-    void shouldSkipType_skipsJdkPrefix() {
-        // Use a stable public jdk.* type to verify the jdk. filter
-        assertThat(KotowariFeature.shouldSkipType(jdk.net.ExtendedSocketOptions.class)).isTrue();
+    void shouldSkipType_skipsJdkPrefix() throws Exception {
+        // Use Class.forName to avoid a compile-time dependency on a non-exported jdk.* package
+        Class<?> jdkClass = Class.forName("jdk.net.ExtendedSocketOptions");
+        assertThat(KotowariFeature.shouldSkipType(jdkClass)).isTrue();
     }
 
     @Test
@@ -278,9 +301,20 @@ class KotowariFeatureTest {
     }
 
     @Test
-    void shouldSkipType_doesNotSkipAppClass() {
-        // app.example.* is an application package — must NOT be skipped
-        assertThat(KotowariFeature.shouldSkipType(SimpleForm.class)).isFalse();
+    void shouldSkipType_doesNotSkipUnnamedModuleAppClass() throws Exception {
+        // Load SimpleForm via a URLClassLoader so it lands in the unnamed module
+        // (isNamed()==false). This simulates how app classes appear at native-image
+        // build time when the classpath-based (non-JPMS) native build is used.
+        URL[] urls = {SimpleForm.class.getProtectionDomain().getCodeSource().getLocation()};
+        try (URLClassLoader ucl = new URLClassLoader(urls, null)) {
+            Class<?> appClass = ucl.loadClass(SimpleForm.class.getName());
+            assertThat(appClass.getModule().isNamed())
+                    .as("Class loaded via URLClassLoader must be in the unnamed module")
+                    .isFalse();
+            assertThat(KotowariFeature.shouldSkipType(appClass))
+                    .as("App class in unnamed module (app.example.*) must NOT be skipped")
+                    .isFalse();
+        }
     }
 
     // --- mixin pre-generation ---

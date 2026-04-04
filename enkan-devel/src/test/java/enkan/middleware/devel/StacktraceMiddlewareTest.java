@@ -1,8 +1,8 @@
 package enkan.middleware.devel;
 
-import enkan.collection.Headers;
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.collection.Headers;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.UnreachableException;
 import org.junit.jupiter.api.Test;

@@ -2,12 +2,12 @@ package enkan.middleware.throttling;
 
 import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 
 import enkan.throttling.Throttle;
-import enkan.middleware.WebMiddleware;
-import enkan.util.HttpResponseUtils;
+import enkan.web.middleware.WebMiddleware;
+import enkan.web.util.HttpResponseUtils;
 
 import java.util.Collections;
 import java.util.List;

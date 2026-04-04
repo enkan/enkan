@@ -2,7 +2,7 @@ package kotowari.graalvm.controller;
 
 import app.example.Address;
 import app.example.SimpleForm;
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 
 import java.util.List;
 

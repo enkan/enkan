@@ -1,7 +1,7 @@
 package kotowari.inject.parameter;
 
-import enkan.data.ContentNegotiable;
-import enkan.data.HttpRequest;
+import enkan.web.data.ContentNegotiable;
+import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
 import java.util.Locale;

@@ -2,19 +2,19 @@ package enkan.middleware.devel;
 
 import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
-import enkan.collection.Headers;
+import enkan.web.collection.Headers;
 import enkan.collection.Parameters;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
-import enkan.middleware.WebMiddleware;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
+import enkan.web.middleware.WebMiddleware;
 import enkan.data.TraceLog;
 import enkan.data.Traceable;
 import enkan.endpoint.devel.TraceDetail;
 import enkan.endpoint.devel.TraceList;
 import enkan.endpoint.devel.TraceRouting;
 
-import enkan.middleware.session.KeyValueStore;
-import enkan.middleware.session.MemoryStore;
+import enkan.web.middleware.session.KeyValueStore;
+import enkan.web.middleware.session.MemoryStore;
 import enkan.util.MixinUtils;
 import net.unit8.moshas.MoshasEngine;
 

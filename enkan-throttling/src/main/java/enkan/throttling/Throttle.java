@@ -1,6 +1,6 @@
 package enkan.throttling;
 
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
