@@ -5,7 +5,12 @@ import enkan.component.LifecycleManager;
 import enkan.component.SystemComponent;
 import enkan.exception.MisconfigurationException;
 
+import org.crac.Context;
+import org.crac.Core;
+import org.crac.Resource;
+
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +41,7 @@ public class EnkanSystem {
     private final Map<String, SystemComponent<?>> components;
     private final LinkedList<String> componentsOrder;
     private volatile boolean started = false;
+    private final AtomicBoolean cracRegistered = new AtomicBoolean(false);
 
     private EnkanSystem() {
         components = new HashMap<>();
@@ -175,6 +181,60 @@ public class EnkanSystem {
                 .map(components::get)
                 .forEach(EnkanSystem::startComponent);
         started = true;
+    }
+
+    /**
+     * Registers this system with the CRaC global context so that
+     * {@link #stop()} is called before a checkpoint and {@link #start()}
+     * is called after restore.
+     *
+     * <p>This method is a no-op on JVMs that do not support CRaC
+     * (the {@code org.crac} portability shim absorbs the call silently).
+     *
+     * <p>Call this once, after {@link #start()}, in your application entry point:
+     * <pre>{@code
+     * system.start();
+     * system.registerCrac();  // opt-in
+     * }</pre>
+     *
+     * <p>This method is idempotent — calling it more than once on the same instance
+     * has no effect. Re-registration is not necessary after a checkpoint/restore cycle;
+     * the same registration remains active for the lifetime of this instance.
+     */
+    public void registerCrac() {
+        registerCrac(Core.getGlobalContext());
+    }
+
+    /**
+     * Registers this system with the given CRaC context.
+     * Intended for testing; production code should use {@link #registerCrac()}.
+     *
+     * @param context the CRaC context to register with
+     */
+    void registerCrac(Context<Resource> context) {
+        if (!cracRegistered.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            context.register(new Resource() {
+                @Override
+                public void beforeCheckpoint(Context<? extends Resource> ctx) {
+                    if (isStarted()) {
+                        stop();
+                    }
+                }
+
+                @Override
+                public void afterRestore(Context<? extends Resource> ctx) {
+                    if (!isStarted()) {
+                        start();
+                    }
+                }
+            });
+        } catch (Exception e) {
+            cracRegistered.set(false);
+            throw e;
+        }
     }
 
     /**

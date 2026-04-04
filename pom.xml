@@ -42,6 +42,7 @@
         <junit.version>5.14.3</junit.version>
         <assertj.version>3.27.7</assertj.version>
         <micrometer.version>1.16.4</micrometer.version>
+        <crac.version>1.5.0</crac.version>
     </properties>
 
     <modules>
@@ -333,6 +334,11 @@
                 <version>${jakarta.persistence.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.crac</groupId>
+                <artifactId>crac</artifactId>
+                <version>${crac.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.hibernate.validator</groupId>
                 <artifactId>hibernate-validator</artifactId>
