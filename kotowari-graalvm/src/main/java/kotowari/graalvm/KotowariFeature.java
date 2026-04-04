@@ -192,9 +192,11 @@ public class KotowariFeature implements Feature {
             // so Jackson can deserialize request bodies and serialize responses without
             // manual reflect-config entries. Generic type arguments (e.g. List<Customer>)
             // are also traversed to catch container return types.
+            // getMethods() includes inherited public methods; getDeclaredMethods() would miss
+            // action methods defined in a controller superclass.
             Set<Class<?>> appTypes = new LinkedHashSet<>();
-            for (Method m : ctrl.getDeclaredMethods()) {
-                if (!Modifier.isPublic(m.getModifiers())) continue;
+            for (Method m : ctrl.getMethods()) {
+                if (m.getDeclaringClass() == Object.class) continue;
                 for (Type t : m.getGenericParameterTypes()) {
                     collectReachableTypes(t, appTypes);
                 }
@@ -228,8 +230,12 @@ public class KotowariFeature implements Feature {
             }
             if (shouldSkipType(cls)) return;
             if (!result.add(cls)) return; // already seen, avoid cycles
-            for (Field f : cls.getDeclaredFields()) {
-                collectReachableTypes(f.getGenericType(), result);
+            try {
+                for (Field f : cls.getDeclaredFields()) {
+                    collectReachableTypes(f.getGenericType(), result);
+                }
+            } catch (SecurityException e) {
+                // Module system may deny field access for some types; skip field traversal
             }
         } else if (type instanceof ParameterizedType pt) {
             collectReachableTypes(pt.getRawType(), result);
@@ -243,6 +249,15 @@ public class KotowariFeature implements Feature {
         // TypeVariable: skip — resolved only at runtime
     }
 
+    /**
+     * Returns {@code true} for types that do not need manual reflection registration:
+     * JDK types, framework types (enkan.* and known kotowari framework sub-packages).
+     *
+     * <p>Note: only specific kotowari framework sub-packages are listed here rather than
+     * the entire {@code kotowari.} namespace, so that application types under
+     * {@code kotowari.example.*} or similar are correctly auto-registered. If new
+     * framework sub-packages are added to kotowari they must be listed here explicitly.
+     */
     static boolean shouldSkipType(Class<?> type) {
         String name = type.getName();
         return name.startsWith("java.")
