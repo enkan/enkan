@@ -31,12 +31,20 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
     public void onWebSocketOpen(Session jettySession) {
         super.onWebSocketOpen(jettySession);
         this.session = new JettyWebSocketSession(id, jettySession, handler);
-        handler.onOpen(session);
+        try {
+            handler.onOpen(session);
+        } catch (Throwable cause) {
+            handler.onError(session, cause);
+        }
     }
 
     @Override
     public void onWebSocketText(String message) {
-        handler.onMessage(session, message);
+        try {
+            handler.onMessage(session, message);
+        } catch (Throwable cause) {
+            handler.onError(session, cause);
+        }
     }
 
     @Override
@@ -57,7 +65,11 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
 
     @Override
     public void onWebSocketClose(int statusCode, String reason) {
-        handler.onClose(session, statusCode, reason);
+        try {
+            handler.onClose(session, statusCode, reason);
+        } catch (Throwable cause) {
+            handler.onError(session, cause);
+        }
     }
 
     @Override

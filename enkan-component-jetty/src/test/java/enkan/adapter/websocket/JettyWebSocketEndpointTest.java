@@ -113,6 +113,17 @@ class JettyWebSocketEndpointTest {
         assertThat(handler.opens.get(0).isOpen()).isTrue();
     }
 
+    @Test
+    void onOpenHandlerExceptionRoutesToOnError() {
+        var boom = new RuntimeException("onOpen failed");
+        var throwingHandler = new TrackingHandler() {
+            @Override public void onOpen(WebSocketSession s) { throw boom; }
+        };
+        var ep = new JettyWebSocketEndpoint("ex-id", throwingHandler);
+        ep.onWebSocketOpen(new StubSession());
+        assertThat(throwingHandler.errors).containsExactly(boom);
+    }
+
     // --- onMessage ----------------------------------------------------------
 
     @Test
@@ -126,6 +137,18 @@ class JettyWebSocketEndpointTest {
         endpoint.onWebSocketText("first");
         endpoint.onWebSocketText("second");
         assertThat(handler.messages).containsExactly("first", "second");
+    }
+
+    @Test
+    void onMessageHandlerExceptionRoutesToOnError() {
+        var boom = new RuntimeException("onMessage failed");
+        var throwingHandler = new TrackingHandler() {
+            @Override public void onMessage(WebSocketSession s, String m) { throw boom; }
+        };
+        var ep = new JettyWebSocketEndpoint("ex-id", throwingHandler);
+        ep.onWebSocketOpen(new StubSession());
+        ep.onWebSocketText("trigger");
+        assertThat(throwingHandler.errors).containsExactly(boom);
     }
 
     // --- onBinary -----------------------------------------------------------
@@ -168,6 +191,18 @@ class JettyWebSocketEndpointTest {
     void closeEventIsDispatchedToHandler() {
         endpoint.onWebSocketClose(1000, "Normal Closure");
         assertThat(handler.closeCodes).containsExactly(1000);
+    }
+
+    @Test
+    void onCloseHandlerExceptionRoutesToOnError() {
+        var boom = new RuntimeException("onClose failed");
+        var throwingHandler = new TrackingHandler() {
+            @Override public void onClose(WebSocketSession s, int code, String r) { throw boom; }
+        };
+        var ep = new JettyWebSocketEndpoint("ex-id", throwingHandler);
+        ep.onWebSocketOpen(new StubSession());
+        ep.onWebSocketClose(1000, "Normal Closure");
+        assertThat(throwingHandler.errors).containsExactly(boom);
     }
 
     // --- onError ------------------------------------------------------------

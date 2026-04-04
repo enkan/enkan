@@ -49,7 +49,7 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
                     if (!(app.getApplication() instanceof WebApplication webApp)) {
                         throw new MisconfigurationException("web.APPLICATION_NOT_WEB");
                     }
-                    options.put("wsHandlers", wsHandlers);
+                    options.put("wsHandlers", Map.copyOf(wsHandlers));
                     server = new JettyAdapter().runJetty(webApp, options);
                 }
             }

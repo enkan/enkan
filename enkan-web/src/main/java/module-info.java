@@ -12,6 +12,7 @@ module enkan.web {
     exports enkan.web.security.backend;
     exports enkan.web.util;
     exports enkan.web.util.sf;
+    exports enkan.web.websocket;
 
     requires transitive enkan.core;
     requires transitive enkan.system;

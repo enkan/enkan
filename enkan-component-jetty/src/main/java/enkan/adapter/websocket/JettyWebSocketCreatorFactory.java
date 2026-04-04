@@ -3,6 +3,7 @@ package enkan.adapter.websocket;
 import enkan.web.websocket.WebSocketHandler;
 import org.eclipse.jetty.ee10.websocket.server.JettyWebSocketCreator;
 
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -28,6 +29,7 @@ public final class JettyWebSocketCreatorFactory {
      *         {@code JettyWebSocketServerContainer.addMapping()}
      */
     public static JettyWebSocketCreator forHandler(WebSocketHandler handler) {
+        Objects.requireNonNull(handler, "handler must not be null");
         return (req, resp) -> new JettyWebSocketEndpoint(UUID.randomUUID().toString(), handler);
     }
 }
