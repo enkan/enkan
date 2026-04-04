@@ -39,6 +39,12 @@ import static enkan.util.BeanBuilder.builder;
 @Middleware(name = "digestValidation")
 public class DigestValidationMiddleware implements WebMiddleware {
 
+    private enum VerifyResult {
+        OK,
+        MISMATCH,
+        MALFORMED
+    }
+
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
                                               MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
@@ -62,34 +68,47 @@ public class DigestValidationMiddleware implements WebMiddleware {
         // Validate whichever digest headers are present.
         // RFC 9530 §5.1: Content-Digest and Repr-Digest are equivalent for
         // representations without content-coding, so we check both independently.
-        if (contentDigestHeader != null && !verifyDigest(body, contentDigestHeader)) {
-            return builder(HttpResponse.of("Content-Digest mismatch"))
-                    .set(HttpResponse::setStatus, 400)
-                    .build();
+        if (contentDigestHeader != null) {
+            VerifyResult result = verifyDigest(body, contentDigestHeader);
+            if (result != VerifyResult.OK) {
+                return builder(HttpResponse.of(errorMessage("Content-Digest", result)))
+                        .set(HttpResponse::setStatus, 400)
+                        .build();
+            }
         }
-        if (reprDigestHeader != null && !verifyDigest(body, reprDigestHeader)) {
-            return builder(HttpResponse.of("Repr-Digest mismatch"))
-                    .set(HttpResponse::setStatus, 400)
-                    .build();
+        if (reprDigestHeader != null) {
+            VerifyResult result = verifyDigest(body, reprDigestHeader);
+            if (result != VerifyResult.OK) {
+                return builder(HttpResponse.of(errorMessage("Repr-Digest", result)))
+                        .set(HttpResponse::setStatus, 400)
+                        .build();
+            }
         }
 
         return chain.next(request);
     }
 
+    private static String errorMessage(String headerName, VerifyResult result) {
+        return switch (result) {
+            case MALFORMED -> "Invalid " + headerName + " header";
+            case MISMATCH  -> headerName + " mismatch";
+            case OK        -> throw new AssertionError("should not build error message for OK");
+        };
+    }
+
     /**
      * Verifies the body against every supported-algorithm entry in the SF Dictionary
-     * digest header. Returns {@code true} only if every such entry matches (i.e. all
-     * present supported algorithms agree). Returns {@code true} also when no supported
-     * algorithm is present — the server cannot verify what it does not understand, so
-     * the request passes through (RFC 9530 §5.1).
+     * digest header. Returns {@link VerifyResult#OK} only if every such entry matches
+     * (i.e. all present supported algorithms agree). Returns {@link VerifyResult#OK}
+     * also when no supported algorithm is present — the server cannot verify what it
+     * does not understand, so the request passes through (RFC 9530 §5.1).
      */
-    private static boolean verifyDigest(byte[] body, String digestHeaderValue) {
+    private static VerifyResult verifyDigest(byte[] body, String digestHeaderValue) {
         SfDictionary dict;
         try {
             dict = StructuredFields.parseDictionary(digestHeaderValue);
         } catch (SfParseException e) {
-            // Malformed header — treat as mismatch (RFC 9530 §5.1)
-            return false;
+            return VerifyResult.MALFORMED;
         }
 
         for (var entry : dict.members().entrySet()) {
@@ -99,16 +118,15 @@ public class DigestValidationMiddleware implements WebMiddleware {
             }
             if (!(entry.getValue() instanceof SfItem item &&
                   item.value() instanceof SfValue.SfByteSequence bs)) {
-                return false; // malformed value for supported algorithm
+                return VerifyResult.MALFORMED;
             }
             byte[] expected = bs.value();
             byte[] actual = computeRaw(body, algorithm);
             if (!Arrays.equals(expected, actual)) {
-                return false;
+                return VerifyResult.MISMATCH;
             }
         }
-        // No supported algorithm found — cannot verify, pass through
-        return true;
+        return VerifyResult.OK;
     }
 
     private static byte[] computeRaw(byte[] data, String algorithm) {

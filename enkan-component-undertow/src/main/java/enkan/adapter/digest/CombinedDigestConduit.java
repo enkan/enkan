@@ -88,6 +88,8 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
         long transferred = 0;
         while (transferred < count) {
             buf.clear();
+            int maxRead = (int) Math.min(buf.capacity(), count - transferred);
+            buf.limit(maxRead);
             int read = src.read(buf, position + transferred);
             if (read <= 0) break;
             buf.flip();

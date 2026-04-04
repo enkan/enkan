@@ -84,11 +84,14 @@ public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> 
 
     @Override
     public long transferFrom(FileChannel src, long position, long count) throws IOException {
-        // For file transfers, read into a buffer first
         ByteBuffer buf = ByteBuffer.allocate((int) Math.min(count, 65536));
         long transferred = 0;
         while (transferred < count) {
             buf.clear();
+            // Cap the read to the remaining requested bytes so we never buffer
+            // more than count bytes total.
+            int maxRead = (int) Math.min(buf.capacity(), count - transferred);
+            buf.limit(maxRead);
             int read = src.read(buf, position + transferred);
             if (read <= 0) break;
             buf.flip();

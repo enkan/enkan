@@ -172,7 +172,7 @@ class DigestValidationMiddlewareTest {
     // ----------------------------------------------------------- malformed header
 
     @Test
-    void malformedDigestHeaderReturns400() {
+    void malformedDigestHeaderReturns400WithInvalidMessage() {
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Content-Digest", "not valid SF !!!"))
                 .set(HttpRequest::setBody, new ByteArrayInputStream("body".getBytes()))
@@ -181,6 +181,23 @@ class DigestValidationMiddlewareTest {
         HttpResponse response = new DigestValidationMiddleware().handle(request, chain);
 
         assertThat(response.getStatus()).isEqualTo(400);
+        assertThat((String) response.getBody()).contains("Invalid");
+    }
+
+    @Test
+    void mismatchDigestHeaderReturns400WithMismatchMessage() {
+        byte[] body = "actual body".getBytes();
+        String wrongDigest = DigestFieldsUtils.computeDigestHeader("wrong body".getBytes(), "sha-256");
+
+        HttpRequest request = builder(new DefaultHttpRequest())
+                .set(HttpRequest::setHeaders, Headers.of("Content-Digest", wrongDigest))
+                .set(HttpRequest::setBody, new ByteArrayInputStream(body))
+                .build();
+
+        HttpResponse response = new DigestValidationMiddleware().handle(request, chain);
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat((String) response.getBody()).contains("mismatch");
     }
 
     // ----------------------------------------------------------- sha-512
