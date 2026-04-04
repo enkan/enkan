@@ -96,6 +96,26 @@ class RequestTimeoutMiddlewareTest {
     }
 
     @Test
+    void invalidTimeoutStatusThrowsMisconfigurationException() {
+        assertThatThrownBy(() -> middleware.setTimeoutStatus(99))
+                .isInstanceOf(MisconfigurationException.class);
+        assertThatThrownBy(() -> middleware.setTimeoutStatus(600))
+                .isInstanceOf(MisconfigurationException.class);
+    }
+
+    @Test
+    void nullResponseFromHandlerIsPassedThrough() {
+        middleware.setTimeoutMillis(5_000);
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(
+                new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> null);
+
+        HttpResponse response = middleware.handle(getRequest(), chain);
+
+        assertThat(response).isNull();
+    }
+
+    @Test
     void scopedValueIsInheritedBySubtask() throws Exception {
         var user = ScopedValue.<String>newInstance();
         middleware.setTimeoutMillis(5_000);

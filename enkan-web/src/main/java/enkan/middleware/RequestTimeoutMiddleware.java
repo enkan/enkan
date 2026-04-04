@@ -45,6 +45,14 @@ import static enkan.util.BeanBuilder.builder;
  * app.use(new RequestTimeoutMiddleware());
  * }</pre>
  *
+ * <h2>Shutdown blocking after timeout</h2>
+ * <p>When a timeout fires, {@link StructuredTaskScope#close()} waits for the
+ * subtask thread to finish before returning. If the subtask is blocked on
+ * non-interruptible I/O (e.g. a JDBC query that ignores interrupt), the caller
+ * will be blocked until the subtask completes naturally, even though the 504
+ * response has already been prepared. Design subtasks to be interrupt-responsive
+ * to avoid this.
+ *
  * <h2>Middleware ordering note (Doma2)</h2>
  * <p>Because the downstream chain runs in a separate virtual thread,
  * {@code ThreadLocal}-based context is <em>not</em> inherited. Most Enkan
@@ -108,9 +116,13 @@ public class RequestTimeoutMiddleware implements WebMiddleware {
     /**
      * Sets the HTTP status code returned when a request times out. Defaults to {@code 504}.
      *
-     * @param timeoutStatus the HTTP status code to return on timeout
+     * @param timeoutStatus the HTTP status code to return on timeout; must be between 100 and 599
+     * @throws MisconfigurationException if {@code timeoutStatus} is outside the valid range
      */
     public void setTimeoutStatus(int timeoutStatus) {
+        if (timeoutStatus < 100 || timeoutStatus > 599) {
+            throw new MisconfigurationException("core.INVALID_ARGUMENT", "timeoutStatus");
+        }
         this.timeoutStatus = timeoutStatus;
     }
 }
