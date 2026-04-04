@@ -81,7 +81,7 @@ public class MisconfigurationException extends UnrecoverableException {
         Enumeration<URL> urls;
         try {
             urls = loader.getResources(resourceName);
-        } catch (IOException e) {
+        } catch (IOException _) {
             return;
         }
         while (urls.hasMoreElements()) {
@@ -95,7 +95,7 @@ public class MisconfigurationException extends UnrecoverableException {
                     p.load(reader);
                     target.putAll(p);
                 }
-            } catch (IOException e) {
+            } catch (IOException _) {
                 // Skip unreadable resource file; continue with remaining URLs
             }
         }

@@ -43,7 +43,7 @@ public class IdleSessionTimeoutMiddleware implements WebMiddleware {
                 obj -> {
                     try {
                         return Long.parseLong(Objects.toString(obj));
-                    } catch (NumberFormatException e) {
+                    } catch (NumberFormatException _) {
                         return null;
                     }
                 });

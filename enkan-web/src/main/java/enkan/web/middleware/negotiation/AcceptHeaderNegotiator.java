@@ -132,7 +132,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                 if ("*".equals(entry.getKey())) continue;
                 try {
                     resolvedAccepts.put(Charset.forName(entry.getKey()), entry.getValue());
-                } catch (UnsupportedCharsetException ignored) {}
+                } catch (UnsupportedCharsetException _) {}
             }
             return selectBest(available, charset -> {
                 charset = charset.toLowerCase(Locale.US);
@@ -147,7 +147,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
                     if (wildcardQ != null) return wildcardQ;
                     // RFC 9110 §12.5.3: ISO-8859-1 gets a default quality of 1.0
                     if (cs.equals(StandardCharsets.ISO_8859_1)) return 1.0;
-                } catch (UnsupportedCharsetException ignored) {
+                } catch (UnsupportedCharsetException _) {
                     // Available charset not recognized by the JVM — fall through to wildcard
                 }
                 if (wildcardQ != null) return wildcardQ;

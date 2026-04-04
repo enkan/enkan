@@ -44,7 +44,7 @@ public class HttpRequestUtils {
         if (length != null) {
             try {
                 return Long.parseLong(length, 10);
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException _) {
                 // ignore
             }
         }

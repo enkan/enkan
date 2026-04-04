@@ -26,7 +26,7 @@ import java.util.function.Supplier;
  * @author kawasima
  */
 public class WebApplication implements Application<HttpRequest, HttpResponse> {
-    private final LinkedList<MiddlewareChain<?, ?, ?, ?>> middlewareStack = new LinkedList<>();
+    private final List<MiddlewareChain<?, ?, ?, ?>> middlewareStack = new LinkedList<>();
     private volatile Supplier<HttpRequest> requestFactory;
 
     /** Registers a middleware for GET requests matching the given path. */

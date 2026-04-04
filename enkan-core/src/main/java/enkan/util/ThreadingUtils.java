@@ -7,6 +7,7 @@ import java.nio.charset.UnsupportedCharsetException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Optional;
+import java.util.SequencedCollection;
 import java.util.Set;
 
 /**
@@ -28,7 +29,7 @@ public class ThreadingUtils {
         }
 
         Object v = start;
-        LinkedList<ThreadingFunction<?,?>> funcQueue = new LinkedList<>(Arrays.asList(functions));
+        SequencedCollection<ThreadingFunction<?,?>> funcQueue = new LinkedList<>(Arrays.asList(functions));
         while(!funcQueue.isEmpty()) {
             ThreadingFunction<Object, ?> typedFunction = (ThreadingFunction<Object, ?>) funcQueue.removeFirst();
             try {

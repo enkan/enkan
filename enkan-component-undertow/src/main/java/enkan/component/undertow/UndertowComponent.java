@@ -92,10 +92,11 @@ public class UndertowComponent extends WebServerComponent<UndertowComponent> imp
 
     @Override
     public String toString() {
-        return "#UndertowComponent {\n"
-                + "  \"host\": \"" + getHost() + "\",\n"
-                + "  \"port\": \"" + getPort() + "\",\n"
-                + "  \"dependencies\": \"" + dependenciesToString() + ",\n"
-                + "}";
+        return """
+                #UndertowComponent {
+                  "host": "%s",
+                  "port": "%s",
+                  "dependencies": "%s"
+                }""".formatted(getHost(), getPort(), dependenciesToString());
     }
 }
