@@ -1,5 +1,6 @@
 package enkan.adapter;
 
+import enkan.adapter.digest.DigestConduit;
 import enkan.adapter.digest.DigestOuterHandler;
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
@@ -45,6 +46,8 @@ import java.security.*;
  */
 public class UndertowAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(UndertowAdapter.class);
+    private static final HttpString REPR_DIGEST    = HttpString.tryFromString("Repr-Digest");
+    private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
 
     public record UndertowServer(Undertow undertow, GracefulShutdownHandler shutdownHandler) {}
 
@@ -141,17 +144,15 @@ public class UndertowAdapter {
                     String wantRepr = exchange.getRequestHeaders().getFirst("Want-Repr-Digest");
                     String reprAlgo = DigestFieldsUtils.negotiateAlgorithm(wantRepr, digestAlgorithm);
                     if (reprAlgo != null) {
-                        final String algo = reprAlgo;
                         exchange.addResponseWrapper((factory, ex) ->
-                                new enkan.adapter.digest.DigestConduit(factory.create(), ex, algo, "Repr-Digest"));
+                                new DigestConduit(factory.create(), ex, reprAlgo, REPR_DIGEST));
                     }
                     if (!compress) {
                         String wantContent = exchange.getRequestHeaders().getFirst("Want-Content-Digest");
                         String contentAlgo = DigestFieldsUtils.negotiateAlgorithm(wantContent, digestAlgorithm);
                         if (contentAlgo != null) {
-                            final String algo = contentAlgo;
                             exchange.addResponseWrapper((factory, ex) ->
-                                    new enkan.adapter.digest.DigestConduit(factory.create(), ex, algo, "Content-Digest"));
+                                    new DigestConduit(factory.create(), ex, contentAlgo, CONTENT_DIGEST));
                         }
                     }
                 }

@@ -77,9 +77,11 @@ public class DigestValidationMiddleware implements WebMiddleware {
     }
 
     /**
-     * Verifies the body against all entries in the SF Dictionary digest header.
-     * Returns {@code true} if at least one supported algorithm matches,
-     * or if no supported algorithm is present (cannot verify → pass through).
+     * Verifies the body against every supported-algorithm entry in the SF Dictionary
+     * digest header. Returns {@code true} only if every such entry matches (i.e. all
+     * present supported algorithms agree). Returns {@code true} also when no supported
+     * algorithm is present — the server cannot verify what it does not understand, so
+     * the request passes through (RFC 9530 §5.1).
      */
     private static boolean verifyDigest(byte[] body, String digestHeaderValue) {
         SfDictionary dict;

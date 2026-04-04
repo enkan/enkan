@@ -107,15 +107,17 @@ class DigestFieldsUtilsTest {
     }
 
     @Test
-    void zeroPreferenceStillSelected() {
-        // RFC 9530: priority 0 means "not wanted" - but we still technically find it
-        // Zero priority is the client's preference signal; implementation chooses to omit
-        // Per RFC: "if the client assigns a preference value of 0 it means the client does not want it"
-        // negotiateAlgorithm selects by highest priority — sha-256=0 should be returned since it's supported
-        // and 0 is still a valid value (filtering for >0 is optional per impl)
-        String result = DigestFieldsUtils.negotiateAlgorithm("sha-256=0", "sha-512");
-        // Our implementation selects it (max of 0 is still sha-256)
-        assertThat(result).isEqualTo("sha-256");
+    void zeroPreferenceIsExcluded() {
+        // RFC 9530 §4: a preference value of 0 means the client does not want this field.
+        // The algorithm must be treated as absent — return null, not the zero-priority algorithm.
+        assertThat(DigestFieldsUtils.negotiateAlgorithm("sha-256=0", "sha-512")).isNull();
+    }
+
+    @Test
+    void zeroPreferenceWithOtherAlgorithmPicksNonZero() {
+        // sha-256=0 is excluded; sha-512=3 is selected
+        assertThat(DigestFieldsUtils.negotiateAlgorithm("sha-256=0, sha-512=3", "sha-256"))
+                .isEqualTo("sha-512");
     }
 
     // ----------------------------------------------------------- toJcaAlgorithm

@@ -76,7 +76,8 @@ public final class DigestFieldsUtils {
         return dict.members().entrySet().stream()
                 .filter(e -> SUPPORTED_ALGORITHMS.contains(e.getKey()))
                 .filter(e -> e.getValue() instanceof SfItem item
-                        && item.value() instanceof SfValue.SfInteger)
+                        && item.value() instanceof SfValue.SfInteger i
+                        && i.value() > 0)  // RFC 9530 §4: priority 0 means "not wanted"
                 .max(Comparator.comparingLong(
                         e -> ((SfValue.SfInteger) ((SfItem) e.getValue()).value()).value()))
                 .map(Map.Entry::getKey)

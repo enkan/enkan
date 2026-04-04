@@ -3,6 +3,7 @@ package enkan.adapter.digest;
 import enkan.web.util.DigestFieldsUtils;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.util.HttpString;
 
 /**
  * Undertow {@link HttpHandler} placed <em>outside</em> the {@code EncodingHandler}
@@ -25,6 +26,8 @@ import io.undertow.server.HttpServerExchange;
  */
 public class DigestOuterHandler implements HttpHandler {
 
+    private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
+
     private final HttpHandler next;
     private final String defaultAlgorithm;
 
@@ -40,7 +43,7 @@ public class DigestOuterHandler implements HttpHandler {
 
         if (algorithm != null) {
             exchange.addResponseWrapper((factory, ex) ->
-                    new DigestConduit(factory.create(), ex, algorithm, "Content-Digest"));
+                    new DigestConduit(factory.create(), ex, algorithm, CONTENT_DIGEST));
         }
         next.handleRequest(exchange);
     }

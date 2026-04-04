@@ -122,7 +122,10 @@ public class DigestFilter implements Filter {
         }
 
         @Override
-        public ServletOutputStream getOutputStream() {
+        public ServletOutputStream getOutputStream() throws IllegalStateException {
+            if (writer != null) {
+                throw new IllegalStateException("getWriter() has already been called");
+            }
             if (outputStream == null) {
                 outputStream = new ServletOutputStream() {
                     @Override
@@ -149,8 +152,13 @@ public class DigestFilter implements Filter {
 
         @Override
         public PrintWriter getWriter() throws IOException {
+            if (outputStream != null) {
+                throw new IllegalStateException("getOutputStream() has already been called");
+            }
             if (writer == null) {
-                writer = new PrintWriter(getOutputStream());
+                writer = new PrintWriter(buffer, false, getCharacterEncoding() != null
+                        ? java.nio.charset.Charset.forName(getCharacterEncoding())
+                        : java.nio.charset.StandardCharsets.ISO_8859_1);
             }
             return writer;
         }

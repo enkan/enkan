@@ -24,25 +24,22 @@ import java.nio.channels.FileChannel;
  */
 public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> {
 
-    private static final HttpString REPR_DIGEST    = HttpString.tryFromString("Repr-Digest");
-    private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
-
     private final HttpServerExchange exchange;
     private final String algorithm;
-    private final String headerName;
+    private final HttpString header;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream(4096);
 
     /**
-     * @param next      the underlying conduit
-     * @param exchange  the in-flight HTTP exchange (used to set response headers)
-     * @param algorithm the SF algorithm name ({@code "sha-256"} or {@code "sha-512"})
-     * @param headerName the response header to set (e.g. {@code "Repr-Digest"} or {@code "Content-Digest"})
+     * @param next       the underlying conduit
+     * @param exchange   the in-flight HTTP exchange (used to set response headers)
+     * @param algorithm  the SF algorithm name ({@code "sha-256"} or {@code "sha-512"})
+     * @param header     the response header to set (e.g. {@code "Repr-Digest"} or {@code "Content-Digest"})
      */
-    public DigestConduit(StreamSinkConduit next, HttpServerExchange exchange, String algorithm, String headerName) {
+    public DigestConduit(StreamSinkConduit next, HttpServerExchange exchange, String algorithm, HttpString header) {
         super(next);
         this.exchange = exchange;
         this.algorithm = algorithm;
-        this.headerName = headerName;
+        this.header = header;
     }
 
     // -------------------------------------------------------------------------
@@ -103,12 +100,6 @@ public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> 
     public void terminateWrites() throws IOException {
         byte[] allBytes = buffer.toByteArray();
         String digestValue = DigestFieldsUtils.computeDigestHeader(allBytes, algorithm);
-
-        HttpString header = switch (headerName) {
-            case "Repr-Digest"    -> REPR_DIGEST;
-            case "Content-Digest" -> CONTENT_DIGEST;
-            default -> HttpString.tryFromString(headerName);
-        };
         exchange.getResponseHeaders().put(header, digestValue);
 
         // Write all buffered bytes to the underlying conduit, then terminate.
