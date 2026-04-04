@@ -11,11 +11,14 @@ import java.lang.classfile.CodeBuilder;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import static java.lang.constant.ConstantDescs.*;
 
@@ -181,7 +184,54 @@ public class KotowariFeature implements Feature {
             // can wire the controller instance in native mode.
             RuntimeReflection.registerAllDeclaredFields(ctrl);
             RuntimeReflection.registerAllDeclaredMethods(ctrl);
+
+            // Auto-register parameter types and return types of all public methods
+            // so Jackson can deserialize request bodies and serialize responses without
+            // manual reflect-config entries.
+            Set<Class<?>> appTypes = new LinkedHashSet<>();
+            for (Method m : ctrl.getDeclaredMethods()) {
+                if (!Modifier.isPublic(m.getModifiers())) continue;
+                for (Parameter p : m.getParameters()) {
+                    collectReachableTypes(p.getType(), appTypes);
+                }
+                collectReachableTypes(m.getReturnType(), appTypes);
+            }
+            for (Class<?> t : appTypes) {
+                RuntimeReflection.register(t);
+                RuntimeReflection.registerAllConstructors(t);
+                RuntimeReflection.registerAllDeclaredFields(t);
+                RuntimeReflection.registerAllDeclaredMethods(t);
+            }
         }
+    }
+
+    /**
+     * Collects types reachable from {@code type} that need manual reflection registration
+     * (i.e. application classes not covered by GraalVM's built-in analysis).
+     * Recurses one level into declared fields to handle nested objects.
+     */
+    void collectReachableTypes(Class<?> type, Set<Class<?>> result) {
+        if (type == null || type.isPrimitive() || type == void.class) return;
+        if (type.isArray()) {
+            collectReachableTypes(type.getComponentType(), result);
+            return;
+        }
+        if (shouldSkipType(type)) return;
+        if (!result.add(type)) return; // already seen, avoid cycles
+        for (Field f : type.getDeclaredFields()) {
+            collectReachableTypes(f.getType(), result);
+        }
+    }
+
+    private static boolean shouldSkipType(Class<?> type) {
+        String name = type.getName();
+        return name.startsWith("java.")
+            || name.startsWith("javax.")
+            || name.startsWith("jakarta.")
+            || name.startsWith("sun.")
+            || name.startsWith("com.sun.")
+            || name.startsWith("enkan.")
+            || name.startsWith("kotowari.");
     }
 
     /**

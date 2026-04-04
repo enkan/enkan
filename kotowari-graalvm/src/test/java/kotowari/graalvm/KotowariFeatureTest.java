@@ -6,6 +6,7 @@ import enkan.data.HttpRequest;
 import enkan.data.WebSessionAvailable;
 import enkan.middleware.SessionMiddleware;
 import kotowari.graalvm.controller.SimpleController;
+import app.example.SimpleForm;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +14,9 @@ import java.lang.classfile.ClassFile;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.constant.ConstantDescs.*;
@@ -223,6 +226,22 @@ class KotowariFeatureTest {
                         new SimpleController(), new Object[0]);
 
         assertThat(result).isEqualTo("index");
+    }
+
+    // --- collectReachableTypes ---
+
+    @Test
+    void collectReachableTypes_includesAppClass() {
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(SimpleForm.class, result);
+        assertThat(result).contains(SimpleForm.class);
+    }
+
+    @Test
+    void collectReachableTypes_excludesFrameworkTypes() {
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(HttpRequest.class, result);
+        assertThat(result).doesNotContain(HttpRequest.class);
     }
 
     // --- mixin pre-generation ---
