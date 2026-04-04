@@ -23,8 +23,10 @@ import java.util.Map;
  *
  * <p><b>Reflection requirement:</b> unnamed {@code @Inject} fields (those annotated with
  * {@code @Inject} but <em>not</em> with {@code @Named}) are resolved by
- * {@link ComponentInjector#injectField} which calls {@code Field.setAccessible(true)}.
- * Any component class that has such fields must therefore have
+ * {@link ComponentInjector#injectField} which calls {@code Field.trySetAccessible()}.
+ * Because {@link #collectUnnamedInjectFields} walks the full superclass hierarchy,
+ * this requirement applies to every <em>declaring class</em> of such fields, not only
+ * the concrete component class.  Each such class must have
  * {@code "allDeclaredFields": true} in its {@code reflect-config.json} entry,
  * or be registered via {@code EnkanFeature} with
  * {@code RuntimeReflection.registerAllFields(componentClass)}.
