@@ -226,7 +226,7 @@ public class KotowariFeature implements Feature {
         }
     }
 
-    private static boolean shouldSkipType(Class<?> type) {
+    static boolean shouldSkipType(Class<?> type) {
         String name = type.getName();
         return name.startsWith("java.")
             || name.startsWith("javax.")

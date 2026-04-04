@@ -233,15 +233,8 @@ class KotowariFeatureTest {
     // --- collectReachableTypes ---
 
     @Test
-    void collectReachableTypes_includesAppClass() {
-        Set<Class<?>> result = new LinkedHashSet<>();
-        feature.collectReachableTypes(SimpleForm.class, result);
-        assertThat(result).contains(SimpleForm.class);
-    }
-
-    @Test
-    void collectReachableTypes_recursesIntoFieldTypes() {
-        // SimpleForm has an Address field — Address should be collected transitively
+    void collectReachableTypes_includesAppClassAndFieldTypesTransitively() {
+        // SimpleForm has an Address field — both should be collected
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(SimpleForm.class, result);
         assertThat(result).contains(SimpleForm.class, Address.class);
@@ -255,13 +248,17 @@ class KotowariFeatureTest {
         assertThat(result).doesNotContain(DefaultHttpRequest.class);
     }
 
+    // --- shouldSkipType ---
+
     @Test
-    void collectReachableTypes_excludesJdkTypes() throws Exception {
-        // Load a jdk.* class via reflection to avoid compile-time accessibility errors
-        Class<?> jdkClass = Class.forName("jdk.internal.loader.BuiltinClassLoader");
-        Set<Class<?>> result = new LinkedHashSet<>();
-        feature.collectReachableTypes(jdkClass, result);
-        assertThat(result).doesNotContain(jdkClass);
+    void shouldSkipType_skipsJdkPrefix() {
+        // Use a stable public jdk.* type to verify the jdk. filter
+        assertThat(KotowariFeature.shouldSkipType(jdk.net.ExtendedSocketOptions.class)).isTrue();
+    }
+
+    @Test
+    void shouldSkipType_doesNotSkipAppClass() {
+        assertThat(KotowariFeature.shouldSkipType(SimpleForm.class)).isFalse();
     }
 
     // --- mixin pre-generation ---
