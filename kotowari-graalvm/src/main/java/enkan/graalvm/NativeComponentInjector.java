@@ -5,7 +5,9 @@ import enkan.system.inject.ComponentInjector;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import java.util.Arrays;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,7 +21,7 @@ import java.util.Map;
  * For any class without a registered binder, it falls back entirely to the standard
  * reflection-based {@code ComponentInjector}.
  *
- * <p><b>Limitation:</b> unnamed {@code @Inject} fields (those annotated with
+ * <p><b>Reflection requirement:</b> unnamed {@code @Inject} fields (those annotated with
  * {@code @Inject} but <em>not</em> with {@code @Named}) are resolved by
  * {@link ComponentInjector#injectField} which calls {@code Field.setAccessible(true)}.
  * Any component class that has such fields must therefore have
@@ -48,11 +50,24 @@ public class NativeComponentInjector extends ComponentInjector {
         // Inject any remaining unnamed @Inject fields via the reflection fallback,
         // then call @PostConstruct.
         T instance = binder.bind(components);
-        Arrays.stream(clazz.getDeclaredFields())
-                .filter(f -> f.getAnnotation(Inject.class) != null
-                          && f.getAnnotation(Named.class) == null)
+        collectUnnamedInjectFields(clazz)
                 .forEach(f -> injectField(instance, f));
         postConstruct(instance);
         return instance;
+    }
+
+    private List<Field> collectUnnamedInjectFields(Class<?> clazz) {
+        List<Field> result = new ArrayList<>();
+        Class<?> current = clazz;
+        while (current != null && current != Object.class
+                && !current.getName().equals("enkan.component.SystemComponent")) {
+            for (Field f : current.getDeclaredFields()) {
+                if (f.getAnnotation(Inject.class) != null && f.getAnnotation(Named.class) == null) {
+                    result.add(f);
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return result;
     }
 }
