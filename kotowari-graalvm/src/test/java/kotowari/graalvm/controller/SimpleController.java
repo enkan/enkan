@@ -1,7 +1,10 @@
 package kotowari.graalvm.controller;
 
+import app.example.Address;
 import app.example.SimpleForm;
 import enkan.data.HttpRequest;
+
+import java.util.List;
 
 public class SimpleController {
     public String index() {
@@ -14,5 +17,9 @@ public class SimpleController {
 
     public SimpleForm create(SimpleForm form) {
         return form;
+    }
+
+    public List<Address> listAddresses() {
+        return List.of();
     }
 }

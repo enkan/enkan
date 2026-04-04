@@ -1,14 +1,13 @@
 package kotowari.graalvm;
 
 import enkan.application.WebApplication;
+import app.example.Address;
+import app.example.SimpleForm;
 import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
 import enkan.data.WebSessionAvailable;
 import enkan.middleware.SessionMiddleware;
 import kotowari.graalvm.controller.SimpleController;
-import app.example.Address;
-import app.example.SimpleForm;
-import enkan.data.DefaultHttpRequest;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +15,7 @@ import java.lang.classfile.ClassFile;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -241,6 +241,15 @@ class KotowariFeatureTest {
     }
 
     @Test
+    void collectReachableTypes_traversesGenericTypeArguments() throws Exception {
+        // listAddresses() returns List<Address> — Address must be collected via generic arg
+        Method m = SimpleController.class.getMethod("listAddresses");
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(m.getGenericReturnType(), result);
+        assertThat(result).contains(Address.class);
+    }
+
+    @Test
     void collectReachableTypes_excludesEnkanFrameworkTypes() {
         // DefaultHttpRequest is in enkan.* — must be excluded
         Set<Class<?>> result = new LinkedHashSet<>();
@@ -257,7 +266,15 @@ class KotowariFeatureTest {
     }
 
     @Test
+    void shouldSkipType_skipsKotowariFrameworkPackages() {
+        // kotowari.routing.* and kotowari.graalvm.* are framework internals — must be skipped
+        assertThat(KotowariFeature.shouldSkipType(kotowari.routing.Routes.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(KotowariFeature.class)).isTrue();
+    }
+
+    @Test
     void shouldSkipType_doesNotSkipAppClass() {
+        // app.example.* is an application package — must NOT be skipped
         assertThat(KotowariFeature.shouldSkipType(SimpleForm.class)).isFalse();
     }
 

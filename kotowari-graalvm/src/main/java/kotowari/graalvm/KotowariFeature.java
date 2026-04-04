@@ -15,6 +15,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -187,14 +190,15 @@ public class KotowariFeature implements Feature {
 
             // Auto-register parameter types and return types of all public methods
             // so Jackson can deserialize request bodies and serialize responses without
-            // manual reflect-config entries.
+            // manual reflect-config entries. Generic type arguments (e.g. List<Customer>)
+            // are also traversed to catch container return types.
             Set<Class<?>> appTypes = new LinkedHashSet<>();
             for (Method m : ctrl.getDeclaredMethods()) {
                 if (!Modifier.isPublic(m.getModifiers())) continue;
-                for (Parameter p : m.getParameters()) {
-                    collectReachableTypes(p.getType(), appTypes);
+                for (Type t : m.getGenericParameterTypes()) {
+                    collectReachableTypes(t, appTypes);
                 }
-                collectReachableTypes(m.getReturnType(), appTypes);
+                collectReachableTypes(m.getGenericReturnType(), appTypes);
             }
             for (Class<?> t : appTypes) {
                 RuntimeReflection.register(t);
@@ -209,21 +213,34 @@ public class KotowariFeature implements Feature {
      * Collects types reachable from {@code type} that need manual reflection registration
      * (i.e. application classes not covered by GraalVM's built-in analysis).
      *
-     * <p>Recursively traverses declared field types to handle nested objects (e.g. embedded
-     * DTOs). Cycles are prevented by the {@code result} set: once a type is added it is not
-     * visited again, so traversal terminates even for mutually-referential types.
+     * <p>Handles raw classes, arrays, parameterized types (e.g. {@code List<Customer>}),
+     * and wildcard bounds. Recursively traverses declared field types to handle nested
+     * objects (e.g. embedded DTOs). Cycles are prevented by the {@code result} set: once
+     * a type is added it is not visited again, so traversal terminates even for
+     * mutually-referential types.
      */
-    void collectReachableTypes(Class<?> type, Set<Class<?>> result) {
-        if (type == null || type.isPrimitive() || type == void.class) return;
-        if (type.isArray()) {
-            collectReachableTypes(type.getComponentType(), result);
-            return;
+    void collectReachableTypes(Type type, Set<Class<?>> result) {
+        if (type instanceof Class<?> cls) {
+            if (cls.isPrimitive() || cls == void.class) return;
+            if (cls.isArray()) {
+                collectReachableTypes(cls.getComponentType(), result);
+                return;
+            }
+            if (shouldSkipType(cls)) return;
+            if (!result.add(cls)) return; // already seen, avoid cycles
+            for (Field f : cls.getDeclaredFields()) {
+                collectReachableTypes(f.getGenericType(), result);
+            }
+        } else if (type instanceof ParameterizedType pt) {
+            collectReachableTypes(pt.getRawType(), result);
+            for (Type arg : pt.getActualTypeArguments()) {
+                collectReachableTypes(arg, result);
+            }
+        } else if (type instanceof WildcardType wt) {
+            for (Type b : wt.getUpperBounds()) collectReachableTypes(b, result);
+            for (Type b : wt.getLowerBounds()) collectReachableTypes(b, result);
         }
-        if (shouldSkipType(type)) return;
-        if (!result.add(type)) return; // already seen, avoid cycles
-        for (Field f : type.getDeclaredFields()) {
-            collectReachableTypes(f.getType(), result);
-        }
+        // TypeVariable: skip — resolved only at runtime
     }
 
     static boolean shouldSkipType(Class<?> type) {
@@ -235,7 +252,11 @@ public class KotowariFeature implements Feature {
             || name.startsWith("sun.")
             || name.startsWith("com.sun.")
             || name.startsWith("enkan.")
-            || name.startsWith("kotowari.");
+            || name.startsWith("kotowari.graalvm.")
+            || name.startsWith("kotowari.routing.")
+            || name.startsWith("kotowari.middleware.")
+            || name.startsWith("kotowari.inject.")
+            || name.startsWith("kotowari.data.");
     }
 
     /**
