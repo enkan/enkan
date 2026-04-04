@@ -61,7 +61,7 @@ public class NativeApplicationFactory implements ApplicationFactory<HttpRequest,
         Routes routes = routes();
 
         if (injector != null) {
-            // Register routes for KotowariFeature build-time discovery (runtime only)
+            // Register routes in the runtime registry when a real injector is available.
             RouteRegistry.register(routes);
         }
 

@@ -229,24 +229,18 @@ class KotowariFeatureTest {
     // --- mixin pre-generation ---
 
     @Test
-    void buildRequestFactory_pregeneratesMixinForSessionMiddleware() throws ClassNotFoundException {
+    void buildRequestFactory_pregeneratesMixinForSessionMiddleware() {
         WebApplication app = new WebApplication();
         app.use(new SessionMiddleware());
 
         // Trigger mixin pre-generation — same path as KotowariFeature.pregenerateMixinClasses()
-        app.createRequest();
+        HttpRequest request = app.createRequest();
 
-        // One of the generated classes must implement WebSessionAvailable
-        boolean found = false;
-        for (String className : MixinUtils.generatedClassBytes.keySet()) {
-            Class<?> cls = Class.forName(className);
-            if (WebSessionAvailable.class.isAssignableFrom(cls)) {
-                found = true;
-                break;
-            }
-        }
-        assertThat(found)
-                .as("Expected a $Mixin class implementing WebSessionAvailable to be pre-generated")
-                .isTrue();
+        assertThat(request)
+                .as("Expected app.createRequest() to return a request implementing WebSessionAvailable")
+                .isInstanceOf(WebSessionAvailable.class);
+        assertThat(MixinUtils.generatedClassBytes)
+                .as("Expected the generated request mixin class to be pre-generated")
+                .containsKey(request.getClass().getName());
     }
 }
