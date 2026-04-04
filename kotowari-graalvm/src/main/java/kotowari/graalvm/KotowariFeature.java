@@ -112,6 +112,9 @@ public class KotowariFeature implements Feature {
                 return;
             }
             Object app = buildAppMethod.invoke(null);
+            if (app == null) {
+                return;
+            }
             // Trigger buildRequestFactory() -> MixinUtils.createFactory().
             // The resulting Supplier is cached in MixinUtils.factoryCache and will be
             // reused at runtime (no duplicate defineClass call needed).

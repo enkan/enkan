@@ -78,10 +78,15 @@ public class MisconfigurationException extends UnrecoverableException {
     }
 
     private static void loadInto(ClassLoader loader, String resourceName, Properties target) {
+        Enumeration<URL> urls;
         try {
-            Enumeration<URL> urls = loader.getResources(resourceName);
-            while (urls.hasMoreElements()) {
-                URL url = urls.nextElement();
+            urls = loader.getResources(resourceName);
+        } catch (IOException e) {
+            return;
+        }
+        while (urls.hasMoreElements()) {
+            URL url = urls.nextElement();
+            try {
                 URLConnection conn = url.openConnection();
                 conn.setUseCaches(false);
                 try (InputStream is = conn.getInputStream();
@@ -90,9 +95,9 @@ public class MisconfigurationException extends UnrecoverableException {
                     p.load(reader);
                     target.putAll(p);
                 }
+            } catch (IOException e) {
+                // Skip unreadable resource file; continue with remaining URLs
             }
-        } catch (IOException e) {
-            // Skip unreadable resource files; remaining candidates will still be loaded
         }
     }
 
