@@ -21,9 +21,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>
-                        --add-opens java.base/java.lang=ALL-UNNAMED
-                        --add-opens java.base/java.lang.invoke=ALL-UNNAMED
-                        -XX:+EnableDynamicAgentLoading
+                        ${surefire.argLine.common}
                         --add-opens kotowari/kotowari.middleware=ALL-UNNAMED
                         --add-opens kotowari/kotowari.middleware=org.hibernate.validator
                         --add-opens kotowari/kotowari.test.form=ALL-UNNAMED

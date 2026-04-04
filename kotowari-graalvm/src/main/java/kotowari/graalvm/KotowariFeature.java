@@ -294,15 +294,20 @@ public class KotowariFeature implements Feature {
                 || moduleName.startsWith("org.slf4j")
                 || moduleName.startsWith("org.graalvm");
         }
-        // Unnamed module (classpath): fall back to package-prefix check for
-        // well-known JDK and Jakarta namespaces that are not yet named modules.
+        // Unnamed module (classpath, or JPMS disabled at native-image build time):
+        // fall back to package-prefix checks covering JDK, Jakarta EE, and all
+        // Enkan/Kotowari framework packages.  This preserves the pre-JPMS behaviour
+        // so that a caller who does not set USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM
+        // still gets correct filtering.
         String name = type.getName();
         return name.startsWith("java.")
             || name.startsWith("javax.")
             || name.startsWith("jakarta.")
             || name.startsWith("jdk.")
             || name.startsWith("sun.")
-            || name.startsWith("com.sun.");
+            || name.startsWith("com.sun.")
+            || name.startsWith("enkan.")
+            || name.startsWith("kotowari.");
     }
 
     /**

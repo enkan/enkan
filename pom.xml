@@ -16,6 +16,13 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>25</java.version>
 
+        <!-- Common JVM flags required by all modules during test execution -->
+        <surefire.argLine.common>
+            --add-opens java.base/java.lang=ALL-UNNAMED
+            --add-opens java.base/java.lang.invoke=ALL-UNNAMED
+            -XX:+EnableDynamicAgentLoading
+        </surefire.argLine.common>
+
         <enkan.version>0.14.2-SNAPSHOT</enkan.version>
         <maven.version>3.6.3</maven.version>
 
@@ -102,11 +109,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.surefire.version}</version>
                     <configuration>
-                        <argLine>
-                            --add-opens java.base/java.lang=ALL-UNNAMED
-                            --add-opens java.base/java.lang.invoke=ALL-UNNAMED
-                            -XX:+EnableDynamicAgentLoading
-                        </argLine>
+                        <argLine>${surefire.argLine.common}</argLine>
                     </configuration>
                 </plugin>
                 <plugin>

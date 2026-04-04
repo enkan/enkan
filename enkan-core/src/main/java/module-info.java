@@ -16,6 +16,8 @@ module enkan.core {
     requires java.logging;
     requires org.slf4j;
 
-    // MixinUtils.createFactory() generates subclass inside enkan.util at runtime
-    opens enkan.util;
+    // MixinUtils.lookupSpecial() uses privateLookupIn on interfaces in enkan.util.
+    // org.hibernate.validator needs access for field-level constraint validation on
+    // test inner classes defined in this package.
+    opens enkan.util to enkan.core, org.hibernate.validator;
 }

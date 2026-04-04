@@ -21,6 +21,7 @@ module enkan.web {
     requires java.logging;
     requires static com.ibm.icu;
 
-    // MixinUtils.createFactory() generates DefaultHttpRequest$Mixin inside enkan.web.data at runtime
-    opens enkan.web.data;
+    // MixinUtils.buildFactory() uses privateLookupIn + defineClass inside enkan.web.data at runtime.
+    // Qualified to enkan.core (the only caller) to avoid exposing DefaultHttpRequest internals broadly.
+    opens enkan.web.data to enkan.core;
 }

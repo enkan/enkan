@@ -12,7 +12,7 @@ module enkan.system {
     requires jakarta.annotation;
     requires jakarta.validation;
     requires jakarta.transaction;
-    requires java.desktop;
+    requires static java.desktop;  // optional: only used by StartCommand.execute() to open a browser
     requires java.logging;
     requires java.sql;
     requires org.crac;

@@ -52,8 +52,8 @@ public class MixinUtils {
     private static final ConcurrentHashMap<List<Class<?>>, Class<?>[]> interfaceArrayCache = new ConcurrentHashMap<>();
     /** Cache: class → all implemented interfaces (avoids repeated class hierarchy traversal). */
     private static final ConcurrentHashMap<Class<?>, Class<?>[]> allInterfacesCache = new ConcurrentHashMap<>();
-    /** Cache: interface array cache key → Proxy constructor (avoids Proxy.newProxyInstance + getConstructor per call). */
-    private static final ConcurrentHashMap<List<Class<?>>, Constructor<?>> proxyCtorCache = new ConcurrentHashMap<>();
+    /** Cache: interface array cache key → Proxy constructor MethodHandle (avoids Proxy.newProxyInstance + getConstructor per call). */
+    private static final ConcurrentHashMap<List<Class<?>>, MethodHandle> proxyCtorCache = new ConcurrentHashMap<>();
 
     /**
      * Build a MethodHandle for a default method, normalized to
@@ -210,19 +210,27 @@ public class MixinUtils {
             return merged;
         });
 
-        Constructor<?> ctor = proxyCtorCache.computeIfAbsent(cacheKey, k -> {
+        MethodHandle ctor = proxyCtorCache.computeIfAbsent(cacheKey, k -> {
             try {
                 ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                // Create a temporary proxy instance only to capture the generated proxy class;
+                // the instance itself is discarded immediately.
                 Class<?> proxyClass = Proxy.newProxyInstance(cl, classes,
                         (p, m, a) -> null).getClass();
-                return proxyClass.getConstructor(InvocationHandler.class);
+                Constructor<?> cons = proxyClass.getConstructor(InvocationHandler.class);
+                // Use publicLookup() so that enkan.core can unreflect the constructor of
+                // jdk.proxy2.$ProxyN without needing the caller module to read jdk.proxy2.
+                // (privateLookupIn would require a read edge that cannot be established here.)
+                return MethodHandles.publicLookup()
+                        .unreflectConstructor(cons)
+                        .asType(MethodType.methodType(Object.class, InvocationHandler.class));
             } catch (ReflectiveOperationException e) {
-                throw new RuntimeException("Failed to find proxy constructor", e);
+                throw new RuntimeException("Failed to create proxy constructor handle", e);
             }
         });
         try {
-            return (T) ctor.newInstance(new MixinProxyHandler<>(original, classes));
-        } catch (ReflectiveOperationException e) {
+            return (T) ctor.invoke(new MixinProxyHandler<>(original, classes));
+        } catch (Throwable e) {
             throw new RuntimeException("Failed to create mixin proxy", e);
         }
     }

@@ -15,7 +15,11 @@ import java.util.ResourceBundle;
  * A control for loading UTF-8 ResourceBundle.
  *
  * @author kawasima
+ * @deprecated {@link ResourceBundle.Control} is prohibited in named modules (JPMS).
+ *             This class is no longer used internally; it will be removed in a future release.
+ *             Use {@code ClassLoader.getResources()} with manual property merging instead.
  */
+@Deprecated(since = "0.15.0", forRemoval = true)
 public class MergeableResourceBundleControl extends ResourceBundle.Control {
     protected Properties load(URL url, boolean reload) throws IOException {
         Properties properties = new Properties();

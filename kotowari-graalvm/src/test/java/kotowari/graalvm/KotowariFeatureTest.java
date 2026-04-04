@@ -17,6 +17,8 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -289,21 +291,19 @@ class KotowariFeatureTest {
 
     @Test
     void shouldSkipType_doesNotSkipUnnamedModuleAppClass() throws Exception {
-        // In production native builds, application classes reside in an unnamed module
-        // (classpath) or in their own named module that does not start with "kotowari" or "enkan".
-        // The unnamed-module case: isNamed()==false → never skipped (only JDK prefixes apply).
-        // We simulate this by loading a class via a custom URLClassLoader from the test JAR,
-        // which always lands in the unnamed module.
-        // A simpler proxy: verify that a class whose module isNamed()==false is not skipped.
-        // Since all test classes compile into the named kotowari.graalvm module, we check the
-        // fallback path using Object.class (java.base named — skipped) vs a raw package check.
-        //
-        // The authoritative behavior: in a real native build with JPMS enabled,
-        // app classes are in an unnamed module → isNamed()==false → not skipped.
-        // We test this indirectly: if we reach the unnamed-module branch, only JDK/Jakarta
-        // package prefixes are skipped, not arbitrary app packages.
-        assertThat(KotowariFeature.shouldSkipType(String.class)).isTrue();   // java.base → skipped
-        assertThat(KotowariFeature.shouldSkipType(enkan.web.data.HttpRequest.class)).isTrue(); // enkan.web → skipped
+        // Load SimpleForm via a URLClassLoader so it lands in the unnamed module
+        // (isNamed()==false). This simulates how app classes appear at native-image
+        // build time when the classpath-based (non-JPMS) native build is used.
+        URL[] urls = {SimpleForm.class.getProtectionDomain().getCodeSource().getLocation()};
+        try (URLClassLoader ucl = new URLClassLoader(urls, null)) {
+            Class<?> appClass = ucl.loadClass(SimpleForm.class.getName());
+            assertThat(appClass.getModule().isNamed())
+                    .as("Class loaded via URLClassLoader must be in the unnamed module")
+                    .isFalse();
+            assertThat(KotowariFeature.shouldSkipType(appClass))
+                    .as("App class in unnamed module (app.example.*) must NOT be skipped")
+                    .isFalse();
+        }
     }
 
     // --- mixin pre-generation ---

@@ -22,16 +22,62 @@ public class MisconfigurationException extends UnrecoverableException {
     static final Properties misconfigurationMessages;
 
     static {
-        misconfigurationMessages = loadMessages();
+        misconfigurationMessages = loadMessages(Locale.getDefault());
     }
 
-    private static Properties loadMessages() {
+    /**
+     * Loads and merges misconfiguration message properties from all JARs on the classpath,
+     * with locale-specific files taking precedence over the base file (same lookup order
+     * as {@link ResourceBundle}).
+     *
+     * <p>Loading order (later entries win, matching ResourceBundle fallback chain):
+     * <ol>
+     *   <li>{@code META-INF/misconfiguration.properties} (base)</li>
+     *   <li>{@code META-INF/misconfiguration_<language>.properties}</li>
+     *   <li>{@code META-INF/misconfiguration_<language>_<country>.properties}</li>
+     *   <li>{@code META-INF/misconfiguration_<language>_<country>_<variant>.properties}</li>
+     * </ol>
+     *
+     * <p>This replicates the behavior of the former {@code MergeableResourceBundleControl}
+     * without using {@link ResourceBundle.Control}, which is prohibited in named modules.
+     */
+    private static Properties loadMessages(Locale locale) {
         Properties merged = new Properties();
-        String resourceName = "META-INF/misconfiguration.properties";
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         if (loader == null) {
             loader = MisconfigurationException.class.getClassLoader();
         }
+
+        // Build the ResourceBundle-style candidate list from least to most specific,
+        // so that more specific files overwrite less specific ones.
+        List<String> candidates = buildCandidateNames(locale);
+        for (String candidate : candidates) {
+            loadInto(loader, candidate, merged);
+        }
+        return merged;
+    }
+
+    private static List<String> buildCandidateNames(Locale locale) {
+        List<String> names = new ArrayList<>();
+        names.add("META-INF/misconfiguration.properties");
+
+        String language = locale.getLanguage();
+        String country  = locale.getCountry();
+        String variant  = locale.getVariant();
+
+        if (!language.isEmpty()) {
+            names.add("META-INF/misconfiguration_" + language + ".properties");
+            if (!country.isEmpty()) {
+                names.add("META-INF/misconfiguration_" + language + "_" + country + ".properties");
+                if (!variant.isEmpty()) {
+                    names.add("META-INF/misconfiguration_" + language + "_" + country + "_" + variant + ".properties");
+                }
+            }
+        }
+        return names;
+    }
+
+    private static void loadInto(ClassLoader loader, String resourceName, Properties target) {
         try {
             Enumeration<URL> urls = loader.getResources(resourceName);
             while (urls.hasMoreElements()) {
@@ -42,13 +88,12 @@ public class MisconfigurationException extends UnrecoverableException {
                      InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
                     Properties p = new Properties();
                     p.load(reader);
-                    merged.putAll(p);
+                    target.putAll(p);
                 }
             }
         } catch (IOException e) {
-            // If we can't load messages, an empty Properties is used; messages will show raw codes
+            // Skip unreadable resource files; remaining candidates will still be loaded
         }
-        return merged;
     }
 
     @Override
