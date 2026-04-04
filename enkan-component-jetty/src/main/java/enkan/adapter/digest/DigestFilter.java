@@ -32,7 +32,14 @@ public class DigestFilter implements Filter {
 
     /** Init-param name for the default digest algorithm. */
     public static final String PARAM_ALGORITHM = "digestAlgorithm";
-    /** Init-param name indicating whether compression is active. */
+    /**
+     * Init-param name indicating whether a {@code CompressionHandler} is active in the chain.
+     *
+     * <p>When {@code true}, this filter only computes {@code Repr-Digest} (pre-compression bytes).
+     * {@code Content-Digest} (post-compression bytes) is handled by {@code ContentDigestHandler}
+     * which is placed outside the {@code CompressionHandler}. The value must be kept in sync
+     * with the {@code compress?} option passed to {@code JettyAdapter}.
+     */
     public static final String PARAM_COMPRESSED = "compressed";
 
     private String defaultAlgorithm;
@@ -150,7 +157,9 @@ public class DigestFilter implements Filter {
 
         @Override
         public void flushBuffer() {
-            // Do not commit — we need to add headers after the chain completes
+            // Suppress commit: the Servlet spec commits the response (making headers
+            // immutable) on flushBuffer(). We must suppress this so that Repr-Digest /
+            // Content-Digest headers can still be set after chain.doFilter() returns.
         }
 
         @Override

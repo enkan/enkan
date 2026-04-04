@@ -40,7 +40,6 @@ class UndertowAdapterDigestTest {
     }
 
     private UndertowServer startWith(String body, OptionMap extra) throws IOException {
-        int port = extra.getInt("port", 0);
         WebApplication app = new WebApplication();
         app.use(Predicates.any(), "handler", new WebMiddleware() {
             @Override

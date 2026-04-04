@@ -67,6 +67,9 @@ public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> 
         return total;
     }
 
+    // writeFinal only buffers the last chunk — terminateWrites() is called separately
+    // by the framework (HttpServerExchange.endExchange). Calling terminateWrites() here
+    // would cause a double-invocation: header set twice and buffered bytes forwarded twice.
     @Override
     public int writeFinal(ByteBuffer src) throws IOException {
         return write(src);
@@ -108,11 +111,14 @@ public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> 
         };
         exchange.getResponseHeaders().put(header, digestValue);
 
-        // Write all buffered bytes to the underlying conduit, then terminate
+        // Write all buffered bytes to the underlying conduit, then terminate.
+        // super.write() may not consume all bytes in one call (partial writes);
+        // break on <= 0 to avoid a busy-spin if the conduit stalls unexpectedly.
         if (allBytes.length > 0) {
             ByteBuffer buf = ByteBuffer.wrap(allBytes);
             while (buf.hasRemaining()) {
-                super.write(buf);
+                int n = super.write(buf);
+                if (n <= 0) break;
             }
         }
         super.terminateWrites();
