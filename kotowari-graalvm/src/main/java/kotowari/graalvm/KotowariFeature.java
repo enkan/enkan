@@ -213,8 +213,10 @@ public class KotowariFeature implements Feature {
             for (Class<?> t : appTypes) {
                 RuntimeReflection.register(t);
                 RuntimeReflection.registerAllConstructors(t);
-                RuntimeReflection.registerAllDeclaredFields(t);
-                RuntimeReflection.registerAllDeclaredMethods(t);
+                // registerAllFields/Methods covers inherited members from superclasses,
+                // which registerAllDeclared* alone would miss (e.g. getter/setter in BaseForm).
+                RuntimeReflection.registerAllFields(t);
+                RuntimeReflection.registerAllMethods(t);
             }
         }
     }
@@ -238,12 +240,20 @@ public class KotowariFeature implements Feature {
             }
             if (shouldSkipType(cls)) return;
             if (!result.add(cls)) return; // already seen, avoid cycles
-            try {
-                for (Field f : cls.getDeclaredFields()) {
-                    collectReachableTypes(f.getGenericType(), result);
+            // Traverse declared fields of cls and all superclasses so that field types
+            // in a base class (e.g. BaseForm) are also collected. Each superclass that
+            // passes shouldSkipType is also added to result so it gets reflection-registered.
+            Class<?> current = cls;
+            while (current != null && current != Object.class && !shouldSkipType(current)) {
+                result.add(current); // add(current) is a no-op if already present (cycle guard)
+                try {
+                    for (Field f : current.getDeclaredFields()) {
+                        collectReachableTypes(f.getGenericType(), result);
+                    }
+                } catch (SecurityException e) {
+                    // Module system may deny field access for some types; skip this class
                 }
-            } catch (SecurityException e) {
-                // Module system may deny field access for some types; skip field traversal
+                current = current.getSuperclass();
             }
         } else if (type instanceof ParameterizedType pt) {
             collectReachableTypes(pt.getRawType(), result);

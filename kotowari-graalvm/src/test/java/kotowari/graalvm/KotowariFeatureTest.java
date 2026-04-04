@@ -2,6 +2,7 @@ package kotowari.graalvm;
 
 import enkan.application.WebApplication;
 import app.example.Address;
+import app.example.BaseForm;
 import app.example.SimpleForm;
 import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
@@ -234,10 +235,11 @@ class KotowariFeatureTest {
 
     @Test
     void collectReachableTypes_includesAppClassAndFieldTypesTransitively() {
-        // SimpleForm has an Address field — both should be collected
+        // SimpleForm extends BaseForm which has an Address field —
+        // Address must be collected by traversing the superclass chain
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(SimpleForm.class, result);
-        assertThat(result).contains(SimpleForm.class, Address.class);
+        assertThat(result).contains(SimpleForm.class, BaseForm.class, Address.class);
     }
 
     @Test
