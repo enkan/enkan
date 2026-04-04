@@ -66,8 +66,8 @@ import static enkan.util.BeanBuilder.builder;
 @Middleware(name = "requestTimeout")
 public class RequestTimeoutMiddleware implements WebMiddleware {
 
-    private long timeoutMillis = 30_000;
-    private int  timeoutStatus = 504;
+    private volatile long timeoutMillis = 30_000;
+    private volatile int  timeoutStatus = 504;
 
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
