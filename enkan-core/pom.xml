@@ -70,10 +70,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>
-                        ${surefire.argLine.common}
-                        --add-opens java.base/java.lang.invoke=ALL-UNNAMED
-                    </argLine>
+                    <argLine>${surefire.argLine.common}</argLine>
                 </configuration>
             </plugin>
         </plugins>

@@ -261,15 +261,15 @@ class KotowariFeatureTest {
 
     @Test
     void collectReachableTypes_traversesGenericTypeArguments() throws Exception {
-        // Exercise the ParameterizedType branch: SimpleController.listAddresses() returns
-        // List<Address> where Address is in the named kotowari.graalvm module (skipped).
-        // The traversal must complete without error, and the result must be empty because
-        // both java.util.List (java.base) and Address (kotowari.graalvm) are filtered out.
+        // SimpleController.listAddresses() returns List<Address>, which is a ParameterizedType.
+        // collectReachableTypes() must traverse into the type argument (Address).
+        // Both java.util.List (java.base) and Address (kotowari.graalvm) are in named framework
+        // modules and are filtered out, so the result must be empty.
         Method m = SimpleController.class.getMethod("listAddresses");
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(m.getGenericReturnType(), result);
         assertThat(result)
-                .as("All types in List<Address> are in named framework modules and must be filtered")
+                .as("List<Address>: both List (java.base) and Address (kotowari.graalvm) are in named modules and must be filtered")
                 .isEmpty();
     }
 
