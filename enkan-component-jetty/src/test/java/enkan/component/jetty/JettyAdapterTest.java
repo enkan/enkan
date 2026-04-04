@@ -1,4 +1,4 @@
-package enkan.adapter;
+package enkan.component.jetty;
 
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;

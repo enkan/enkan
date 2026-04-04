@@ -1,6 +1,5 @@
 package enkan.component.jetty;
 
-import enkan.adapter.JettyAdapter;
 import enkan.web.application.WebApplication;
 import enkan.web.util.DigestFieldsUtils;
 import enkan.collection.OptionMap;

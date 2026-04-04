@@ -1,8 +1,8 @@
-package enkan.adapter;
+package enkan.component.undertow;
 
-import enkan.adapter.digest.CombinedDigestConduit;
-import enkan.adapter.digest.DigestConduit;
-import enkan.adapter.digest.DigestOuterHandler;
+import enkan.component.undertow.digest.CombinedDigestConduit;
+import enkan.component.undertow.digest.DigestConduit;
+import enkan.component.undertow.digest.DigestOuterHandler;
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
 import enkan.web.util.DigestFieldsUtils;
