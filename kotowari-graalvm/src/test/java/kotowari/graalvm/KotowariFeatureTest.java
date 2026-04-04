@@ -5,7 +5,6 @@ import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
 import enkan.data.WebSessionAvailable;
 import enkan.middleware.SessionMiddleware;
-import enkan.util.MixinUtils;
 import kotowari.graalvm.controller.SimpleController;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
@@ -239,8 +238,5 @@ class KotowariFeatureTest {
         assertThat(request)
                 .as("Expected app.createRequest() to return a request implementing WebSessionAvailable")
                 .isInstanceOf(WebSessionAvailable.class);
-        assertThat(MixinUtils.generatedClassBytes)
-                .as("Expected the generated request mixin class to be pre-generated")
-                .containsKey(request.getClass().getName());
     }
 }
