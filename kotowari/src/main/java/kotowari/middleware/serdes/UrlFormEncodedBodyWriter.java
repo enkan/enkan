@@ -1,6 +1,6 @@
 package kotowari.middleware.serdes;
 
-import enkan.util.CodecUtils;
+import enkan.web.util.CodecUtils;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;

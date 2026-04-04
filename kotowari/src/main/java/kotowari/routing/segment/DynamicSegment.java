@@ -1,7 +1,7 @@
 package kotowari.routing.segment;
 
 import enkan.collection.OptionMap;
-import enkan.util.CodecUtils;
+import enkan.web.util.CodecUtils;
 import kotowari.routing.RegexpUtils;
 import kotowari.routing.RouteBuilder;
 import kotowari.routing.Segment;

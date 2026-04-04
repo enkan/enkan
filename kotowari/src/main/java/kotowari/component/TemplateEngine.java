@@ -1,7 +1,7 @@
 package kotowari.component;
 
 import enkan.component.SystemComponent;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 
 import java.util.List;
 import java.util.function.Function;

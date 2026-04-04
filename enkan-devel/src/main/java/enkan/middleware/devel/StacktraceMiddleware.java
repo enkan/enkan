@@ -2,14 +2,14 @@ package enkan.middleware.devel;
 
 import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
-import enkan.collection.Headers;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.collection.Headers;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.UnreachableException;
 
-import enkan.middleware.WebMiddleware;
-import enkan.util.HttpResponseUtils;
+import enkan.web.middleware.WebMiddleware;
+import enkan.web.util.HttpResponseUtils;
 import net.unit8.moshas.MoshasEngine;
 import net.unit8.moshas.Snippet;
 import net.unit8.moshas.Template;

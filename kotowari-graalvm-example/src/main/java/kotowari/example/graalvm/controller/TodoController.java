@@ -1,8 +1,8 @@
 package kotowari.example.graalvm.controller;
 
 import enkan.collection.Parameters;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import kotowari.example.graalvm.form.TodoForm;
 import kotowari.example.graalvm.model.Todo;
 

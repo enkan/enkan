@@ -1,6 +1,6 @@
 package kotowari.test.controller;
 
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import kotowari.test.form.NestedForm;
 
 public class TestController {

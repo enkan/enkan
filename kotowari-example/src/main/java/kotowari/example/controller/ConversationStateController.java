@@ -1,7 +1,7 @@
 package kotowari.example.controller;
 
 import enkan.data.ConversationState;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import kotowari.component.TemplateEngine;
 
 import jakarta.enterprise.context.Conversation;

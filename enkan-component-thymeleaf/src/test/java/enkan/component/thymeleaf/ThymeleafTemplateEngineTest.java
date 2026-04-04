@@ -1,7 +1,7 @@
 package enkan.component.thymeleaf;
 
 import enkan.component.LifecycleManager;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,6 +1,6 @@
 package kotowari.inject;
 
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 
 /**
  * Inject object to a controller method.

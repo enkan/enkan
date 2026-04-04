@@ -1,7 +1,7 @@
 package kotowari.inject.parameter;
 
 import enkan.data.ConversationState;
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
 public class ConversationStateInjector implements ParameterInjector<ConversationState> {

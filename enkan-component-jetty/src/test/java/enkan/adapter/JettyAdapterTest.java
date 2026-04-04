@@ -1,12 +1,12 @@
 package enkan.adapter;
 
-import enkan.application.WebApplication;
-import enkan.collection.Headers;
+import enkan.web.application.WebApplication;
+import enkan.web.collection.Headers;
 import enkan.collection.OptionMap;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
-import enkan.middleware.WebMiddleware;
+import enkan.web.middleware.WebMiddleware;
 import enkan.util.Predicates;
 import org.eclipse.jetty.server.Server;
 import org.junit.jupiter.api.AfterAll;

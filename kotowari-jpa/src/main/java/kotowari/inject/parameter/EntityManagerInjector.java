@@ -1,6 +1,6 @@
 package kotowari.inject.parameter;
 
-import enkan.data.HttpRequest;
+import enkan.web.data.HttpRequest;
 import enkan.data.jpa.EntityManageable;
 import kotowari.inject.ParameterInjector;
 

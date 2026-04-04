@@ -1,9 +1,9 @@
 package kotowari.example.controller.api;
 
 import enkan.component.JobExecutor;
-import enkan.data.HttpResponse;
-import enkan.data.SseEmitter;
-import enkan.data.SseEvent;
+import enkan.web.data.HttpResponse;
+import enkan.web.data.SseEmitter;
+import enkan.web.data.SseEvent;
 
 import jakarta.inject.Inject;
 import java.time.Duration;

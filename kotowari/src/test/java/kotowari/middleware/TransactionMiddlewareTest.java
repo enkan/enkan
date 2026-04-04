@@ -2,10 +2,10 @@ package kotowari.middleware;
 
 import enkan.Endpoint;
 import enkan.chain.DefaultMiddlewareChain;
-import enkan.collection.Headers;
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.collection.Headers;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.HttpResponse;
 import enkan.data.Routable;
 import enkan.exception.MisconfigurationException;
 import enkan.util.MixinUtils;

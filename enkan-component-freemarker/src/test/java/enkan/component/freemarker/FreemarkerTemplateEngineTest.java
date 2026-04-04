@@ -1,6 +1,6 @@
 package enkan.component.freemarker;
 
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 import enkan.system.EnkanSystem;
 import freemarker.cache.FileTemplateLoader;

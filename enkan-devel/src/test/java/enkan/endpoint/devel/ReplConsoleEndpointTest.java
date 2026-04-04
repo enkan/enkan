@@ -1,7 +1,7 @@
 package enkan.endpoint.devel;
 
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpResponse;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpResponse;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

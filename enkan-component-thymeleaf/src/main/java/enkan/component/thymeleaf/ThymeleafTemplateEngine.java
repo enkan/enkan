@@ -1,9 +1,9 @@
 package enkan.component.thymeleaf;
 
 import enkan.component.ComponentLifecycle;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
-import enkan.util.HttpResponseUtils;
+import enkan.web.util.HttpResponseUtils;
 import kotowari.component.TemplateEngine;
 import kotowari.data.TemplatedHttpResponse;
 import kotowari.io.LazyRenderInputStream;

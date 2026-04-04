@@ -1,13 +1,13 @@
 package kotowari.graalvm;
 
-import enkan.application.WebApplication;
+import enkan.web.application.WebApplication;
 import app.example.Address;
 import app.example.BaseForm;
 import app.example.SimpleForm;
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpRequest;
-import enkan.data.WebSessionAvailable;
-import enkan.middleware.SessionMiddleware;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpRequest;
+import enkan.web.data.WebSessionAvailable;
+import enkan.web.middleware.SessionMiddleware;
 import kotowari.graalvm.controller.SimpleController;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;

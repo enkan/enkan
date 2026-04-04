@@ -143,10 +143,10 @@ class RouteTest {
         assertThat(postResult).isEmpty();
     }
 
-    private static enkan.data.HttpRequest buildRequest(String uri, String method) {
-        return enkan.util.BeanBuilder.builder(new enkan.data.DefaultHttpRequest())
-                .set(enkan.data.HttpRequest::setUri, uri)
-                .set(enkan.data.HttpRequest::setRequestMethod, method)
+    private static enkan.web.data.HttpRequest buildRequest(String uri, String method) {
+        return enkan.util.BeanBuilder.builder(new enkan.web.data.DefaultHttpRequest())
+                .set(enkan.web.data.HttpRequest::setUri, uri)
+                .set(enkan.web.data.HttpRequest::setRequestMethod, method)
                 .build();
     }
 }

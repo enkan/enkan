@@ -2,7 +2,7 @@ package kotowari.example.controller.guestbook;
 
 import enkan.collection.Parameters;
 import enkan.component.doma2.DomaProvider;
-import enkan.data.HttpResponse;
+import enkan.web.data.HttpResponse;
 import enkan.security.UserPrincipal;
 import kotowari.component.TemplateEngine;
 import kotowari.example.dao.GuestbookDao;

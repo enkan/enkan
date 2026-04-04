@@ -1,7 +1,7 @@
 package kotowari.inject.parameter;
 
-import enkan.data.DefaultHttpRequest;
-import enkan.data.HttpRequest;
+import enkan.web.data.DefaultHttpRequest;
+import enkan.web.data.HttpRequest;
 import enkan.data.jpa.EntityManageable;
 import enkan.util.MixinUtils;
 import jakarta.persistence.EntityManager;

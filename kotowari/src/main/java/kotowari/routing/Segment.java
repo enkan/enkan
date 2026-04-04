@@ -1,7 +1,7 @@
 package kotowari.routing;
 
 import enkan.collection.OptionMap;
-import enkan.util.CodecUtils;
+import enkan.web.util.CodecUtils;
 
 import java.util.List;
 import java.util.regex.Matcher;

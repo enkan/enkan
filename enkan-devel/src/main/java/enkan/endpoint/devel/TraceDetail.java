@@ -1,6 +1,6 @@
 package enkan.endpoint.devel;
 
-import enkan.collection.Headers;
+import enkan.web.collection.Headers;
 import enkan.collection.Parameters;
 import net.unit8.moshas.MoshasEngine;
 import net.unit8.moshas.Snippet;
