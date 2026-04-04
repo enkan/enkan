@@ -236,35 +236,46 @@ class KotowariFeatureTest {
     // --- collectReachableTypes ---
 
     @Test
-    void collectReachableTypes_includesAppClassAndFieldTypesTransitively() {
-        // NOTE: In this test environment all classes (including app fixture classes such as
-        // SimpleForm) are compiled into the named "kotowari.graalvm" module, so shouldSkipType()
-        // returns true for them.  In a real native-image build the app classes reside in an
-        // unnamed module (classpath), where only JDK/Jakarta package prefixes are filtered.
-        // We therefore verify the collectReachableTypes traversal using a class that is in the
-        // unnamed module branch: String (java.base — should be excluded) demonstrates that the
-        // skip logic fires, and that the result set remains empty for framework-only roots.
-        Set<Class<?>> result = new LinkedHashSet<>();
-        feature.collectReachableTypes(DefaultHttpRequest.class, result);
-        assertThat(result).as("Framework class root should produce empty reachable set")
-                .doesNotContain(DefaultHttpRequest.class);
+    void collectReachableTypes_includesAppClassAndFieldTypesTransitively() throws Exception {
+        // Load SimpleForm via URLClassLoader so it lands in the unnamed module,
+        // matching the real native-image build environment where app classes are on
+        // the classpath.  SimpleForm extends BaseForm (which has an Address field),
+        // so traversal should collect SimpleForm, BaseForm, and Address transitively.
+        URL[] urls = {SimpleForm.class.getProtectionDomain().getCodeSource().getLocation()};
+        try (URLClassLoader ucl = new URLClassLoader(urls, null)) {
+            Class<?> simpleFormClass = ucl.loadClass(SimpleForm.class.getName());
+            assertThat(simpleFormClass.getModule().isNamed()).isFalse();
+
+            Set<Class<?>> result = new LinkedHashSet<>();
+            feature.collectReachableTypes(simpleFormClass, result);
+
+            // SimpleForm itself, its superclass BaseForm, and BaseForm's Address field type
+            // are all in the unnamed module and must be collected.
+            assertThat(result)
+                    .as("Traversal should collect SimpleForm, BaseForm, and Address transitively")
+                    .anyMatch(c -> c.getName().equals(SimpleForm.class.getName()))
+                    .anyMatch(c -> c.getName().equals(BaseForm.class.getName()))
+                    .anyMatch(c -> c.getName().equals(Address.class.getName()));
+        }
     }
 
     @Test
     void collectReachableTypes_traversesGenericTypeArguments() throws Exception {
-        // In the named-module test environment, Address is in "kotowari.graalvm" and is skipped.
-        // Verify instead that generic traversal does not throw and returns an empty set for
-        // a framework generic return type (all reachable types are filtered).
+        // Exercise the ParameterizedType branch: SimpleController.listAddresses() returns
+        // List<Address> where Address is in the named kotowari.graalvm module (skipped).
+        // The traversal must complete without error, and the result must be empty because
+        // both java.util.List (java.base) and Address (kotowari.graalvm) are filtered out.
         Method m = SimpleController.class.getMethod("listAddresses");
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(m.getGenericReturnType(), result);
-        // java.util.List is in java.base (named, skipped); Address is in kotowari.graalvm (skipped)
-        assertThat(result).as("Generic traversal of framework types should not throw").isNotNull();
+        assertThat(result)
+                .as("All types in List<Address> are in named framework modules and must be filtered")
+                .isEmpty();
     }
 
     @Test
     void collectReachableTypes_excludesEnkanFrameworkTypes() {
-        // DefaultHttpRequest is in enkan.* — must be excluded
+        // DefaultHttpRequest is in the named enkan.web module — must be excluded
         Set<Class<?>> result = new LinkedHashSet<>();
         feature.collectReachableTypes(DefaultHttpRequest.class, result);
         assertThat(result).doesNotContain(DefaultHttpRequest.class);

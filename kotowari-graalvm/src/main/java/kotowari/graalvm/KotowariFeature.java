@@ -273,13 +273,21 @@ public class KotowariFeature implements Feature {
     }
 
     /**
-     * Returns {@code true} for types that do not need manual reflection registration:
-     * JDK types, framework types (enkan.* and known kotowari framework sub-packages).
+     * Returns {@code true} for types that do not need manual reflection registration
+     * (JDK, Jakarta EE, and Enkan/Kotowari framework types).
      *
-     * <p>Note: only specific kotowari framework sub-packages are listed here rather than
-     * the entire {@code kotowari.} namespace, so that application types under
-     * {@code kotowari.example.*} or similar are correctly auto-registered. If new
-     * framework sub-packages are added to kotowari they must be listed here explicitly.
+     * <p>When JPMS is active (named modules), the decision is made by module-name prefix:
+     * {@code java.*}, {@code jdk.*}, {@code enkan.*}, {@code kotowari} / {@code kotowari.*},
+     * {@code jakarta.*}, {@code org.slf4j}, and {@code org.graalvm} are all skipped.
+     * Application types in their own named module (prefix does not match any of the above)
+     * are <em>not</em> skipped and will be registered for reflection.
+     *
+     * <p>When JPMS is not active (unnamed module — classpath builds or
+     * {@code USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM} not set), the same decision is
+     * made by class-name prefix: JDK ({@code java.*}, {@code javax.*}, {@code jdk.*},
+     * {@code sun.*}, {@code com.sun.*}), Jakarta EE ({@code jakarta.*}), and all Enkan/
+     * Kotowari framework packages ({@code enkan.*}, {@code kotowari.*}) are skipped.
+     * Any application class whose name does not match these prefixes is registered.
      */
     static boolean shouldSkipType(Class<?> type) {
         Module m = type.getModule();
