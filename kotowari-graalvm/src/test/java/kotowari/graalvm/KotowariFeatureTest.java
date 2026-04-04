@@ -262,9 +262,10 @@ class KotowariFeatureTest {
     // --- shouldSkipType ---
 
     @Test
-    void shouldSkipType_skipsJdkPrefix() {
-        // Use a stable public jdk.* type to verify the jdk. filter
-        assertThat(KotowariFeature.shouldSkipType(jdk.net.ExtendedSocketOptions.class)).isTrue();
+    void shouldSkipType_skipsJdkPrefix() throws Exception {
+        // Use Class.forName to avoid a compile-time dependency on a non-exported jdk.* package
+        Class<?> jdkClass = Class.forName("jdk.net.ExtendedSocketOptions");
+        assertThat(KotowariFeature.shouldSkipType(jdkClass)).isTrue();
     }
 
     @Test

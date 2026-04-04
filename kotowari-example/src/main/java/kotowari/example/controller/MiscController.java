@@ -9,7 +9,7 @@ import jakarta.inject.Inject;
 import java.io.File;
 
 import static enkan.util.BeanBuilder.builder;
-import static enkan.util.HttpResponseUtils.response;
+import static enkan.web.util.HttpResponseUtils.response;
 
 /**
  * @author kawasima

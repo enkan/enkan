@@ -31,7 +31,6 @@ public class PermissionPredicateTest {
         private String name;
         private Set<String> permissions;
 
-        @java.beans.ConstructorProperties({"name", "permissions"})
         public TestUser(String name, Set<String> permissions) {
             this.name = name;
             this.permissions = permissions;

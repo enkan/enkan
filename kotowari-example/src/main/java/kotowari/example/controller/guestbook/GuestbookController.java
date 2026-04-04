@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static enkan.util.BeanBuilder.builder;
-import static enkan.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
+import static enkan.web.util.HttpResponseUtils.RedirectStatusCode.SEE_OTHER;
 import static kotowari.routing.UrlRewriter.redirect;
 
 /**
