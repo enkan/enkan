@@ -208,7 +208,10 @@ public class KotowariFeature implements Feature {
     /**
      * Collects types reachable from {@code type} that need manual reflection registration
      * (i.e. application classes not covered by GraalVM's built-in analysis).
-     * Recurses one level into declared fields to handle nested objects.
+     *
+     * <p>Recursively traverses declared field types to handle nested objects (e.g. embedded
+     * DTOs). Cycles are prevented by the {@code result} set: once a type is added it is not
+     * visited again, so traversal terminates even for mutually-referential types.
      */
     void collectReachableTypes(Class<?> type, Set<Class<?>> result) {
         if (type == null || type.isPrimitive() || type == void.class) return;
@@ -228,6 +231,7 @@ public class KotowariFeature implements Feature {
         return name.startsWith("java.")
             || name.startsWith("javax.")
             || name.startsWith("jakarta.")
+            || name.startsWith("jdk.")
             || name.startsWith("sun.")
             || name.startsWith("com.sun.")
             || name.startsWith("enkan.")

@@ -6,7 +6,9 @@ import enkan.data.HttpRequest;
 import enkan.data.WebSessionAvailable;
 import enkan.middleware.SessionMiddleware;
 import kotowari.graalvm.controller.SimpleController;
+import app.example.Address;
 import app.example.SimpleForm;
+import enkan.data.DefaultHttpRequest;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
 
@@ -238,10 +240,28 @@ class KotowariFeatureTest {
     }
 
     @Test
-    void collectReachableTypes_excludesFrameworkTypes() {
+    void collectReachableTypes_recursesIntoFieldTypes() {
+        // SimpleForm has an Address field — Address should be collected transitively
         Set<Class<?>> result = new LinkedHashSet<>();
-        feature.collectReachableTypes(HttpRequest.class, result);
-        assertThat(result).doesNotContain(HttpRequest.class);
+        feature.collectReachableTypes(SimpleForm.class, result);
+        assertThat(result).contains(SimpleForm.class, Address.class);
+    }
+
+    @Test
+    void collectReachableTypes_excludesEnkanFrameworkTypes() {
+        // DefaultHttpRequest is in enkan.* — must be excluded
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(DefaultHttpRequest.class, result);
+        assertThat(result).doesNotContain(DefaultHttpRequest.class);
+    }
+
+    @Test
+    void collectReachableTypes_excludesJdkTypes() throws Exception {
+        // Load a jdk.* class via reflection to avoid compile-time accessibility errors
+        Class<?> jdkClass = Class.forName("jdk.internal.loader.BuiltinClassLoader");
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(jdkClass, result);
+        assertThat(result).doesNotContain(jdkClass);
     }
 
     // --- mixin pre-generation ---
