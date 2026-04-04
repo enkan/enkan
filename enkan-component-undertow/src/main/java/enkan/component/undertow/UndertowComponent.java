@@ -3,6 +3,7 @@ package enkan.component.undertow;
 import enkan.adapter.UndertowAdapter;
 import enkan.adapter.UndertowAdapter.UndertowServer;
 import enkan.web.application.WebApplication;
+import enkan.web.util.DigestFieldsUtils;
 import enkan.collection.OptionMap;
 import enkan.component.ApplicationComponent;
 import enkan.component.ComponentLifecycle;
@@ -22,6 +23,7 @@ public class UndertowComponent extends WebServerComponent<UndertowComponent> imp
     private UndertowServer server;
     private volatile boolean starting = false;
     private volatile boolean stopping = false;
+    private String digestAlgorithm = null;
 
     @Override
     protected ComponentLifecycle<UndertowComponent> lifecycle() {
@@ -36,6 +38,7 @@ public class UndertowComponent extends WebServerComponent<UndertowComponent> imp
                         if (!(app.getApplication() instanceof WebApplication webApp)) {
                             throw new MisconfigurationException("web.APPLICATION_NOT_WEB");
                         }
+                        if (digestAlgorithm != null) options.put("digestAlgorithm", digestAlgorithm);
                         server = new UndertowAdapter().runUndertow(webApp, options);
                     } finally {
                         starting = false;
@@ -88,6 +91,32 @@ public class UndertowComponent extends WebServerComponent<UndertowComponent> imp
             return HealthStatus.STARTING;
         }
         return server != null ? HealthStatus.UP : HealthStatus.DOWN;
+    }
+
+    /**
+     * Enables RFC 9530 Digest Fields generation on responses.
+     *
+     * <p>Must be called before the component is started.
+     * Registers a {@code DigestConduit} (inside {@code appHandler}, for {@code Repr-Digest})
+     * and, when compression is also enabled, a {@code DigestOuterHandler}
+     * (outside {@code EncodingHandler}, for {@code Content-Digest}).
+     *
+     * <p>Example:
+     * <pre>{@code
+     * new UndertowComponent()
+     *     .enableDigestFields("sha-256")
+     * }</pre>
+     *
+     * @param algorithm the default SF algorithm name ({@code "sha-256"} or {@code "sha-512"})
+     * @return {@code this} for chaining
+     * @throws MisconfigurationException if the algorithm is not supported
+     */
+    public UndertowComponent enableDigestFields(String algorithm) {
+        if (!DigestFieldsUtils.SUPPORTED_ALGORITHMS.contains(algorithm)) {
+            throw new MisconfigurationException("web.DIGEST_ALGORITHM_UNSUPPORTED", algorithm);
+        }
+        this.digestAlgorithm = algorithm;
+        return this;
     }
 
     @Override

@@ -1,7 +1,9 @@
 package enkan.adapter;
 
+import enkan.adapter.digest.DigestOuterHandler;
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
+import enkan.web.util.DigestFieldsUtils;
 import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
@@ -121,6 +123,9 @@ public class UndertowAdapter {
     public UndertowServer runUndertow(WebApplication application, OptionMap options) {
         Undertow.Builder builder = Undertow.builder();
 
+        String digestAlgorithm = options.getString("digestAlgorithm");
+        boolean compress = options.getBoolean("compress?", false);
+
         HttpHandler appHandler = new HttpHandler() {
             @Override
             public void handleRequest(HttpServerExchange exchange) throws Exception {
@@ -128,6 +133,29 @@ public class UndertowAdapter {
                     exchange.dispatch(this);
                     return;
                 }
+
+                // Register ReprDigest conduit inside appHandler (outermost/app-side)
+                // so it observes pre-compression bytes.
+                // When compression is disabled, also compute Content-Digest here.
+                if (digestAlgorithm != null) {
+                    String wantRepr = exchange.getRequestHeaders().getFirst("Want-Repr-Digest");
+                    String reprAlgo = DigestFieldsUtils.negotiateAlgorithm(wantRepr, digestAlgorithm);
+                    if (reprAlgo != null) {
+                        final String algo = reprAlgo;
+                        exchange.addResponseWrapper((factory, ex) ->
+                                new enkan.adapter.digest.DigestConduit(factory.create(), ex, algo, "Repr-Digest"));
+                    }
+                    if (!compress) {
+                        String wantContent = exchange.getRequestHeaders().getFirst("Want-Content-Digest");
+                        String contentAlgo = DigestFieldsUtils.negotiateAlgorithm(wantContent, digestAlgorithm);
+                        if (contentAlgo != null) {
+                            final String algo = contentAlgo;
+                            exchange.addResponseWrapper((factory, ex) ->
+                                    new enkan.adapter.digest.DigestConduit(factory.create(), ex, algo, "Content-Digest"));
+                        }
+                    }
+                }
+
                 HttpRequest request = application.createRequest();
                 request.setRequestMethod(exchange.getRequestMethod().toString());
                 request.setUri(exchange.getRequestURI());
@@ -164,11 +192,18 @@ public class UndertowAdapter {
             }
         };
 
-        HttpHandler finalHandler = options.getBoolean("compress?", false)
-                ? new EncodingHandler(appHandler,
-                        new ContentEncodingRepository()
-                                .addEncodingHandler("gzip", new GzipEncodingProvider(), 50))
-                : appHandler;
+        HttpHandler finalHandler;
+        if (compress) {
+            HttpHandler encodingHandler = new EncodingHandler(appHandler,
+                    new ContentEncodingRepository()
+                            .addEncodingHandler("gzip", new GzipEncodingProvider(), 50));
+            // DigestOuterHandler wraps EncodingHandler to observe post-compression bytes
+            finalHandler = digestAlgorithm != null
+                    ? new DigestOuterHandler(encodingHandler, digestAlgorithm)
+                    : encodingHandler;
+        } else {
+            finalHandler = appHandler;
+        }
 
         GracefulShutdownHandler shutdownHandler = new GracefulShutdownHandler(finalHandler);
         builder.setHandler(shutdownHandler);

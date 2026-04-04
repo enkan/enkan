@@ -1,0 +1,120 @@
+package enkan.adapter.digest;
+
+import enkan.web.util.DigestFieldsUtils;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.util.HttpString;
+import org.xnio.conduits.AbstractStreamSinkConduit;
+import org.xnio.conduits.StreamSinkConduit;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+
+/**
+ * XNIO {@link StreamSinkConduit} that buffers the response body, computes a
+ * digest, sets the specified response header, then forwards all buffered bytes
+ * to the underlying conduit in one terminal write.
+ *
+ * <p>Used by the Undertow digest support for both {@code Repr-Digest} (placed
+ * after the application, before any compression conduit) and {@code Content-Digest}
+ * (placed before the compression conduit, so it observes the compressed bytes).
+ *
+ * @author kawasima
+ */
+public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> {
+
+    private static final HttpString REPR_DIGEST    = HttpString.tryFromString("Repr-Digest");
+    private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
+
+    private final HttpServerExchange exchange;
+    private final String algorithm;
+    private final String headerName;
+    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream(4096);
+
+    /**
+     * @param next      the underlying conduit
+     * @param exchange  the in-flight HTTP exchange (used to set response headers)
+     * @param algorithm the SF algorithm name ({@code "sha-256"} or {@code "sha-512"})
+     * @param headerName the response header to set (e.g. {@code "Repr-Digest"} or {@code "Content-Digest"})
+     */
+    public DigestConduit(StreamSinkConduit next, HttpServerExchange exchange, String algorithm, String headerName) {
+        super(next);
+        this.exchange = exchange;
+        this.algorithm = algorithm;
+        this.headerName = headerName;
+    }
+
+    // -------------------------------------------------------------------------
+    // Intercept all writes — buffer without forwarding
+    // -------------------------------------------------------------------------
+
+    @Override
+    public int write(ByteBuffer src) throws IOException {
+        int remaining = src.remaining();
+        byte[] bytes = new byte[remaining];
+        src.get(bytes);
+        buffer.write(bytes, 0, bytes.length);
+        return remaining;
+    }
+
+    @Override
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+        long total = 0;
+        for (int i = offset; i < offset + length; i++) {
+            total += write(srcs[i]);
+        }
+        return total;
+    }
+
+    @Override
+    public int writeFinal(ByteBuffer src) throws IOException {
+        return write(src);
+    }
+
+    @Override
+    public long writeFinal(ByteBuffer[] srcs, int offset, int length) throws IOException {
+        return write(srcs, offset, length);
+    }
+
+    @Override
+    public long transferFrom(FileChannel src, long position, long count) throws IOException {
+        // For file transfers, read into a buffer first
+        ByteBuffer buf = ByteBuffer.allocate((int) Math.min(count, 65536));
+        long transferred = 0;
+        while (transferred < count) {
+            buf.clear();
+            int read = src.read(buf, position + transferred);
+            if (read <= 0) break;
+            buf.flip();
+            transferred += write(buf);
+        }
+        return transferred;
+    }
+
+    // -------------------------------------------------------------------------
+    // On terminateWrites: compute digest, set header, flush, terminate
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void terminateWrites() throws IOException {
+        byte[] allBytes = buffer.toByteArray();
+        String digestValue = DigestFieldsUtils.computeDigestHeader(allBytes, algorithm);
+
+        HttpString header = switch (headerName) {
+            case "Repr-Digest"    -> REPR_DIGEST;
+            case "Content-Digest" -> CONTENT_DIGEST;
+            default -> HttpString.tryFromString(headerName);
+        };
+        exchange.getResponseHeaders().put(header, digestValue);
+
+        // Write all buffered bytes to the underlying conduit, then terminate
+        if (allBytes.length > 0) {
+            ByteBuffer buf = ByteBuffer.wrap(allBytes);
+            while (buf.hasRemaining()) {
+                super.write(buf);
+            }
+        }
+        super.terminateWrites();
+    }
+}
