@@ -18,10 +18,19 @@ import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static java.lang.constant.ConstantDescs.*;
 
@@ -66,6 +75,7 @@ public class KotowariFeature implements Feature {
         }
 
         registerControllerReflection(access, entries);
+        registerServiceLoaderImpls(access);
         pregenerateMixinClasses(access);
 
         byte[] dispatcherBytes = generateDispatcher(entries);
@@ -221,6 +231,82 @@ public class KotowariFeature implements Feature {
                 RuntimeReflection.registerAllFields(t);
                 RuntimeReflection.registerAllMethods(t);
             }
+        }
+    }
+
+    private void registerServiceLoaderImpls(BeforeAnalysisAccess access) {
+        for (Class<?> cls : discoverServiceLoaderClasses(
+                access.getApplicationClassPath(),
+                access.getApplicationClassLoader())) {
+            if (shouldSkipType(cls)) continue;
+            RuntimeReflection.register(cls);
+            RuntimeReflection.registerAllConstructors(cls);
+            RuntimeReflection.registerAllDeclaredFields(cls);
+            RuntimeReflection.registerAllDeclaredMethods(cls);
+            System.out.println("[KotowariFeature] Registered SPI impl: " + cls.getName());
+        }
+    }
+
+    /**
+     * Scans each classpath entry for {@code META-INF/services/<name>} files,
+     * reads each implementation class name, and returns all resolved classes.
+     * Framework and JDK filtering is left to the caller.
+     * Unresolvable class names are silently skipped.
+     */
+    List<Class<?>> discoverServiceLoaderClasses(List<Path> classPath, ClassLoader cl) {
+        List<Class<?>> result = new ArrayList<>();
+        for (Path entry : classPath) {
+            try {
+                if (Files.isDirectory(entry)) {
+                    Path servicesDir = entry.resolve("META-INF/services");
+                    if (!Files.isDirectory(servicesDir)) continue;
+                    try (Stream<Path> files = Files.list(servicesDir)) {
+                        files.filter(Files::isRegularFile)
+                             .forEach(f -> parseServiceFile(f, cl, result));
+                    }
+                } else {
+                    boolean openedHere = false;
+                    FileSystem fs;
+                    URI jarUri = URI.create("jar:" + entry.toUri());
+                    try {
+                        fs = FileSystems.newFileSystem(entry);
+                        openedHere = true;
+                    } catch (FileSystemAlreadyExistsException e) {
+                        fs = FileSystems.getFileSystem(jarUri);
+                    }
+                    try {
+                        Path servicesDir = fs.getPath("META-INF/services");
+                        if (Files.isDirectory(servicesDir)) {
+                            try (Stream<Path> files = Files.list(servicesDir)) {
+                                // Scan only root-level service files;
+                                // skip multi-release JAR subdirs (META-INF/versions/N/...)
+                                files.filter(Files::isRegularFile)
+                                     .forEach(f -> parseServiceFile(f, cl, result));
+                            }
+                        }
+                    } finally {
+                        if (openedHere) fs.close();
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("[KotowariFeature] Skipping classpath entry "
+                        + entry + ": " + e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    private void parseServiceFile(Path file, ClassLoader cl, List<Class<?>> result) {
+        try {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                line = line.strip();
+                if (line.isEmpty() || line.startsWith("#")) continue;
+                try {
+                    result.add(Class.forName(line, false, cl));
+                } catch (ClassNotFoundException ignored) {}
+            }
+        } catch (IOException e) {
+            System.err.println("[KotowariFeature] Could not read " + file + ": " + e.getMessage());
         }
     }
 

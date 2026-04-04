@@ -19,6 +19,8 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.constant.ConstantDescs.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KotowariFeatureTest {
@@ -330,5 +333,41 @@ class KotowariFeatureTest {
         assertThat(request)
                 .as("Expected app.createRequest() to return a request implementing WebSessionAvailable")
                 .isInstanceOf(WebSessionAvailable.class);
+    }
+
+    @Test
+    void discoverServiceLoaderClasses_findsImplFromDirectoryEntry() throws Exception {
+        Path tmpDir = Files.createTempDirectory("spi-dir-test");
+        Path svcDir = tmpDir.resolve("META-INF/services");
+        Files.createDirectories(svcDir);
+        // Use an app-package class (not enkan/kotowari) so shouldSkipType does not filter it out
+        Files.writeString(
+                svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
+                SimpleForm.class.getName());
+
+        URLClassLoader cl = new URLClassLoader(
+                new URL[]{tmpDir.toUri().toURL()}, getClass().getClassLoader());
+
+        List<Class<?>> found = feature.discoverServiceLoaderClasses(List.of(tmpDir), cl);
+
+        assertThat(found).contains(SimpleForm.class);
+        cl.close();
+    }
+
+    @Test
+    void discoverServiceLoaderClasses_ignoresMissingClass() throws Exception {
+        Path tmpDir = Files.createTempDirectory("spi-missing-test");
+        Path svcDir = tmpDir.resolve("META-INF/services");
+        Files.createDirectories(svcDir);
+        Files.writeString(
+                svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
+                "com.example.DoesNotExist");
+
+        URLClassLoader cl = new URLClassLoader(
+                new URL[]{tmpDir.toUri().toURL()}, getClass().getClassLoader());
+
+        assertThatCode(() -> feature.discoverServiceLoaderClasses(List.of(tmpDir), cl))
+                .doesNotThrowAnyException();
+        cl.close();
     }
 }
