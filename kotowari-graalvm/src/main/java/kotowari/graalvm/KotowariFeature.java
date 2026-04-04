@@ -251,7 +251,9 @@ public class KotowariFeature implements Feature {
                         collectReachableTypes(f.getGenericType(), result);
                     }
                 } catch (SecurityException e) {
-                    // Module system may deny field access for some types; skip this class
+                    // Module system may deny field access for some types; log and skip
+                    System.err.println("[KotowariFeature] Skipping field scan for "
+                            + current.getName() + ": " + e.getMessage());
                 }
                 current = current.getSuperclass();
             }
