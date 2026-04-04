@@ -196,6 +196,10 @@ public class EnkanSystem {
      * system.start();
      * system.registerCrac();  // opt-in
      * }</pre>
+     *
+     * <p>This method is idempotent — calling it more than once on the same instance
+     * has no effect. Re-registration is not necessary after a checkpoint/restore cycle;
+     * the same registration remains active for the lifetime of this instance.
      */
     public void registerCrac() {
         registerCrac(Core.getGlobalContext());

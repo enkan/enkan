@@ -137,4 +137,15 @@ class EnkanSystemCRaCTest {
         assertThat(stopCount).isEqualTo(2);
         assertThat(startCount).isEqualTo(3); // initial + 2 restores
     }
+
+    @Test
+    void registerCracIsIdempotent() {
+        system.start();
+        system.registerCrac(cracCtx);
+        system.registerCrac(cracCtx);  // second call must be ignored
+
+        cracCtx.checkpoint();
+
+        assertThat(comp.calls.stream().filter("stop"::equals).count()).isEqualTo(1);
+    }
 }
