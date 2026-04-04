@@ -178,6 +178,48 @@ public class EnkanSystem {
     }
 
     /**
+     * Registers this system with the CRaC global context so that
+     * {@link #stop()} is called before a checkpoint and {@link #start()}
+     * is called after restore.
+     *
+     * <p>This method is a no-op on JVMs that do not support CRaC
+     * (the {@code org.crac} portability shim absorbs the call silently).
+     *
+     * <p>Call this once, after {@link #start()}, in your application entry point:
+     * <pre>{@code
+     * system.start();
+     * system.registerCrac();  // opt-in
+     * }</pre>
+     */
+    public void registerCrac() {
+        registerCrac(org.crac.Core.getGlobalContext());
+    }
+
+    /**
+     * Registers this system with the given CRaC context.
+     * Intended for testing; production code should use {@link #registerCrac()}.
+     *
+     * @param context the CRaC context to register with
+     */
+    public void registerCrac(org.crac.Context<org.crac.Resource> context) {
+        context.register(new org.crac.Resource() {
+            @Override
+            public void beforeCheckpoint(org.crac.Context<? extends org.crac.Resource> ctx) {
+                if (isStarted()) {
+                    stop();
+                }
+            }
+
+            @Override
+            public void afterRestore(org.crac.Context<? extends org.crac.Resource> ctx) {
+                if (!isStarted()) {
+                    start();
+                }
+            }
+        });
+    }
+
+    /**
      * Stop all components
      */
     public void stop() {
