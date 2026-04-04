@@ -11,11 +11,17 @@ import java.lang.classfile.CodeBuilder;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import static java.lang.constant.ConstantDescs.*;
 
@@ -179,9 +185,118 @@ public class KotowariFeature implements Feature {
             RuntimeReflection.registerAllConstructors(ctrl);
             // Register @Inject fields and @PostConstruct methods so ComponentInjector
             // can wire the controller instance in native mode.
+            // registerAllMethods covers inherited public methods (e.g. from a base controller),
+            // which registerAllDeclaredMethods alone would miss.
             RuntimeReflection.registerAllDeclaredFields(ctrl);
             RuntimeReflection.registerAllDeclaredMethods(ctrl);
+            RuntimeReflection.registerAllMethods(ctrl);
+
+            // Auto-register parameter types and return types of all public methods
+            // so Jackson can deserialize request bodies and serialize responses without
+            // manual reflect-config entries. Generic type arguments (e.g. List<Customer>)
+            // are also traversed to catch container return types.
+            // getMethods() includes inherited public methods; getDeclaredMethods() would miss
+            // action methods defined in a controller superclass.
+            Set<Class<?>> appTypes = new LinkedHashSet<>();
+            for (Method m : ctrl.getMethods()) {
+                // Skip Object methods and methods declared in framework types —
+                // their parameter/return types are either primitives, java.* or framework
+                // internals that shouldSkipType() already filters out, but skipping early
+                // avoids unnecessary traversal.
+                Class<?> declaring = m.getDeclaringClass();
+                if (declaring == Object.class || shouldSkipType(declaring)) continue;
+                for (Type t : m.getGenericParameterTypes()) {
+                    collectReachableTypes(t, appTypes);
+                }
+                collectReachableTypes(m.getGenericReturnType(), appTypes);
+            }
+            for (Class<?> t : appTypes) {
+                RuntimeReflection.register(t);
+                RuntimeReflection.registerAllConstructors(t);
+                // registerAllFields/Methods covers inherited members from superclasses,
+                // which registerAllDeclared* alone would miss (e.g. getter/setter in BaseForm).
+                RuntimeReflection.registerAllFields(t);
+                RuntimeReflection.registerAllMethods(t);
+            }
         }
+    }
+
+    /**
+     * Collects types reachable from {@code type} that need manual reflection registration
+     * (i.e. application classes not covered by GraalVM's built-in analysis).
+     *
+     * <p>Handles raw classes, arrays, parameterized types (e.g. {@code List<Customer>}),
+     * and wildcard bounds. Recursively traverses declared field types to handle nested
+     * objects (e.g. embedded DTOs). Cycles are prevented by the {@code result} set: once
+     * a type is added it is not visited again, so traversal terminates even for
+     * mutually-referential types.
+     */
+    void collectReachableTypes(Type type, Set<Class<?>> result) {
+        if (type instanceof Class<?> cls) {
+            if (cls.isPrimitive() || cls == void.class) return;
+            if (cls.isArray()) {
+                collectReachableTypes(cls.getComponentType(), result);
+                return;
+            }
+            if (shouldSkipType(cls)) return;
+            if (!result.add(cls)) return; // already seen, avoid cycles
+            // Traverse declared fields of cls and all superclasses so that field types
+            // in a base class (e.g. BaseForm) are also collected. Each superclass that
+            // passes shouldSkipType is also added to result so it gets reflection-registered.
+            Class<?> current = cls;
+            while (current != null && current != Object.class && !shouldSkipType(current)) {
+                result.add(current); // add(current) is a no-op if already present (cycle guard)
+                try {
+                    for (Field f : current.getDeclaredFields()) {
+                        collectReachableTypes(f.getGenericType(), result);
+                    }
+                } catch (SecurityException e) {
+                    // Module system may deny field access for some types; log and skip
+                    System.err.println("[KotowariFeature] Skipping field scan for "
+                            + current.getName() + ": " + e.getMessage());
+                }
+                current = current.getSuperclass();
+            }
+        } else if (type instanceof ParameterizedType pt) {
+            collectReachableTypes(pt.getRawType(), result);
+            for (Type arg : pt.getActualTypeArguments()) {
+                collectReachableTypes(arg, result);
+            }
+        } else if (type instanceof WildcardType wt) {
+            for (Type b : wt.getUpperBounds()) collectReachableTypes(b, result);
+            for (Type b : wt.getLowerBounds()) collectReachableTypes(b, result);
+        }
+        // TypeVariable: skip — resolved only at runtime
+    }
+
+    /**
+     * Returns {@code true} for types that do not need manual reflection registration:
+     * JDK types, framework types (enkan.* and known kotowari framework sub-packages).
+     *
+     * <p>Note: only specific kotowari framework sub-packages are listed here rather than
+     * the entire {@code kotowari.} namespace, so that application types under
+     * {@code kotowari.example.*} or similar are correctly auto-registered. If new
+     * framework sub-packages are added to kotowari they must be listed here explicitly.
+     */
+    static boolean shouldSkipType(Class<?> type) {
+        String name = type.getName();
+        return name.startsWith("java.")
+            || name.startsWith("javax.")
+            || name.startsWith("jakarta.")
+            || name.startsWith("jdk.")
+            || name.startsWith("sun.")
+            || name.startsWith("com.sun.")
+            || name.startsWith("enkan.")
+            || name.startsWith("kotowari.graalvm.")
+            || name.startsWith("kotowari.routing.")
+            || name.startsWith("kotowari.middleware.")
+            || name.startsWith("kotowari.inject.")
+            || name.startsWith("kotowari.data.")
+            || name.startsWith("kotowari.component.")
+            || name.startsWith("kotowari.io.")
+            || name.startsWith("kotowari.scope.")
+            || name.startsWith("kotowari.system.")
+            || name.startsWith("kotowari.util.");
     }
 
     /**

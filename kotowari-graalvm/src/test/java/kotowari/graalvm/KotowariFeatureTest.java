@@ -1,6 +1,9 @@
 package kotowari.graalvm;
 
 import enkan.application.WebApplication;
+import app.example.Address;
+import app.example.BaseForm;
+import app.example.SimpleForm;
 import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
 import enkan.data.WebSessionAvailable;
@@ -13,7 +16,10 @@ import java.lang.classfile.ClassFile;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Method;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.constant.ConstantDescs.*;
@@ -223,6 +229,58 @@ class KotowariFeatureTest {
                         new SimpleController(), new Object[0]);
 
         assertThat(result).isEqualTo("index");
+    }
+
+    // --- collectReachableTypes ---
+
+    @Test
+    void collectReachableTypes_includesAppClassAndFieldTypesTransitively() {
+        // SimpleForm extends BaseForm which has an Address field —
+        // Address must be collected by traversing the superclass chain
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(SimpleForm.class, result);
+        assertThat(result).contains(SimpleForm.class, BaseForm.class, Address.class);
+    }
+
+    @Test
+    void collectReachableTypes_traversesGenericTypeArguments() throws Exception {
+        // listAddresses() returns List<Address> — Address must be collected via generic arg
+        Method m = SimpleController.class.getMethod("listAddresses");
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(m.getGenericReturnType(), result);
+        assertThat(result).contains(Address.class);
+    }
+
+    @Test
+    void collectReachableTypes_excludesEnkanFrameworkTypes() {
+        // DefaultHttpRequest is in enkan.* — must be excluded
+        Set<Class<?>> result = new LinkedHashSet<>();
+        feature.collectReachableTypes(DefaultHttpRequest.class, result);
+        assertThat(result).doesNotContain(DefaultHttpRequest.class);
+    }
+
+    // --- shouldSkipType ---
+
+    @Test
+    void shouldSkipType_skipsJdkPrefix() {
+        // Use a stable public jdk.* type to verify the jdk. filter
+        assertThat(KotowariFeature.shouldSkipType(jdk.net.ExtendedSocketOptions.class)).isTrue();
+    }
+
+    @Test
+    void shouldSkipType_skipsKotowariFrameworkPackages() {
+        // All kotowari framework sub-packages must be skipped
+        assertThat(KotowariFeature.shouldSkipType(kotowari.routing.Routes.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(KotowariFeature.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(kotowari.middleware.RoutingMiddleware.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(kotowari.data.Validatable.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(kotowari.util.ParameterUtils.class)).isTrue();
+    }
+
+    @Test
+    void shouldSkipType_doesNotSkipAppClass() {
+        // app.example.* is an application package — must NOT be skipped
+        assertThat(KotowariFeature.shouldSkipType(SimpleForm.class)).isFalse();
     }
 
     // --- mixin pre-generation ---
