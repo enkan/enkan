@@ -2,6 +2,7 @@ package enkan.component.jetty;
 
 import enkan.adapter.JettyAdapter;
 import enkan.web.application.WebApplication;
+import enkan.web.util.DigestFieldsUtils;
 import enkan.collection.OptionMap;
 import enkan.component.ApplicationComponent;
 import enkan.component.ComponentLifecycle;
@@ -33,6 +34,7 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
     private boolean virtualThreads = true;
     private volatile boolean stopping = false;
     private final Map<String, WebSocketHandler> wsHandlers = new LinkedHashMap<>();
+    private String digestAlgorithm = null;
 
     @Override
     protected ComponentLifecycle<JettyComponent> lifecycle() {
@@ -50,6 +52,7 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
                         throw new MisconfigurationException("web.APPLICATION_NOT_WEB");
                     }
                     options.put("wsHandlers", Map.copyOf(wsHandlers));
+                    if (digestAlgorithm != null) options.put("digestAlgorithm", digestAlgorithm);
                     server = new JettyAdapter().runJetty(webApp, options);
                 }
             }
@@ -137,6 +140,35 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
             throw new MisconfigurationException("web.WEBSOCKET_MUST_REGISTER_BEFORE_START", path);
         }
         wsHandlers.put(path, handler);
+        return this;
+    }
+
+    /**
+     * Enables RFC 9530 Digest Fields generation on responses.
+     *
+     * <p>Must be called before the component is started.
+     * Registers a {@code DigestFilter} (inside the servlet context, for {@code Repr-Digest})
+     * and, when compression is also enabled, a {@code ContentDigestHandler}
+     * (outside {@code CompressionHandler}, for {@code Content-Digest}).
+     *
+     * <p>Example:
+     * <pre>{@code
+     * new JettyComponent()
+     *     .enableDigestFields("sha-256")
+     * }</pre>
+     *
+     * @param algorithm the default SF algorithm name ({@code "sha-256"} or {@code "sha-512"})
+     * @return {@code this} for chaining
+     * @throws MisconfigurationException if the algorithm is not supported
+     */
+    public JettyComponent enableDigestFields(String algorithm) {
+        if (!DigestFieldsUtils.SUPPORTED_ALGORITHMS.contains(algorithm)) {
+            throw new MisconfigurationException("web.DIGEST_ALGORITHM_UNSUPPORTED", algorithm);
+        }
+        if (server != null) {
+            throw new MisconfigurationException("jetty.DIGEST_FIELDS_MUST_ENABLE_BEFORE_START", algorithm);
+        }
+        this.digestAlgorithm = algorithm;
         return this;
     }
 

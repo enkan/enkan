@@ -170,12 +170,35 @@ public class JettyAdapter {
             });
         }
 
-        if (options.getBoolean("compress?", false)) {
+        String digestAlgorithm = options.getString("digestAlgorithm");
+        boolean compress = options.getBoolean("compress?", false);
+
+        if (digestAlgorithm != null) {
+            // Register DigestFilter inside the servlet context (observes pre-compression bytes)
+            // so it can compute Repr-Digest (and Content-Digest when there is no compression).
+            var filterHolder = new org.eclipse.jetty.ee10.servlet.FilterHolder(
+                    new enkan.adapter.digest.DigestFilter());
+            filterHolder.setInitParameter(enkan.adapter.digest.DigestFilter.PARAM_ALGORITHM, digestAlgorithm);
+            filterHolder.setInitParameter(enkan.adapter.digest.DigestFilter.PARAM_COMPRESSED,
+                    String.valueOf(compress));
+            contextHandler.addFilter(filterHolder, "/*",
+                    java.util.EnumSet.of(jakarta.servlet.DispatcherType.REQUEST));
+        }
+
+        if (compress) {
             GzipCompression gzip = new GzipCompression();
             gzip.setMinCompressSize(options.getInt("compressMinSize", 1024));
             CompressionHandler compressionHandler = new CompressionHandler(contextHandler);
             compressionHandler.putCompression(gzip);
-            server.setHandler(compressionHandler);
+
+            if (digestAlgorithm != null) {
+                // Wrap CompressionHandler with ContentDigestHandler (observes post-compression bytes)
+                var contentDigestHandler = new enkan.adapter.digest.ContentDigestHandler(digestAlgorithm);
+                contentDigestHandler.setHandler(compressionHandler);
+                server.setHandler(contentDigestHandler);
+            } else {
+                server.setHandler(compressionHandler);
+            }
         } else {
             server.setHandler(contextHandler);
         }

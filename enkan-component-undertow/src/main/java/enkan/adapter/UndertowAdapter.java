@@ -1,7 +1,11 @@
 package enkan.adapter;
 
+import enkan.adapter.digest.CombinedDigestConduit;
+import enkan.adapter.digest.DigestConduit;
+import enkan.adapter.digest.DigestOuterHandler;
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
+import enkan.web.util.DigestFieldsUtils;
 import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
@@ -43,6 +47,7 @@ import java.security.*;
  */
 public class UndertowAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(UndertowAdapter.class);
+    private static final HttpString REPR_DIGEST = HttpString.tryFromString("Repr-Digest");
 
     public record UndertowServer(Undertow undertow, GracefulShutdownHandler shutdownHandler) {}
 
@@ -121,6 +126,9 @@ public class UndertowAdapter {
     public UndertowServer runUndertow(WebApplication application, OptionMap options) {
         Undertow.Builder builder = Undertow.builder();
 
+        String digestAlgorithm = options.getString("digestAlgorithm");
+        boolean compress = options.getBoolean("compress?", false);
+
         HttpHandler appHandler = new HttpHandler() {
             @Override
             public void handleRequest(HttpServerExchange exchange) throws Exception {
@@ -128,6 +136,33 @@ public class UndertowAdapter {
                     exchange.dispatch(this);
                     return;
                 }
+
+                // Register digest conduit(s) inside appHandler so they observe pre-compression bytes.
+                if (digestAlgorithm != null) {
+                    String wantRepr = exchange.getRequestHeaders().getFirst("Want-Repr-Digest");
+                    String reprAlgo = DigestFieldsUtils.negotiateAlgorithm(wantRepr, digestAlgorithm);
+
+                    if (!compress) {
+                        // No compression: on-wire bytes == representation bytes.
+                        // Use a single CombinedDigestConduit to buffer once and set both headers.
+                        String wantContent = exchange.getRequestHeaders().getFirst("Want-Content-Digest");
+                        String contentAlgo = DigestFieldsUtils.negotiateAlgorithm(wantContent, digestAlgorithm);
+                        if (reprAlgo != null || contentAlgo != null) {
+                            String finalReprAlgo = reprAlgo;
+                            String finalContentAlgo = contentAlgo;
+                            exchange.addResponseWrapper((factory, ex) ->
+                                    new CombinedDigestConduit(factory.create(), ex, finalReprAlgo, finalContentAlgo));
+                        }
+                    } else {
+                        // Compression enabled: only Repr-Digest is set here (pre-compression bytes).
+                        // Content-Digest (post-compression bytes) is handled by DigestOuterHandler.
+                        if (reprAlgo != null) {
+                            exchange.addResponseWrapper((factory, ex) ->
+                                    new DigestConduit(factory.create(), ex, reprAlgo, REPR_DIGEST));
+                        }
+                    }
+                }
+
                 HttpRequest request = application.createRequest();
                 request.setRequestMethod(exchange.getRequestMethod().toString());
                 request.setUri(exchange.getRequestURI());
@@ -164,11 +199,18 @@ public class UndertowAdapter {
             }
         };
 
-        HttpHandler finalHandler = options.getBoolean("compress?", false)
-                ? new EncodingHandler(appHandler,
-                        new ContentEncodingRepository()
-                                .addEncodingHandler("gzip", new GzipEncodingProvider(), 50))
-                : appHandler;
+        HttpHandler finalHandler;
+        if (compress) {
+            HttpHandler encodingHandler = new EncodingHandler(appHandler,
+                    new ContentEncodingRepository()
+                            .addEncodingHandler("gzip", new GzipEncodingProvider(), 50));
+            // DigestOuterHandler wraps EncodingHandler to observe post-compression bytes
+            finalHandler = digestAlgorithm != null
+                    ? new DigestOuterHandler(encodingHandler, digestAlgorithm)
+                    : encodingHandler;
+        } else {
+            finalHandler = appHandler;
+        }
 
         GracefulShutdownHandler shutdownHandler = new GracefulShutdownHandler(finalHandler);
         builder.setHandler(shutdownHandler);
