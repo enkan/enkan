@@ -12,11 +12,14 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
+import enkan.web.websocket.WebSocketHandler;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.BiFunction;
 
 /**
@@ -29,6 +32,7 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
     private BiFunction<Server, OptionMap, Connector> serverConnectorFactory;
     private boolean virtualThreads = true;
     private volatile boolean stopping = false;
+    private final Map<String, WebSocketHandler> wsHandlers = new LinkedHashMap<>();
 
     @Override
     protected ComponentLifecycle<JettyComponent> lifecycle() {
@@ -45,6 +49,7 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
                     if (!(app.getApplication() instanceof WebApplication webApp)) {
                         throw new MisconfigurationException("web.APPLICATION_NOT_WEB");
                     }
+                    options.put("wsHandlers", Map.copyOf(wsHandlers));
                     server = new JettyAdapter().runJetty(webApp, options);
                 }
             }
@@ -100,6 +105,39 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
 
     public void setVirtualThreads(boolean virtualThreads) {
         this.virtualThreads = virtualThreads;
+    }
+
+    /**
+     * Registers a WebSocket handler at the given path.
+     *
+     * <p>Must be called before the component is started.
+     * Multiple paths can be registered by chaining calls.
+     *
+     * <p>Example:
+     * <pre>{@code
+     * new JettyComponent()
+     *     .addWebSocket("/ws/chat", new ChatHandler())
+     *     .addWebSocket("/ws/notify", new NotifyHandler())
+     * }</pre>
+     *
+     * @param path    the URL path to serve WebSocket connections on; follows Jetty path-mapping
+     *                syntax — exact match (e.g. {@code /ws/echo}) or wildcard prefix
+     *                (e.g. {@code /ws/*})
+     * @param handler the handler for WebSocket lifecycle events
+     * @return {@code this} for chaining
+     */
+    public JettyComponent addWebSocket(String path, WebSocketHandler handler) {
+        if (path == null || path.isBlank()) {
+            throw new MisconfigurationException("web.WEBSOCKET_PATH_REQUIRED", path);
+        }
+        if (handler == null) {
+            throw new MisconfigurationException("web.WEBSOCKET_HANDLER_REQUIRED", path);
+        }
+        if (server != null) {
+            throw new MisconfigurationException("web.WEBSOCKET_MUST_REGISTER_BEFORE_START", path);
+        }
+        wsHandlers.put(path, handler);
+        return this;
     }
 
     /**
