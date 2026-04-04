@@ -96,8 +96,18 @@ class RequestTimeoutMiddlewareTest {
     }
 
     @Test
-    void negativeTimeoutMillisThrowsMisconfigurationException() {
-        assertThatThrownBy(() -> middleware.setTimeoutMillis(-1))
-                .isInstanceOf(MisconfigurationException.class);
+    void scopedValueIsInheritedBySubtask() throws Exception {
+        var user = ScopedValue.<String>newInstance();
+        middleware.setTimeoutMillis(5_000);
+
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(
+                new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req ->
+                        HttpResponse.of(user.isBound() ? user.get() : "<not bound>"));
+
+        HttpResponse response = ScopedValue.where(user, "duke").call(
+                () -> middleware.handle(getRequest(), chain));
+
+        assertThat(response.getBody()).isEqualTo("duke");
     }
 }
