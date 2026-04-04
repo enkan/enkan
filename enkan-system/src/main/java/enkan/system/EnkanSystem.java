@@ -36,7 +36,7 @@ public class EnkanSystem {
     private final Map<String, SystemComponent<?>> components;
     private final LinkedList<String> componentsOrder;
     private volatile boolean started = false;
-    private volatile boolean cracRegistered = false;
+    private final java.util.concurrent.atomic.AtomicBoolean cracRegistered = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private EnkanSystem() {
         components = new HashMap<>();
@@ -203,25 +203,29 @@ public class EnkanSystem {
      * @param context the CRaC context to register with
      */
     void registerCrac(org.crac.Context<org.crac.Resource> context) {
-        if (cracRegistered) {
+        if (!cracRegistered.compareAndSet(false, true)) {
             return;
         }
-        cracRegistered = true;
-        context.register(new org.crac.Resource() {
-            @Override
-            public void beforeCheckpoint(org.crac.Context<? extends org.crac.Resource> ctx) {
-                if (isStarted()) {
-                    stop();
+        try {
+            context.register(new org.crac.Resource() {
+                @Override
+                public void beforeCheckpoint(org.crac.Context<? extends org.crac.Resource> ctx) {
+                    if (isStarted()) {
+                        stop();
+                    }
                 }
-            }
 
-            @Override
-            public void afterRestore(org.crac.Context<? extends org.crac.Resource> ctx) {
-                if (!isStarted()) {
-                    start();
+                @Override
+                public void afterRestore(org.crac.Context<? extends org.crac.Resource> ctx) {
+                    if (!isStarted()) {
+                        start();
+                    }
                 }
-            }
-        });
+            });
+        } catch (Exception e) {
+            cracRegistered.set(false);
+            throw e;
+        }
     }
 
     /**
