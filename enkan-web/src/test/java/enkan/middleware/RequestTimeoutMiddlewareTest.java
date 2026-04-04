@@ -104,6 +104,27 @@ class RequestTimeoutMiddlewareTest {
     }
 
     @Test
+    void interruptedExceptionPropagatesAsRuntimeException() throws InterruptedException {
+        middleware.setTimeoutMillis(5_000);
+        var latch = new java.util.concurrent.CountDownLatch(1);
+        MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(
+                new AnyPredicate<>(), null,
+                (Endpoint<HttpRequest, HttpResponse>) req -> {
+                    latch.countDown();
+                    try { Thread.sleep(10_000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                    return HttpResponse.of("ok");
+                });
+
+        Thread testThread = Thread.ofVirtual().start(() ->
+                assertThatThrownBy(() -> middleware.handle(getRequest(), chain))
+                        .isInstanceOf(RuntimeException.class)
+                        .hasMessageContaining("interrupted"));
+        latch.await();
+        testThread.interrupt();
+        testThread.join(2_000);
+    }
+
+    @Test
     void nullResponseFromHandlerIsPassedThrough() {
         middleware.setTimeoutMillis(5_000);
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> chain = new DefaultMiddlewareChain<>(

@@ -34,11 +34,11 @@ import static enkan.util.BeanBuilder.builder;
  * </ol>
  *
  * <h2>Preview API requirement</h2>
- * <p>{@link StructuredTaskScope} is a preview API in Java 25. This class is
- * compiled with {@code --enable-preview} as part of the enkan-web build.
- * Applications that reference this class must also be <em>run</em> with
- * {@code --enable-preview}; applications that do not reference it are
- * unaffected.
+ * <p>{@link StructuredTaskScope} is a preview API in Java 25. The enkan-web
+ * module is compiled with {@code --enable-preview}, which marks its class files
+ * as preview. As a result, <em>all</em> applications that load classes from
+ * enkan-web must be run with {@code --enable-preview}, regardless of whether
+ * they use this middleware directly.
  *
  * <h2>Usage</h2>
  * <pre>{@code
@@ -89,7 +89,7 @@ public class RequestTimeoutMiddleware implements WebMiddleware {
             throw new RuntimeException(cause);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return timeoutResponse();
+            throw new RuntimeException("Request processing interrupted", e);
         }
     }
 
