@@ -71,4 +71,22 @@ class JettyComponentTest {
                 .addWebSocket("/ws/b", NOOP_HANDLER);
         assertThat(component).isNotNull();
     }
+
+    @Test
+    void addWebSocketWithNullPathThrowsMisconfiguration() {
+        assertThatThrownBy(() -> new JettyComponent().addWebSocket(null, NOOP_HANDLER))
+                .isInstanceOf(MisconfigurationException.class);
+    }
+
+    @Test
+    void addWebSocketWithBlankPathThrowsMisconfiguration() {
+        assertThatThrownBy(() -> new JettyComponent().addWebSocket("  ", NOOP_HANDLER))
+                .isInstanceOf(MisconfigurationException.class);
+    }
+
+    @Test
+    void addWebSocketWithNullHandlerThrowsMisconfiguration() {
+        assertThatThrownBy(() -> new JettyComponent().addWebSocket("/ws/echo", null))
+                .isInstanceOf(MisconfigurationException.class);
+    }
 }

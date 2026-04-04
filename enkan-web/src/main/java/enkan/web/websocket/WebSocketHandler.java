@@ -67,7 +67,9 @@ public interface WebSocketHandler {
     /**
      * Called when an error occurs on the connection.
      *
-     * <p>The connection will be closed after this callback returns.
+     * <p>The server implementation may close the connection after this callback
+     * returns; however, this is not guaranteed by the interface and may vary
+     * across adapters.
      *
      * @param session the affected session
      * @param cause   the error

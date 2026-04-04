@@ -222,4 +222,30 @@ class JettyWebSocketEndpointTest {
         assertThat(h.errors).hasSize(1);
         assertThat(h.errors.get(0)).isSameAs(sendError);
     }
+
+    // --- onBinary exception handling ----------------------------------------
+
+    @Test
+    void onBinaryHandlerExceptionRoutesToOnErrorAndFailsCallback() {
+        var handlerError = new RuntimeException("onBinary exploded");
+        var throwingHandler = new TrackingHandler() {
+            @Override
+            public void onBinary(WebSocketSession s, java.nio.ByteBuffer d) {
+                throw handlerError;
+            }
+        };
+
+        var ep = new JettyWebSocketEndpoint("ex-id", throwingHandler);
+        ep.onWebSocketOpen(jettySession);
+
+        var callbackFailures = new java.util.ArrayList<Throwable>();
+        Callback recordingCallback = Callback.from(() -> {}, callbackFailures::add);
+
+        ep.onWebSocketBinary(ByteBuffer.wrap(new byte[]{9}), recordingCallback);
+
+        assertThat(throwingHandler.errors).hasSize(1);
+        assertThat(throwingHandler.errors.get(0)).isSameAs(handlerError);
+        assertThat(callbackFailures).hasSize(1);
+        assertThat(callbackFailures.get(0)).isSameAs(handlerError);
+    }
 }

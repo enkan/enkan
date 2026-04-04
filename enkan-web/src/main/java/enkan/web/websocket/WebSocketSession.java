@@ -43,7 +43,13 @@ public interface WebSocketSession {
      * <p>The call is asynchronous; delivery errors are reported
      * via {@link WebSocketHandler#onError(WebSocketSession, Throwable)}.
      *
-     * @param data the binary payload
+     * <p>Implementations must make a defensive copy of the bytes remaining
+     * between {@code data.position()} and {@code data.limit()} before this
+     * method returns, so callers may safely reuse or modify the provided
+     * buffer after the call returns.
+     *
+     * @param data the binary payload; the sent bytes are the remaining bytes
+     *             in the buffer at the time of the call
      */
     void sendBinary(ByteBuffer data);
 

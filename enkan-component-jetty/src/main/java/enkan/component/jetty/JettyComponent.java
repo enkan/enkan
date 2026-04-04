@@ -130,6 +130,12 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
         if (server != null) {
             throw new MisconfigurationException("web.WEBSOCKET_MUST_REGISTER_BEFORE_START", path);
         }
+        if (path == null || path.isBlank()) {
+            throw new MisconfigurationException("web.WEBSOCKET_PATH_REQUIRED", path);
+        }
+        if (handler == null) {
+            throw new MisconfigurationException("web.WEBSOCKET_HANDLER_REQUIRED", path);
+        }
         wsHandlers.put(path, handler);
         return this;
     }
