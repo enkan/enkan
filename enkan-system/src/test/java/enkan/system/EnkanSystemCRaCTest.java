@@ -81,7 +81,7 @@ class EnkanSystemCRaCTest {
     }
 
     @Test
-    void beforeCheckpointStopsStartedSystem() throws Exception {
+    void beforeCheckpointStopsStartedSystem() {
         system.start();
         system.registerCrac(cracCtx);
 
@@ -92,7 +92,7 @@ class EnkanSystemCRaCTest {
     }
 
     @Test
-    void afterRestoreStartsStoppedSystem() throws Exception {
+    void afterRestoreStartsStoppedSystem() {
         system.start();
         system.registerCrac(cracCtx);
 
@@ -104,7 +104,7 @@ class EnkanSystemCRaCTest {
     }
 
     @Test
-    void beforeCheckpointIsNoopWhenAlreadyStopped() throws Exception {
+    void beforeCheckpointIsNoopWhenAlreadyStopped() {
         system.registerCrac(cracCtx);  // not started
 
         cracCtx.checkpoint();
@@ -113,7 +113,7 @@ class EnkanSystemCRaCTest {
     }
 
     @Test
-    void afterRestoreIsNoopWhenAlreadyStarted() throws Exception {
+    void afterRestoreIsNoopWhenAlreadyStarted() {
         system.start();
         system.registerCrac(cracCtx);
 
@@ -123,7 +123,7 @@ class EnkanSystemCRaCTest {
     }
 
     @Test
-    void multipleCheckpointRestoreCyclesWork() throws Exception {
+    void multipleCheckpointRestoreCyclesWork() {
         system.start();
         system.registerCrac(cracCtx);
 

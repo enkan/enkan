@@ -36,6 +36,7 @@ public class EnkanSystem {
     private final Map<String, SystemComponent<?>> components;
     private final LinkedList<String> componentsOrder;
     private volatile boolean started = false;
+    private volatile boolean cracRegistered = false;
 
     private EnkanSystem() {
         components = new HashMap<>();
@@ -201,7 +202,11 @@ public class EnkanSystem {
      *
      * @param context the CRaC context to register with
      */
-    public void registerCrac(org.crac.Context<org.crac.Resource> context) {
+    void registerCrac(org.crac.Context<org.crac.Resource> context) {
+        if (cracRegistered) {
+            return;
+        }
+        cracRegistered = true;
         context.register(new org.crac.Resource() {
             @Override
             public void beforeCheckpoint(org.crac.Context<? extends org.crac.Resource> ctx) {
