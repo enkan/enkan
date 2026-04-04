@@ -279,24 +279,30 @@ public class KotowariFeature implements Feature {
      * framework sub-packages are added to kotowari they must be listed here explicitly.
      */
     static boolean shouldSkipType(Class<?> type) {
+        Module m = type.getModule();
+        if (m.isNamed()) {
+            // Named module: skip JDK, Jakarta EE, Enkan and Kotowari framework modules.
+            // Any new enkan.* or kotowari.* module is automatically covered without
+            // having to update this method.
+            String moduleName = m.getName();
+            return moduleName.startsWith("java.")
+                || moduleName.startsWith("jdk.")
+                || moduleName.startsWith("sun.")
+                || moduleName.startsWith("enkan.")
+                || moduleName.startsWith("kotowari")  // covers "kotowari" and "kotowari.*"
+                || moduleName.startsWith("jakarta.")
+                || moduleName.startsWith("org.slf4j")
+                || moduleName.startsWith("org.graalvm");
+        }
+        // Unnamed module (classpath): fall back to package-prefix check for
+        // well-known JDK and Jakarta namespaces that are not yet named modules.
         String name = type.getName();
         return name.startsWith("java.")
             || name.startsWith("javax.")
             || name.startsWith("jakarta.")
             || name.startsWith("jdk.")
             || name.startsWith("sun.")
-            || name.startsWith("com.sun.")
-            || name.startsWith("enkan.")
-            || name.startsWith("kotowari.graalvm.")
-            || name.startsWith("kotowari.routing.")
-            || name.startsWith("kotowari.middleware.")
-            || name.startsWith("kotowari.inject.")
-            || name.startsWith("kotowari.data.")
-            || name.startsWith("kotowari.component.")
-            || name.startsWith("kotowari.io.")
-            || name.startsWith("kotowari.scope.")
-            || name.startsWith("kotowari.system.")
-            || name.startsWith("kotowari.util.");
+            || name.startsWith("com.sun.");
     }
 
     /**
