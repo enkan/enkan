@@ -1,4 +1,4 @@
-package enkan.adapter.digest;
+package enkan.component.undertow.digest;
 
 import enkan.web.util.DigestFieldsUtils;
 import io.undertow.server.HttpHandler;

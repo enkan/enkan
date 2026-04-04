@@ -1,4 +1,4 @@
-package enkan.adapter.websocket;
+package enkan.component.jetty.websocket;
 
 import enkan.web.websocket.WebSocketHandler;
 import org.eclipse.jetty.ee10.websocket.server.JettyWebSocketCreator;

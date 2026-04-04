@@ -1,7 +1,5 @@
 package enkan.component.undertow;
 
-import enkan.adapter.UndertowAdapter;
-import enkan.adapter.UndertowAdapter.UndertowServer;
 import enkan.web.application.WebApplication;
 import enkan.web.util.DigestFieldsUtils;
 import enkan.collection.OptionMap;
@@ -20,7 +18,7 @@ import org.slf4j.LoggerFactory;
 public class UndertowComponent extends WebServerComponent<UndertowComponent> implements HealthCheckable {
     private static final Logger LOG = LoggerFactory.getLogger(UndertowComponent.class);
 
-    private UndertowServer server;
+    private UndertowAdapter.UndertowServer server;
     private volatile boolean starting = false;
     private volatile boolean stopping = false;
     private String digestAlgorithm = null;

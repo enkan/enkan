@@ -1,4 +1,4 @@
-package enkan.adapter.digest;
+package enkan.component.jetty.digest;
 
 import enkan.web.util.DigestFieldsUtils;
 import org.eclipse.jetty.server.Handler;

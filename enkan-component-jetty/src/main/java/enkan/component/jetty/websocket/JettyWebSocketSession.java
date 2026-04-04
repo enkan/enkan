@@ -1,4 +1,4 @@
-package enkan.adapter.websocket;
+package enkan.component.jetty.websocket;
 
 import enkan.web.websocket.WebSocketHandler;
 import enkan.web.websocket.WebSocketSession;

@@ -1,6 +1,4 @@
-package enkan.adapter;
-
-import enkan.adapter.UndertowAdapter.UndertowServer;
+package enkan.component.undertow;
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
 import enkan.collection.OptionMap;
@@ -51,7 +49,7 @@ class UndertowGracefulShutdownTest {
                 return res;
             }
         });
-        UndertowServer server = new UndertowAdapter().runUndertow(app, options);
+        UndertowAdapter.UndertowServer server = new UndertowAdapter().runUndertow(app, options);
         try {
             // Verify server is working
             HttpURLConnection conn = connect(port, "/");
@@ -92,7 +90,7 @@ class UndertowGracefulShutdownTest {
                 return res;
             }
         });
-        UndertowServer server = new UndertowAdapter().runUndertow(app, options);
+        UndertowAdapter.UndertowServer server = new UndertowAdapter().runUndertow(app, options);
         try {
             // Start a slow request in background
             CompletableFuture<String> response = CompletableFuture.supplyAsync(() -> {

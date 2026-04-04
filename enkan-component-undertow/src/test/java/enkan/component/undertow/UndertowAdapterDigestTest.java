@@ -1,4 +1,4 @@
-package enkan.adapter;
+package enkan.component.undertow;
 
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
@@ -8,7 +8,7 @@ import enkan.web.data.HttpResponse;
 import enkan.web.middleware.WebMiddleware;
 import enkan.util.Predicates;
 import enkan.web.util.DigestFieldsUtils;
-import enkan.adapter.UndertowAdapter.UndertowServer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class UndertowAdapterDigestTest {
 
-    private UndertowServer server;
+    private UndertowAdapter.UndertowServer server;
 
     @AfterEach
     void tearDown() {
@@ -39,7 +39,7 @@ class UndertowAdapterDigestTest {
         try (ServerSocket s = new ServerSocket(0)) { return s.getLocalPort(); }
     }
 
-    private UndertowServer startWith(String body, OptionMap extra) throws IOException {
+    private UndertowAdapter.UndertowServer startWith(String body, OptionMap extra) throws IOException {
         WebApplication app = new WebApplication();
         app.use(Predicates.any(), "handler", new WebMiddleware() {
             @Override

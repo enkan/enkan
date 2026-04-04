@@ -1,4 +1,4 @@
-package enkan.adapter.digest;
+package enkan.component.undertow.digest;
 
 import enkan.web.util.DigestFieldsUtils;
 import io.undertow.server.HttpServerExchange;
@@ -12,37 +12,34 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
 /**
- * XNIO {@link StreamSinkConduit} that buffers the entire response body once and
- * sets both {@code Repr-Digest} and {@code Content-Digest} from the same byte array.
+ * XNIO {@link StreamSinkConduit} that buffers the response body, computes a
+ * digest, sets the specified response header, then forwards all buffered bytes
+ * to the underlying conduit in one terminal write.
  *
- * <p>Used when compression is disabled: in that case the on-wire bytes equal the
- * representation bytes, so both headers can be derived from a single buffering pass,
- * avoiding the double-buffer overhead of stacking two {@link DigestConduit}s.
+ * <p>Used by the Undertow digest support for both {@code Repr-Digest} (placed
+ * after the application, before any compression conduit) and {@code Content-Digest}
+ * (placed before the compression conduit, so it observes the compressed bytes).
  *
  * @author kawasima
  */
-public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> {
-
-    private static final HttpString REPR_DIGEST    = HttpString.tryFromString("Repr-Digest");
-    private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
+public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> {
 
     private final HttpServerExchange exchange;
-    private final String reprAlgorithm;
-    private final String contentAlgorithm;
+    private final String algorithm;
+    private final HttpString header;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream(4096);
 
     /**
-     * @param next             the underlying conduit
-     * @param exchange         the in-flight HTTP exchange
-     * @param reprAlgorithm    algorithm for {@code Repr-Digest}, or {@code null} to omit
-     * @param contentAlgorithm algorithm for {@code Content-Digest}, or {@code null} to omit
+     * @param next       the underlying conduit
+     * @param exchange   the in-flight HTTP exchange (used to set response headers)
+     * @param algorithm  the SF algorithm name ({@code "sha-256"} or {@code "sha-512"})
+     * @param header     the response header to set (e.g. {@code "Repr-Digest"} or {@code "Content-Digest"})
      */
-    public CombinedDigestConduit(StreamSinkConduit next, HttpServerExchange exchange,
-                                 String reprAlgorithm, String contentAlgorithm) {
+    public DigestConduit(StreamSinkConduit next, HttpServerExchange exchange, String algorithm, HttpString header) {
         super(next);
         this.exchange = exchange;
-        this.reprAlgorithm = reprAlgorithm;
-        this.contentAlgorithm = contentAlgorithm;
+        this.algorithm = algorithm;
+        this.header = header;
     }
 
     // -------------------------------------------------------------------------
@@ -72,6 +69,9 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
         return total;
     }
 
+    // writeFinal only buffers the last chunk — terminateWrites() is called separately
+    // by the framework (HttpServerExchange.endExchange). Calling terminateWrites() here
+    // would cause a double-invocation: header set twice and buffered bytes forwarded twice.
     @Override
     public int writeFinal(ByteBuffer src) throws IOException {
         return write(src);
@@ -88,6 +88,8 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
         long transferred = 0;
         while (transferred < count) {
             buf.clear();
+            // Cap the read to the remaining requested bytes so we never buffer
+            // more than count bytes total.
             int maxRead = (int) Math.min(buf.capacity(), count - transferred);
             buf.limit(maxRead);
             int read = src.read(buf, position + transferred);
@@ -99,25 +101,19 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
     }
 
     // -------------------------------------------------------------------------
-    // On terminateWrites: compute digests, set headers, flush, terminate
+    // On terminateWrites: compute digest, set header, flush, terminate
     // -------------------------------------------------------------------------
 
     @Override
     public void terminateWrites() throws IOException {
         byte[] allBytes = buffer.toByteArray();
+        String digestValue = DigestFieldsUtils.computeDigestHeader(allBytes, algorithm);
+        exchange.getResponseHeaders().put(header, digestValue);
 
-        if (reprAlgorithm != null) {
-            exchange.getResponseHeaders().put(REPR_DIGEST,
-                    DigestFieldsUtils.computeDigestHeader(allBytes, reprAlgorithm));
-        }
-        if (contentAlgorithm != null) {
-            // When algorithms are identical, reuse the already-computed header value
-            String contentValue = contentAlgorithm.equals(reprAlgorithm)
-                    ? exchange.getResponseHeaders().getFirst(REPR_DIGEST)
-                    : DigestFieldsUtils.computeDigestHeader(allBytes, contentAlgorithm);
-            exchange.getResponseHeaders().put(CONTENT_DIGEST, contentValue);
-        }
-
+        // Write all buffered bytes to the underlying conduit, then terminate.
+        // The underlying conduit may accept fewer bytes than requested (partial write);
+        // use awaitWritable() to block until space is available rather than breaking early,
+        // which would truncate the response body.
         if (allBytes.length > 0) {
             ByteBuffer buf = ByteBuffer.wrap(allBytes);
             while (buf.hasRemaining()) {
