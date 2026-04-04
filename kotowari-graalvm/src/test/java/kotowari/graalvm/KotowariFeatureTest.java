@@ -19,6 +19,8 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.constant.ConstantDescs.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KotowariFeatureTest {
@@ -330,5 +333,43 @@ class KotowariFeatureTest {
         assertThat(request)
                 .as("Expected app.createRequest() to return a request implementing WebSessionAvailable")
                 .isInstanceOf(WebSessionAvailable.class);
+    }
+
+    @Test
+    void discoverServiceLoaderClasses_findsImplFromDirectoryEntry() throws Exception {
+        Path tmpDir = Files.createTempDirectory("spi-dir-test");
+        Path svcDir = tmpDir.resolve("META-INF/services");
+        Files.createDirectories(svcDir);
+        Files.writeString(
+                svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
+                SimpleForm.class.getName());
+
+        // Load SimpleForm via URLClassLoader with null parent so it lands in the unnamed module,
+        // matching the production scenario where application classes are on the classpath.
+        // SimpleForm is in app.* — not filtered by shouldSkipType().
+        URL classesUrl = SimpleForm.class.getProtectionDomain().getCodeSource().getLocation();
+        try (URLClassLoader cl = new URLClassLoader(new URL[]{classesUrl}, null)) {
+            List<Class<?>> found = feature.discoverServiceLoaderClasses(List.of(tmpDir), cl);
+
+            assertThat(found)
+                    .as("Should discover SimpleForm via META-INF/services directory entry")
+                    .anyMatch(c -> c.getName().equals(SimpleForm.class.getName()));
+        }
+    }
+
+    @Test
+    void discoverServiceLoaderClasses_ignoresMissingClass() throws Exception {
+        Path tmpDir = Files.createTempDirectory("spi-missing-test");
+        Path svcDir = tmpDir.resolve("META-INF/services");
+        Files.createDirectories(svcDir);
+        Files.writeString(
+                svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
+                "com.example.DoesNotExist");
+
+        try (URLClassLoader cl = new URLClassLoader(
+                new URL[]{tmpDir.toUri().toURL()}, getClass().getClassLoader())) {
+            assertThatCode(() -> feature.discoverServiceLoaderClasses(List.of(tmpDir), cl))
+                    .doesNotThrowAnyException();
+        }
     }
 }
