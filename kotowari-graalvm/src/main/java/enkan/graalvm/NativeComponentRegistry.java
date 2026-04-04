@@ -25,4 +25,8 @@ public final class NativeComponentRegistry {
     public static <T> ComponentBinder<T> get(Class<T> componentClass) {
         return (ComponentBinder<T>) BINDERS.get(componentClass);
     }
+
+    public static void unregister(Class<?> componentClass) {
+        BINDERS.remove(componentClass);
+    }
 }
