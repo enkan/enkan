@@ -302,8 +302,13 @@ public class KotowariFeature implements Feature {
     private void parseServiceFile(Path file, ClassLoader cl, List<Class<?>> result) {
         try {
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                // ServiceLoader spec allows inline comments: "com.Foo # note"
+                int commentStart = line.indexOf('#');
+                if (commentStart >= 0) {
+                    line = line.substring(0, commentStart);
+                }
                 line = line.strip();
-                if (line.isEmpty() || line.startsWith("#")) continue;
+                if (line.isEmpty()) continue;
                 try {
                     result.add(Class.forName(line, false, cl));
                 } catch (ClassNotFoundException ignored) {}

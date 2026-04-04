@@ -337,12 +337,6 @@ class KotowariFeatureTest {
 
     @Test
     void discoverServiceLoaderClasses_findsImplFromDirectoryEntry() throws Exception {
-        // Load SimpleForm via URLClassLoader with null parent so it lands in the unnamed module,
-        // matching the production scenario where application classes are on the classpath.
-        // SimpleForm is in app.* — not filtered by shouldSkipType().
-        URL classesUrl = SimpleForm.class.getProtectionDomain().getCodeSource().getLocation();
-        URLClassLoader cl = new URLClassLoader(new URL[]{classesUrl}, null);
-
         Path tmpDir = Files.createTempDirectory("spi-dir-test");
         Path svcDir = tmpDir.resolve("META-INF/services");
         Files.createDirectories(svcDir);
@@ -350,12 +344,17 @@ class KotowariFeatureTest {
                 svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
                 SimpleForm.class.getName());
 
-        List<Class<?>> found = feature.discoverServiceLoaderClasses(List.of(tmpDir), cl);
+        // Load SimpleForm via URLClassLoader with null parent so it lands in the unnamed module,
+        // matching the production scenario where application classes are on the classpath.
+        // SimpleForm is in app.* — not filtered by shouldSkipType().
+        URL classesUrl = SimpleForm.class.getProtectionDomain().getCodeSource().getLocation();
+        try (URLClassLoader cl = new URLClassLoader(new URL[]{classesUrl}, null)) {
+            List<Class<?>> found = feature.discoverServiceLoaderClasses(List.of(tmpDir), cl);
 
-        assertThat(found)
-                .as("Should discover SimpleForm via META-INF/services directory entry")
-                .anyMatch(c -> c.getName().equals(SimpleForm.class.getName()));
-        cl.close();
+            assertThat(found)
+                    .as("Should discover SimpleForm via META-INF/services directory entry")
+                    .anyMatch(c -> c.getName().equals(SimpleForm.class.getName()));
+        }
     }
 
     @Test
@@ -367,11 +366,10 @@ class KotowariFeatureTest {
                 svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
                 "com.example.DoesNotExist");
 
-        URLClassLoader cl = new URLClassLoader(
-                new URL[]{tmpDir.toUri().toURL()}, getClass().getClassLoader());
-
-        assertThatCode(() -> feature.discoverServiceLoaderClasses(List.of(tmpDir), cl))
-                .doesNotThrowAnyException();
-        cl.close();
+        try (URLClassLoader cl = new URLClassLoader(
+                new URL[]{tmpDir.toUri().toURL()}, getClass().getClassLoader())) {
+            assertThatCode(() -> feature.discoverServiceLoaderClasses(List.of(tmpDir), cl))
+                    .doesNotThrowAnyException();
+        }
     }
 }
