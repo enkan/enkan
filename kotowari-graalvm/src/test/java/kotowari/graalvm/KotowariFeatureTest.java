@@ -1,7 +1,11 @@
 package kotowari.graalvm;
 
+import enkan.application.WebApplication;
 import enkan.data.DefaultHttpRequest;
 import enkan.data.HttpRequest;
+import enkan.data.WebSessionAvailable;
+import enkan.middleware.SessionMiddleware;
+import enkan.util.MixinUtils;
 import kotowari.graalvm.controller.SimpleController;
 import kotowari.routing.Routes;
 import org.junit.jupiter.api.Test;
@@ -220,5 +224,29 @@ class KotowariFeatureTest {
                         new SimpleController(), new Object[0]);
 
         assertThat(result).isEqualTo("index");
+    }
+
+    // --- mixin pre-generation ---
+
+    @Test
+    void buildRequestFactory_pregeneratesMixinForSessionMiddleware() throws ClassNotFoundException {
+        WebApplication app = new WebApplication();
+        app.use(new SessionMiddleware());
+
+        // Trigger mixin pre-generation — same path as KotowariFeature.pregenerateMixinClasses()
+        app.createRequest();
+
+        // One of the generated classes must implement WebSessionAvailable
+        boolean found = false;
+        for (String className : MixinUtils.generatedClassBytes.keySet()) {
+            Class<?> cls = Class.forName(className);
+            if (WebSessionAvailable.class.isAssignableFrom(cls)) {
+                found = true;
+                break;
+            }
+        }
+        assertThat(found)
+                .as("Expected a $Mixin class implementing WebSessionAvailable to be pre-generated")
+                .isTrue();
     }
 }
