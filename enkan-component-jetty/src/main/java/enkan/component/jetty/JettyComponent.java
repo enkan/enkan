@@ -125,6 +125,9 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
      * @return {@code this} for chaining
      */
     public JettyComponent addWebSocket(String path, WebSocketHandler handler) {
+        if (server != null) {
+            throw new MisconfigurationException("web.WEBSOCKET_MUST_REGISTER_BEFORE_START", path);
+        }
         wsHandlers.put(path, handler);
         return this;
     }

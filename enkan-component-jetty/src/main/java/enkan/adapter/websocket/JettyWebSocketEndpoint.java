@@ -20,7 +20,7 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
 
     private final String id;
     private final WebSocketHandler handler;
-    private JettyWebSocketSession session;
+    private volatile JettyWebSocketSession session;
 
     JettyWebSocketEndpoint(String id, WebSocketHandler handler) {
         this.id = id;
@@ -30,7 +30,7 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
     @Override
     public void onWebSocketOpen(Session jettySession) {
         super.onWebSocketOpen(jettySession);
-        this.session = new JettyWebSocketSession(id, jettySession);
+        this.session = new JettyWebSocketSession(id, jettySession, handler);
         handler.onOpen(session);
     }
 
@@ -41,7 +41,12 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
 
     @Override
     public void onWebSocketBinary(ByteBuffer payload, Callback callback) {
-        handler.onBinary(session, payload);
+        // Copy the payload before calling callback.succeed() — Jetty may recycle
+        // the underlying buffer once the callback completes.
+        ByteBuffer copy = ByteBuffer.allocate(payload.remaining());
+        copy.put(payload.duplicate());
+        copy.flip();
+        handler.onBinary(session, copy);
         callback.succeed();
     }
 

@@ -1,18 +1,18 @@
 package enkan.adapter.websocket;
 
+import enkan.web.websocket.WebSocketHandler;
 import enkan.web.websocket.WebSocketSession;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.StatusCode;
 
 import java.nio.ByteBuffer;
 
 /**
  * Enkan {@link WebSocketSession} backed by a Jetty {@link Session}.
  *
- * <p>Sends are fire-and-forget (using {@link Callback#NOOP}).
- * Delivery errors are surfaced via
- * {@link enkan.web.websocket.WebSocketHandler#onError(WebSocketSession, Throwable)}.
+ * <p>Sends are asynchronous. Delivery failures are routed to
+ * {@link WebSocketHandler#onError(WebSocketSession, Throwable)} so the
+ * application receives a consistent error signal.
  *
  * @author kawasima
  */
@@ -20,10 +20,12 @@ class JettyWebSocketSession implements WebSocketSession {
 
     private final String id;
     private final Session jettySession;
+    private final WebSocketHandler handler;
 
-    JettyWebSocketSession(String id, Session jettySession) {
+    JettyWebSocketSession(String id, Session jettySession, WebSocketHandler handler) {
         this.id = id;
         this.jettySession = jettySession;
+        this.handler = handler;
     }
 
     @Override
@@ -38,12 +40,12 @@ class JettyWebSocketSession implements WebSocketSession {
 
     @Override
     public void sendText(String message) {
-        jettySession.sendText(message, Callback.NOOP);
+        jettySession.sendText(message, Callback.from(() -> {}, cause -> handler.onError(this, cause)));
     }
 
     @Override
     public void sendBinary(ByteBuffer data) {
-        jettySession.sendBinary(data, Callback.NOOP);
+        jettySession.sendBinary(data, Callback.from(() -> {}, cause -> handler.onError(this, cause)));
     }
 
     @Override
