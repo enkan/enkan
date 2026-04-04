@@ -97,6 +97,6 @@ public class UndertowComponent extends WebServerComponent<UndertowComponent> imp
                   "host": "%s",
                   "port": "%s",
                   "dependencies": "%s"
-                }""".formatted(getHost(), getPort(), dependenciesToString());
+                }""".stripLeading().formatted(getHost(), getPort(), dependenciesToString());
     }
 }
