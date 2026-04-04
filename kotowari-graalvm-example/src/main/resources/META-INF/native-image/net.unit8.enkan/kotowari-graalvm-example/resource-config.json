@@ -2,6 +2,7 @@
   "globs": [
     {"glob": "META-INF/services/org.slf4j.spi.SLF4JServiceProvider"},
     {"glob": "META-INF/services/jakarta.validation.spi.ValidationProvider"},
+    {"glob": "org/hibernate/validator/ValidationMessages*.properties"},
     {"glob": "simplelogger.properties"},
     {"module": "jdk.jfr", "glob": "jdk/jfr/internal/query/view.ini"}
   ]

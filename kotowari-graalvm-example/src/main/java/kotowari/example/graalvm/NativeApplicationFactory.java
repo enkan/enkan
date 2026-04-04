@@ -37,6 +37,7 @@ public class NativeApplicationFactory implements ApplicationFactory<HttpRequest,
             r.get("/todos").to(TodoController.class, "list");
             r.get("/todos/:id").to(TodoController.class, "show");
             r.post("/todos").to(TodoController.class, "create");
+            r.post("/todos/validate").to(TodoController.class, "createWithValidation");
             r.get("/session").to(SessionController.class, "visit");
         }).compile();
     }
@@ -84,6 +85,7 @@ public class NativeApplicationFactory implements ApplicationFactory<HttpRequest,
                 .set(SerDesMiddleware::setBodyReaders,
                         new JsonBodyReader<>(mapper))
                 .build());
+        app.use(new ValidateBodyMiddleware<>());
         app.use(new NativeControllerInvokerMiddleware<>(injector));
 
         return app;

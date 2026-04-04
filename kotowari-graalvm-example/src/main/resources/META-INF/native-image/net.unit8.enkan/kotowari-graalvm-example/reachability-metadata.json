@@ -22,6 +22,14 @@
       "methods": [
         {"name": "<init>", "parameterTypes": ["long", "java.lang.String", "boolean"]}
       ]
+    },
+    {
+      "type": "kotowari.example.graalvm.form.TodoForm",
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "methods": [
+        {"name": "<init>", "parameterTypes": []}
+      ]
     }
   ]
 }
