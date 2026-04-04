@@ -3,6 +3,7 @@ package kotowari.example.graalvm.controller;
 import enkan.collection.Parameters;
 import enkan.data.HttpRequest;
 import enkan.data.HttpResponse;
+import kotowari.example.graalvm.form.TodoForm;
 import kotowari.example.graalvm.model.Todo;
 
 import java.util.ArrayList;
@@ -36,6 +37,18 @@ public class TodoController {
     public Todo create(Todo todo) {
         long id = idGenerator.getAndIncrement();
         Todo created = new Todo(id, todo.title(), todo.done());
+        store.put(id, created);
+        return created;
+    }
+
+    public Object createWithValidation(TodoForm form) {
+        if (form.hasErrors()) {
+            return builder(HttpResponse.of("Validation failed"))
+                    .set(HttpResponse::setStatus, 400)
+                    .build();
+        }
+        long id = idGenerator.getAndIncrement();
+        Todo created = new Todo(id, form.getTitle(), false);
         store.put(id, created);
         return created;
     }

@@ -99,6 +99,16 @@
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
+        <!-- Jakarta Validation provider for native image -->
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+        </dependency>
+        <!-- EL implementation required by Hibernate Validator's message interpolator -->
+        <dependency>
+            <groupId>org.glassfish.expressly</groupId>
+            <artifactId>expressly</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
@@ -162,6 +172,9 @@
                                 <version>25</version>
                                 <vendor>GraalVM</vendor>
                             </javaToolchain>
+                            <metadataRepository>
+                                <enabled>true</enabled>
+                            </metadataRepository>
                         </configuration>
                     </plugin>
                 </plugins>
