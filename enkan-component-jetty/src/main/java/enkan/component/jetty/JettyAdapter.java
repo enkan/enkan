@@ -1,5 +1,7 @@
 package enkan.component.jetty;
 
+import enkan.component.jetty.digest.ContentDigestHandler;
+import enkan.component.jetty.digest.DigestFilter;
 import enkan.component.jetty.websocket.JettyWebSocketCreatorFactory;
 import enkan.web.application.WebApplication;
 import enkan.collection.OptionMap;
@@ -177,9 +179,9 @@ public class JettyAdapter {
             // Register DigestFilter inside the servlet context (observes pre-compression bytes)
             // so it can compute Repr-Digest (and Content-Digest when there is no compression).
             var filterHolder = new org.eclipse.jetty.ee10.servlet.FilterHolder(
-                    new enkan.component.jetty.digest.DigestFilter());
-            filterHolder.setInitParameter(enkan.component.jetty.digest.DigestFilter.PARAM_ALGORITHM, digestAlgorithm);
-            filterHolder.setInitParameter(enkan.component.jetty.digest.DigestFilter.PARAM_COMPRESSED,
+                    new DigestFilter());
+            filterHolder.setInitParameter(DigestFilter.PARAM_ALGORITHM, digestAlgorithm);
+            filterHolder.setInitParameter(DigestFilter.PARAM_COMPRESSED,
                     String.valueOf(compress));
             contextHandler.addFilter(filterHolder, "/*",
                     java.util.EnumSet.of(jakarta.servlet.DispatcherType.REQUEST));
@@ -193,7 +195,7 @@ public class JettyAdapter {
 
             if (digestAlgorithm != null) {
                 // Wrap CompressionHandler with ContentDigestHandler (observes post-compression bytes)
-                var contentDigestHandler = new enkan.component.jetty.digest.ContentDigestHandler(digestAlgorithm);
+                var contentDigestHandler = new ContentDigestHandler(digestAlgorithm);
                 contentDigestHandler.setHandler(compressionHandler);
                 server.setHandler(contentDigestHandler);
             } else {
