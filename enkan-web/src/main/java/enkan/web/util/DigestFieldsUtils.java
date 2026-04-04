@@ -72,7 +72,13 @@ public final class DigestFieldsUtils {
      */
     public static String negotiateAlgorithm(String wantHeaderValue, String defaultAlgorithm) {
         if (wantHeaderValue == null) return defaultAlgorithm;
-        SfDictionary dict = StructuredFields.parseDictionary(wantHeaderValue);
+        SfDictionary dict;
+        try {
+            dict = StructuredFields.parseDictionary(wantHeaderValue);
+        } catch (SfParseException e) {
+            // Malformed Want-* header from client — fall back to default algorithm
+            return defaultAlgorithm;
+        }
         return dict.members().entrySet().stream()
                 .filter(e -> SUPPORTED_ALGORITHMS.contains(e.getKey()))
                 .filter(e -> e.getValue() instanceof SfItem item

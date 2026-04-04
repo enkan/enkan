@@ -1,5 +1,6 @@
 package enkan.adapter;
 
+import enkan.adapter.digest.CombinedDigestConduit;
 import enkan.adapter.digest.DigestConduit;
 import enkan.adapter.digest.DigestOuterHandler;
 import enkan.web.application.WebApplication;
@@ -46,8 +47,7 @@ import java.security.*;
  */
 public class UndertowAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(UndertowAdapter.class);
-    private static final HttpString REPR_DIGEST    = HttpString.tryFromString("Repr-Digest");
-    private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
+    private static final HttpString REPR_DIGEST = HttpString.tryFromString("Repr-Digest");
 
     public record UndertowServer(Undertow undertow, GracefulShutdownHandler shutdownHandler) {}
 
@@ -137,22 +137,28 @@ public class UndertowAdapter {
                     return;
                 }
 
-                // Register ReprDigest conduit inside appHandler (outermost/app-side)
-                // so it observes pre-compression bytes.
-                // When compression is disabled, also compute Content-Digest here.
+                // Register digest conduit(s) inside appHandler so they observe pre-compression bytes.
                 if (digestAlgorithm != null) {
                     String wantRepr = exchange.getRequestHeaders().getFirst("Want-Repr-Digest");
                     String reprAlgo = DigestFieldsUtils.negotiateAlgorithm(wantRepr, digestAlgorithm);
-                    if (reprAlgo != null) {
-                        exchange.addResponseWrapper((factory, ex) ->
-                                new DigestConduit(factory.create(), ex, reprAlgo, REPR_DIGEST));
-                    }
+
                     if (!compress) {
+                        // No compression: on-wire bytes == representation bytes.
+                        // Use a single CombinedDigestConduit to buffer once and set both headers.
                         String wantContent = exchange.getRequestHeaders().getFirst("Want-Content-Digest");
                         String contentAlgo = DigestFieldsUtils.negotiateAlgorithm(wantContent, digestAlgorithm);
-                        if (contentAlgo != null) {
+                        if (reprAlgo != null || contentAlgo != null) {
+                            String finalReprAlgo = reprAlgo;
+                            String finalContentAlgo = contentAlgo;
                             exchange.addResponseWrapper((factory, ex) ->
-                                    new DigestConduit(factory.create(), ex, contentAlgo, CONTENT_DIGEST));
+                                    new CombinedDigestConduit(factory.create(), ex, finalReprAlgo, finalContentAlgo));
+                        }
+                    } else {
+                        // Compression enabled: only Repr-Digest is set here (pre-compression bytes).
+                        // Content-Digest (post-compression bytes) is handled by DigestOuterHandler.
+                        if (reprAlgo != null) {
+                            exchange.addResponseWrapper((factory, ex) ->
+                                    new DigestConduit(factory.create(), ex, reprAlgo, REPR_DIGEST));
                         }
                     }
                 }

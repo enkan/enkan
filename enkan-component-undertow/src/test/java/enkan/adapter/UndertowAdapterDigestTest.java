@@ -55,11 +55,15 @@ class UndertowAdapterDigestTest {
     }
 
     private HttpURLConnection connect(int port, String path) throws IOException {
+        return connect(port, path, "identity");
+    }
+
+    private HttpURLConnection connect(int port, String path, String acceptEncoding) throws IOException {
         URI uri = URI.create("http://127.0.0.1:" + port + path);
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         conn.setConnectTimeout(3000);
         conn.setReadTimeout(3000);
-        conn.setRequestProperty("Accept-Encoding", "identity");
+        conn.setRequestProperty("Accept-Encoding", acceptEncoding);
         return conn;
     }
 
@@ -158,11 +162,12 @@ class UndertowAdapterDigestTest {
                 "http?", true, "port", port, "host", "127.0.0.1",
                 "digestAlgorithm", "sha-256", "compress?", true));
 
-        HttpURLConnection conn = connect(port, "/");
+        // Request with gzip to actually exercise the compression path
+        HttpURLConnection conn = connect(port, "/", "gzip");
         assertThat(conn.getResponseCode()).isEqualTo(200);
         conn.getInputStream().readAllBytes();
 
-        // Repr-Digest is over the pre-compression representation
+        // Repr-Digest is over the pre-compression representation bytes
         String reprDigest = conn.getHeaderField("Repr-Digest");
         assertThat(reprDigest).isNotNull().startsWith("sha-256=:");
 
@@ -178,13 +183,18 @@ class UndertowAdapterDigestTest {
                 "http?", true, "port", port, "host", "127.0.0.1",
                 "digestAlgorithm", "sha-256", "compress?", true));
 
-        HttpURLConnection conn = connect(port, "/");
+        // Request with gzip so the server actually compresses the response
+        HttpURLConnection conn = connect(port, "/", "gzip");
         assertThat(conn.getResponseCode()).isEqualTo(200);
-        conn.getInputStream().readAllBytes();
+        // Read the raw (compressed) bytes — Content-Digest covers these on-wire bytes
+        byte[] compressedBody = conn.getInputStream().readAllBytes();
 
-        // Content-Digest is set by DigestOuterHandler (post-compression bytes)
         String contentDigest = conn.getHeaderField("Content-Digest");
         assertThat(contentDigest).isNotNull().startsWith("sha-256=:");
+
+        // Verify digest matches the actual on-wire (gzip-compressed) bytes
+        String expected = DigestFieldsUtils.computeDigestHeader(compressedBody, "sha-256");
+        assertThat(contentDigest).isEqualTo(expected);
     }
 
     @Test
@@ -194,7 +204,7 @@ class UndertowAdapterDigestTest {
                 "http?", true, "port", port, "host", "127.0.0.1",
                 "digestAlgorithm", "sha-256", "compress?", true));
 
-        HttpURLConnection conn = connect(port, "/");
+        HttpURLConnection conn = connect(port, "/", "gzip");
         conn.setRequestProperty("Want-Content-Digest", "sha-512=10");
         assertThat(conn.getResponseCode()).isEqualTo(200);
         conn.getInputStream().readAllBytes();

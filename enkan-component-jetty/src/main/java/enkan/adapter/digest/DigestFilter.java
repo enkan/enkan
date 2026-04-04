@@ -23,8 +23,15 @@ import java.io.PrintWriter;
  * value.
  *
  * <p>Algorithm negotiation via {@code Want-Repr-Digest} is supported.
- * Streaming responses ({@code Transfer-Encoding: chunked} that bypass buffering) are
- * not supported and will have no digest header set.
+ *
+ * <p><strong>Buffering behaviour:</strong> All response bytes are captured in memory
+ * before being forwarded to the underlying response. This includes
+ * {@link enkan.web.data.StreamingBody} responses — the body is fully buffered so that
+ * the digest can be computed before headers are committed.
+ * {@code flushBuffer()} calls from the application are suppressed to keep headers
+ * mutable until after the digest is set. Non-blocking writes
+ * ({@link jakarta.servlet.WriteListener}) are not supported and will throw
+ * {@link UnsupportedOperationException}.
  *
  * @author kawasima
  */
@@ -165,9 +172,12 @@ public class DigestFilter implements Filter {
 
         @Override
         public void flushBuffer() {
-            // Suppress commit: the Servlet spec commits the response (making headers
-            // immutable) on flushBuffer(). We must suppress this so that Repr-Digest /
-            // Content-Digest headers can still be set after chain.doFilter() returns.
+            // Intentionally suppress commit: the Servlet spec makes response headers
+            // immutable once flushBuffer() commits the response. Suppressing it keeps
+            // headers mutable so that Repr-Digest / Content-Digest can be set after
+            // chain.doFilter() returns.
+            // Side-effect: streaming / chunked responses that rely on early flush are
+            // fully buffered. This is a known trade-off for digest computation.
         }
 
         @Override

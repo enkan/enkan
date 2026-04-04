@@ -80,12 +80,15 @@ class JettyAdapterDigestTest {
     }
 
     private HttpURLConnection connect(int port, String path) throws IOException {
+        return connect(port, path, "identity");
+    }
+
+    private HttpURLConnection connect(int port, String path, String acceptEncoding) throws IOException {
         URI uri = URI.create("http://127.0.0.1:" + port + path);
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         conn.setConnectTimeout(3000);
         conn.setReadTimeout(3000);
-        // Disable accept-encoding so the response is not compressed (we don't have gzip decoder in tests)
-        conn.setRequestProperty("Accept-Encoding", "identity");
+        conn.setRequestProperty("Accept-Encoding", acceptEncoding);
         return conn;
     }
 
@@ -161,16 +164,35 @@ class JettyAdapterDigestTest {
     @Test
     void reprDigestIsSetWithCompression() throws Exception {
         responseBody.set("compressed response body");
-        HttpURLConnection conn = connect(portWithCompress, "/");
+        // Request gzip to actually exercise the compression path
+        HttpURLConnection conn = connect(portWithCompress, "/", "gzip");
         assertThat(conn.getResponseCode()).isEqualTo(200);
 
         String reprDigest = conn.getHeaderField("Repr-Digest");
         assertThat(reprDigest).isNotNull().startsWith("sha-256=:");
 
-        // Repr-Digest covers the pre-compression (plain) body — consume response bytes
+        // Repr-Digest covers the pre-compression (plain) body
         conn.getInputStream().readAllBytes();
         String expected = DigestFieldsUtils.computeDigestHeader(
                 "compressed response body".getBytes(StandardCharsets.UTF_8), "sha-256");
         assertThat(reprDigest).isEqualTo(expected);
+    }
+
+    @Test
+    void contentDigestIsSetWithCompression() throws Exception {
+        responseBody.set("compressed content digest body");
+        // Request gzip so the server actually compresses the response
+        HttpURLConnection conn = connect(portWithCompress, "/", "gzip");
+        assertThat(conn.getResponseCode()).isEqualTo(200);
+
+        // Read the raw on-wire (gzip-compressed) bytes — Content-Digest covers these
+        byte[] compressedBody = conn.getInputStream().readAllBytes();
+
+        String contentDigest = conn.getHeaderField("Content-Digest");
+        assertThat(contentDigest).isNotNull().startsWith("sha-256=:");
+
+        // Verify digest matches actual on-wire bytes
+        String expected = DigestFieldsUtils.computeDigestHeader(compressedBody, "sha-256");
+        assertThat(contentDigest).isEqualTo(expected);
     }
 }

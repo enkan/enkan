@@ -165,6 +165,9 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
         if (!DigestFieldsUtils.SUPPORTED_ALGORITHMS.contains(algorithm)) {
             throw new MisconfigurationException("web.DIGEST_ALGORITHM_UNSUPPORTED", algorithm);
         }
+        if (server != null) {
+            throw new MisconfigurationException("web.DIGEST_FIELDS_MUST_ENABLE_BEFORE_START", algorithm);
+        }
         this.digestAlgorithm = algorithm;
         return this;
     }
