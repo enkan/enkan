@@ -300,7 +300,7 @@ public class KotowariFeature implements Feature {
                 || moduleName.startsWith("jdk.")
                 || moduleName.startsWith("sun.")
                 || moduleName.startsWith("enkan.")
-                || moduleName.startsWith("kotowari")  // covers "kotowari" and "kotowari.*"
+                || moduleName.equals("kotowari") || moduleName.startsWith("kotowari.")
                 || moduleName.startsWith("jakarta.")
                 || moduleName.startsWith("org.slf4j")
                 || moduleName.startsWith("org.graalvm");

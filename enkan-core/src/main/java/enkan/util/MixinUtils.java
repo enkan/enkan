@@ -85,6 +85,8 @@ public class MixinUtils {
             mh = MethodHandles.publicLookup().unreflect(m);
         } catch (IllegalAccessException e) {
             mh = tryReflection(() -> {
+                // privateLookupIn requires the caller module to read the target module.
+                MixinUtils.class.getModule().addReads(m.getDeclaringClass().getModule());
                 MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(
                         m.getDeclaringClass(), MethodHandles.lookup());
                 return lookup.unreflect(m);

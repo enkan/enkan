@@ -71,6 +71,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>
+                        ${surefire.argLine.common}
                         --add-opens java.base/java.lang.invoke=ALL-UNNAMED
                     </argLine>
                 </configuration>
