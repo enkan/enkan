@@ -1,5 +1,6 @@
 package enkan.adapter;
 
+import enkan.adapter.websocket.JettyWebSocketCreatorFactory;
 import enkan.web.application.WebApplication;
 import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
@@ -7,12 +8,14 @@ import enkan.web.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
 import enkan.servlet.util.ServletUtils;
+import enkan.web.websocket.WebSocketHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.compression.gzip.GzipCompression;
 import org.eclipse.jetty.compression.server.CompressionHandler;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.ee10.websocket.server.config.JettyWebSocketServletContainerInitializer;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -25,6 +28,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import java.io.IOException;
 import java.security.KeyStore;
+import java.util.Map;
 import java.util.function.BiFunction;
 
 /**
@@ -149,10 +153,22 @@ public class JettyAdapter {
         return runJetty(application, OptionMap.of());
     }
 
+    @SuppressWarnings("unchecked")
     public Server runJetty(WebApplication application, OptionMap options) {
         Server server = createServer(options);
         ServletContextHandler contextHandler = new ServletContextHandler();
         contextHandler.addServlet(new ServletHolder(new ProxyServlet(application)), "/*");
+
+        Map<String, WebSocketHandler> wsHandlers = (Map<String, WebSocketHandler>) options.get("wsHandlers");
+        if (wsHandlers != null && !wsHandlers.isEmpty()) {
+            JettyWebSocketServletContainerInitializer.configure(contextHandler, (servletContext, container) -> {
+                for (Map.Entry<String, WebSocketHandler> entry : wsHandlers.entrySet()) {
+                    WebSocketHandler handler = entry.getValue();
+                    container.addMapping(entry.getKey(),
+                            JettyWebSocketCreatorFactory.forHandler(handler));
+                }
+            });
+        }
 
         if (options.getBoolean("compress?", false)) {
             GzipCompression gzip = new GzipCompression();
