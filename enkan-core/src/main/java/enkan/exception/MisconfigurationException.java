@@ -38,7 +38,7 @@ public class MisconfigurationException extends UnrecoverableException {
      *   <li>{@code META-INF/misconfiguration_<language>_<country>_<variant>.properties}</li>
      * </ol>
      *
-     * <p>This replicates the behavior of the former {@code MergeableResourceBundleControl}
+     * <p>This replicates the ResourceBundle fallback behavior
      * without using {@link ResourceBundle.Control}, which is prohibited in named modules.
      */
     private static Properties loadMessages(Locale locale) {
