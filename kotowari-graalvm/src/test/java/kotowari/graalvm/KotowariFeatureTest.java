@@ -337,20 +337,24 @@ class KotowariFeatureTest {
 
     @Test
     void discoverServiceLoaderClasses_findsImplFromDirectoryEntry() throws Exception {
+        // Load SimpleForm via URLClassLoader with null parent so it lands in the unnamed module,
+        // matching the production scenario where application classes are on the classpath.
+        // SimpleForm is in app.* — not filtered by shouldSkipType().
+        URL classesUrl = SimpleForm.class.getProtectionDomain().getCodeSource().getLocation();
+        URLClassLoader cl = new URLClassLoader(new URL[]{classesUrl}, null);
+
         Path tmpDir = Files.createTempDirectory("spi-dir-test");
         Path svcDir = tmpDir.resolve("META-INF/services");
         Files.createDirectories(svcDir);
-        // Use an app-package class (not enkan/kotowari) so shouldSkipType does not filter it out
         Files.writeString(
                 svcDir.resolve("jakarta.ws.rs.ext.MessageBodyReader"),
                 SimpleForm.class.getName());
 
-        URLClassLoader cl = new URLClassLoader(
-                new URL[]{tmpDir.toUri().toURL()}, getClass().getClassLoader());
-
         List<Class<?>> found = feature.discoverServiceLoaderClasses(List.of(tmpDir), cl);
 
-        assertThat(found).contains(SimpleForm.class);
+        assertThat(found)
+                .as("Should discover SimpleForm via META-INF/services directory entry")
+                .anyMatch(c -> c.getName().equals(SimpleForm.class.getName()));
         cl.close();
     }
 

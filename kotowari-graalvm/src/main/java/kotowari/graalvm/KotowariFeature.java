@@ -6,6 +6,7 @@ import kotowari.routing.Routes;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 
+import java.io.IOException;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.CodeBuilder;
 import java.lang.constant.ClassDesc;
@@ -18,7 +19,6 @@ import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
-import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
@@ -285,6 +285,9 @@ public class KotowariFeature implements Feature {
                             }
                         }
                     } finally {
+                        // Only close the FileSystem if we opened it.
+                        // If GraalVM's analysis already holds it open, closing here
+                        // would corrupt other classpath consumers.
                         if (openedHere) fs.close();
                     }
                 }
