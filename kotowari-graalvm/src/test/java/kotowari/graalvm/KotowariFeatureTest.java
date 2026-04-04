@@ -267,9 +267,12 @@ class KotowariFeatureTest {
 
     @Test
     void shouldSkipType_skipsKotowariFrameworkPackages() {
-        // kotowari.routing.* and kotowari.graalvm.* are framework internals — must be skipped
+        // All kotowari framework sub-packages must be skipped
         assertThat(KotowariFeature.shouldSkipType(kotowari.routing.Routes.class)).isTrue();
         assertThat(KotowariFeature.shouldSkipType(KotowariFeature.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(kotowari.middleware.RoutingMiddleware.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(kotowari.data.Validatable.class)).isTrue();
+        assertThat(KotowariFeature.shouldSkipType(kotowari.util.ParameterUtils.class)).isTrue();
     }
 
     @Test

@@ -185,8 +185,11 @@ public class KotowariFeature implements Feature {
             RuntimeReflection.registerAllConstructors(ctrl);
             // Register @Inject fields and @PostConstruct methods so ComponentInjector
             // can wire the controller instance in native mode.
+            // registerAllMethods covers inherited public methods (e.g. from a base controller),
+            // which registerAllDeclaredMethods alone would miss.
             RuntimeReflection.registerAllDeclaredFields(ctrl);
             RuntimeReflection.registerAllDeclaredMethods(ctrl);
+            RuntimeReflection.registerAllMethods(ctrl);
 
             // Auto-register parameter types and return types of all public methods
             // so Jackson can deserialize request bodies and serialize responses without
@@ -196,7 +199,12 @@ public class KotowariFeature implements Feature {
             // action methods defined in a controller superclass.
             Set<Class<?>> appTypes = new LinkedHashSet<>();
             for (Method m : ctrl.getMethods()) {
-                if (m.getDeclaringClass() == Object.class) continue;
+                // Skip Object methods and methods declared in framework types —
+                // their parameter/return types are either primitives, java.* or framework
+                // internals that shouldSkipType() already filters out, but skipping early
+                // avoids unnecessary traversal.
+                Class<?> declaring = m.getDeclaringClass();
+                if (declaring == Object.class || shouldSkipType(declaring)) continue;
                 for (Type t : m.getGenericParameterTypes()) {
                     collectReachableTypes(t, appTypes);
                 }
@@ -271,7 +279,12 @@ public class KotowariFeature implements Feature {
             || name.startsWith("kotowari.routing.")
             || name.startsWith("kotowari.middleware.")
             || name.startsWith("kotowari.inject.")
-            || name.startsWith("kotowari.data.");
+            || name.startsWith("kotowari.data.")
+            || name.startsWith("kotowari.component.")
+            || name.startsWith("kotowari.io.")
+            || name.startsWith("kotowari.scope.")
+            || name.startsWith("kotowari.system.")
+            || name.startsWith("kotowari.util.");
     }
 
     /**
