@@ -223,6 +223,39 @@ class JettyWebSocketEndpointTest {
         assertThat(h.errors.get(0)).isSameAs(sendError);
     }
 
+    // --- sendBinary buffer copy ---------------------------------------------
+
+    @Test
+    void sendBinaryDoesNotExposeOriginalBufferToJetty() {
+        // Verify that JettyWebSocketSession copies the buffer before passing it to Jetty,
+        // so callers can safely reuse/modify the buffer after sendBinary() returns.
+        var capturedBuffers = new java.util.ArrayList<ByteBuffer>();
+        var capturingSession = new StubSession() {
+            @Override
+            public void sendBinary(ByteBuffer d, Callback cb) {
+                // Record the buffer that Jetty received (before cb.succeed modifies anything).
+                capturedBuffers.add(d);
+                cb.succeed();
+            }
+        };
+
+        var h = new TrackingHandler();
+        var ep = new JettyWebSocketEndpoint("copy-id", h);
+        ep.onWebSocketOpen(capturingSession);
+
+        byte[] original = "hello".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buf = ByteBuffer.wrap(original);
+        h.opens.get(0).sendBinary(buf);
+
+        // Mutate the original array after the call — Jetty's copy must be unaffected.
+        original[0] = 'X';
+
+        assertThat(capturedBuffers).hasSize(1);
+        byte[] sent = new byte[capturedBuffers.get(0).remaining()];
+        capturedBuffers.get(0).get(sent);
+        assertThat(new String(sent, StandardCharsets.UTF_8)).isEqualTo("hello");
+    }
+
     // --- onBinary exception handling ----------------------------------------
 
     @Test

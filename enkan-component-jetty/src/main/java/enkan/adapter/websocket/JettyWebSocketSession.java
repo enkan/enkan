@@ -45,7 +45,10 @@ class JettyWebSocketSession implements WebSocketSession {
 
     @Override
     public void sendBinary(ByteBuffer data) {
-        jettySession.sendBinary(data, Callback.from(() -> {}, cause -> handler.onError(this, cause)));
+        ByteBuffer copy = ByteBuffer.allocate(data.remaining());
+        copy.put(data.duplicate());
+        copy.flip();
+        jettySession.sendBinary(copy, Callback.from(() -> {}, cause -> handler.onError(this, cause)));
     }
 
     @Override
