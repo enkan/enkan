@@ -12,6 +12,8 @@ module enkan.web {
     exports enkan.web.security.backend;
     exports enkan.web.util;
     exports enkan.web.util.sf;
+    exports enkan.web.jwt;
+    exports enkan.web.signature;
     exports enkan.web.websocket;
 
     requires transitive enkan.core;

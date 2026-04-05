@@ -39,14 +39,8 @@ public final class HttpMessageSignatures {
             return List.of();
         }
 
-        SfDictionary signatureDict;
-        SfDictionary signatureInputDict;
-        try {
-            signatureDict = StructuredFields.parseDictionary(signatureHeader);
-            signatureInputDict = StructuredFields.parseDictionary(signatureInputHeader);
-        } catch (SfParseException e) {
-            return List.of();
-        }
+        SfDictionary signatureDict = StructuredFields.parseDictionary(signatureHeader);
+        SfDictionary signatureInputDict = StructuredFields.parseDictionary(signatureInputHeader);
 
         List<VerifyResult> results = new ArrayList<>();
         for (var entry : signatureInputDict.members().entrySet()) {
