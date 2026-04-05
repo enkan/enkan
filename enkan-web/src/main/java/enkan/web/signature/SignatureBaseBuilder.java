@@ -5,7 +5,6 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.util.sf.*;
 
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -57,8 +56,16 @@ public final class SignatureBaseBuilder {
         StringBuilder sb = new StringBuilder();
         for (SignatureComponent component : components) {
             String serializedId = serializeComponentId(component);
-            String value = resolveComponentValue(request, response, component);
-            sb.append(serializedId).append(": ").append(value).append('\n');
+            if ("@query-param".equals(component.name())) {
+                // RFC 9421 §2.2.8: each occurrence of the named parameter becomes a separate line
+                List<String> values = resolveQueryParamValues(request, component);
+                for (String value : values) {
+                    sb.append(serializedId).append(": ").append(value).append('\n');
+                }
+            } else {
+                String value = resolveComponentValue(request, response, component);
+                sb.append(serializedId).append(": ").append(value).append('\n');
+            }
         }
         sb.append("\"@signature-params\": ").append(serializeSignatureParams(components, params));
         return sb.toString();
@@ -115,7 +122,7 @@ public final class SignatureBaseBuilder {
                 String qs = request.getQueryString();
                 yield qs != null ? path + "?" + qs : path;
             }
-            case "@query-param" -> resolveQueryParam(request, component);
+            case "@query-param" -> String.join(", ", resolveQueryParamValues(request, component));
             case "@status" -> {
                 if (response == null) {
                     throw new MisconfigurationException("web.SIGNATURE_STATUS_REQUIRES_RESPONSE");
@@ -145,7 +152,13 @@ public final class SignatureBaseBuilder {
         return scheme + "://" + authority + path + (qs != null ? "?" + qs : "");
     }
 
-    private static String resolveQueryParam(HttpRequest request, SignatureComponent component) {
+    /**
+     * Returns all percent-decoded values for the named query parameter (RFC 9421 §2.2.8).
+     *
+     * <p>Uses percent-decoding only — {@code +} is NOT converted to a space, consistent
+     * with RFC 9421's use of the query component rather than form-encoding semantics.
+     */
+    private static List<String> resolveQueryParamValues(HttpRequest request, SignatureComponent component) {
         String paramName = component.nameParam();
         if (paramName == null) {
             throw new MisconfigurationException("web.SIGNATURE_QUERY_PARAM_NAME_REQUIRED");
@@ -154,19 +167,42 @@ public final class SignatureBaseBuilder {
         if (qs == null) {
             throw new IllegalArgumentException("Query parameter '" + paramName + "' not found (no query string)");
         }
-        // RFC 9421 §2.2.8: if the parameter appears multiple times, all values are collected
         List<String> values = new ArrayList<>();
-        for (String pair : qs.split("&")) {
+        for (String pair : qs.split("&", -1)) {
             int eq = pair.indexOf('=');
-            String name = eq >= 0 ? URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8) : pair;
+            String name = percentDecode(eq >= 0 ? pair.substring(0, eq) : pair);
             if (paramName.equals(name)) {
-                values.add(eq >= 0 ? URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8) : "");
+                values.add(eq >= 0 ? percentDecode(pair.substring(eq + 1)) : "");
             }
         }
         if (values.isEmpty()) {
             throw new IllegalArgumentException("Query parameter '" + paramName + "' not found");
         }
-        return String.join(", ", values);
+        return values;
+    }
+
+    /**
+     * Percent-decodes a string per RFC 3986 §2.1.
+     * Unlike {@link java.net.URLDecoder}, {@code +} is NOT treated as a space.
+     */
+    private static String percentDecode(String encoded) {
+        if (encoded.indexOf('%') < 0) return encoded;
+        byte[] bytes = encoded.getBytes(StandardCharsets.UTF_8);
+        byte[] out = new byte[bytes.length];
+        int j = 0;
+        for (int i = 0; i < bytes.length; i++) {
+            if (bytes[i] == '%' && i + 2 < bytes.length) {
+                int hi = Character.digit(bytes[i + 1], 16);
+                int lo = Character.digit(bytes[i + 2], 16);
+                if (hi >= 0 && lo >= 0) {
+                    out[j++] = (byte) ((hi << 4) | lo);
+                    i += 2;
+                    continue;
+                }
+            }
+            out[j++] = bytes[i];
+        }
+        return new String(out, 0, j, StandardCharsets.UTF_8);
     }
 
     // -------------------------------------------------------------------------

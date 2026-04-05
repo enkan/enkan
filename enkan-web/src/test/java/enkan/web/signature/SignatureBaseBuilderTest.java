@@ -255,14 +255,28 @@ class SignatureBaseBuilderTest {
     }
 
     @Test
-    void queryParamMultipleValuesJoined() {
-        // RFC 9421 §2.2.8: multiple occurrences of a parameter are joined with ", "
+    void queryParamMultipleValuesEachOnSeparateLine() {
+        // RFC 9421 §2.2.8: each occurrence becomes a separate line in the signature base
         HttpRequest req = buildRequest("GET", "/", "tag=a&id=1&tag=b&tag=c", "http", "example.com", 80);
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("name", new SfValue.SfString("tag"));
+        List<SignatureComponent> components = List.of(
+                new SignatureComponent("@query-param", new SfParameters(paramMap)));
+        String base = SignatureBaseBuilder.buildSignatureBase(req, components, SfParameters.EMPTY);
+        assertThat(base).contains("\"@query-param\";name=\"tag\": a\n");
+        assertThat(base).contains("\"@query-param\";name=\"tag\": b\n");
+        assertThat(base).contains("\"@query-param\";name=\"tag\": c\n");
+    }
+
+    @Test
+    void queryParamPlusSignIsNotDecoded() {
+        // RFC 9421 §2.2.8 uses percent-decoding only; + must NOT become a space
+        HttpRequest req = buildRequest("GET", "/", "q=hello+world", "http", "example.com", 80);
         Map<String, SfValue> params = new LinkedHashMap<>();
-        params.put("name", new SfValue.SfString("tag"));
+        params.put("name", new SfValue.SfString("q"));
         SignatureComponent comp = new SignatureComponent("@query-param", new SfParameters(params));
         String value = SignatureBaseBuilder.resolveComponentValue(req, null, comp);
-        assertThat(value).isEqualTo("a, b, c");
+        assertThat(value).isEqualTo("hello+world");
     }
 
     // ----------------------------------------------------------- response header resolution
