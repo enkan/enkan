@@ -4,6 +4,8 @@ import enkan.web.util.sf.SfItem;
 import enkan.web.util.sf.SfParameters;
 import enkan.web.util.sf.SfValue;
 
+import java.util.Locale;
+
 /**
  * A covered component identifier in an RFC 9421 {@code Signature-Input} inner list.
  *
@@ -27,7 +29,12 @@ public record SignatureComponent(String name, SfParameters parameters) {
         if (!(item.value() instanceof SfValue.SfString s)) {
             throw new IllegalArgumentException("Component identifier must be an SF String, got: " + item.value());
         }
-        return new SignatureComponent(s.value(), item.parameters());
+        // RFC 9421 §2.1: HTTP field component identifiers MUST be lowercase
+        String name = s.value();
+        if (!name.startsWith("@")) {
+            name = name.toLowerCase(Locale.ROOT);
+        }
+        return new SignatureComponent(name, item.parameters());
     }
 
     /** Returns {@code true} if this is a derived component (name starts with {@code @}). */

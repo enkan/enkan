@@ -114,6 +114,16 @@ class SignatureBaseBuilderTest {
     // ----------------------------------------------------------- header components
 
     @Test
+    void fromSfItemNormalizesHeaderNameToLowerCase() {
+        // Verify that mixed-case header names are lowercased per RFC 9421 §2.1
+        enkan.web.util.sf.SfItem item = new enkan.web.util.sf.SfItem(
+                new enkan.web.util.sf.SfValue.SfString("Content-Type"),
+                enkan.web.util.sf.SfParameters.EMPTY);
+        SignatureComponent comp = SignatureComponent.fromSfItem(item);
+        assertThat(comp.name()).isEqualTo("content-type");
+    }
+
+    @Test
     void headerComponent() {
         HttpRequest req = buildRequest("GET", "/", null, "http", "example.com", 80);
         req.getHeaders().put("content-type", "application/json");

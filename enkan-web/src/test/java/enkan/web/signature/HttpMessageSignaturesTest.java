@@ -240,6 +240,41 @@ class HttpMessageSignaturesTest {
         assertThat(results).isEmpty();
     }
 
+    // ----------------------------------------------------------- expires before created rejected
+
+    @Test
+    void verifyAllRejectsExpiresBeforeCreated() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
+
+        long now = Instant.now().getEpochSecond();
+        long created = now - 10;
+        long expires = created - 1; // expires before created — structurally invalid
+
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
+        paramMap.put("keyid", new SfValue.SfString("k1"));
+        paramMap.put("created", new SfValue.SfInteger(created));
+        paramMap.put("expires", new SfValue.SfInteger(expires));
+        SfParameters params = new SfParameters(paramMap);
+
+        String base = SignatureBaseBuilder.buildSignatureBase(
+                req, List.of(SignatureComponent.of("@method")), params);
+        byte[] sig = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key).sign(
+                base.getBytes(StandardCharsets.UTF_8));
+
+        String sigInput = SignatureBaseBuilder.serializeSignatureParams(
+                List.of(SignatureComponent.of("@method")), params);
+        String sigValue = StructuredFields.serializeItem(new SfItem(new SfValue.SfByteSequence(sig)));
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + sigValue);
+
+        SignatureKeyResolver resolver = testResolver("k1", SignatureAlgorithm.HMAC_SHA256,
+                new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key));
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).isEmpty();
+    }
+
     // ----------------------------------------------------------- unknown algorithm is skipped (T1)
 
     @Test

@@ -210,13 +210,16 @@ public final class HttpMessageSignatures {
     private static boolean validateTimeParams(SfParameters params) {
         long now = Instant.now().getEpochSecond();
         SfValue created = params.get("created");
+        SfValue expires = params.get("expires");
+
         if (created instanceof SfValue.SfInteger c) {
             // Reject future-dated signatures (with clock skew tolerance)
             if (c.value() - CLOCK_SKEW_SECONDS > now) return false;
             // Reject stale signatures to limit replay window
             if (now - c.value() > MAX_SIGNATURE_AGE_SECONDS) return false;
+            // Reject structurally invalid signatures where expires precedes created
+            if (expires instanceof SfValue.SfInteger e && c.value() > e.value()) return false;
         }
-        SfValue expires = params.get("expires");
         if (expires instanceof SfValue.SfInteger e) {
             // Reject expired signatures (with clock skew tolerance)
             if (e.value() + CLOCK_SKEW_SECONDS <= now) return false;
