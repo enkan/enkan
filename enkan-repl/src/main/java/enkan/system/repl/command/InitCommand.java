@@ -74,19 +74,20 @@ public class InitCommand implements SystemCommand {
 
         ProcessBuilder pb = new ProcessBuilder(
                 "claude", "-p",
+                "--output-format", "stream-json",
                 "--allowedTools", "Write",
                 "--add-dir", outPath.toString(),
                 prompt
         );
         pb.directory(outPath.toFile());
-        pb.redirectErrorStream(true);
+        pb.redirectErrorStream(false);
         Process process = pb.start();
 
         try (var reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                transport.sendOut("[AI] " + line);
+                streamJsonLine(transport, line);
             }
         }
 
@@ -98,6 +99,63 @@ public class InitCommand implements SystemCommand {
         transport.sendOut("\nDone! Created project at " + outPath);
         transport.sendOut("\nTo start:\n  cd " + outPath.getFileName()
                 + " && mvn compile exec:exec -Pdev");
+    }
+
+    /**
+     * Parses one stream-json line from Claude CLI and forwards relevant events
+     * to the transport without pulling in a JSON library.
+     *
+     * <p>Relevant event types:
+     * <ul>
+     *   <li>{@code assistant} with {@code text} content delta — printed as-is</li>
+     *   <li>{@code assistant} with {@code tool_use} — prints the tool name</li>
+     * </ul>
+     */
+    private void streamJsonLine(Transport transport, String json) {
+        // Only process assistant message events
+        if (!json.contains("\"type\":\"assistant\"")) return;
+
+        // text delta
+        int textIdx = json.indexOf("\"text\":\"");
+        if (textIdx >= 0) {
+            int start = textIdx + 8;
+            int end = findJsonStringEnd(json, start);
+            if (end > start) {
+                String text = unescapeJson(json.substring(start, end));
+                if (!text.isBlank()) {
+                    transport.sendOut(text);
+                }
+            }
+            return;
+        }
+
+        // tool_use — print the tool name so user sees progress
+        int nameIdx = json.indexOf("\"name\":\"");
+        if (nameIdx >= 0) {
+            int start = nameIdx + 8;
+            int end = findJsonStringEnd(json, start);
+            if (end > start) {
+                transport.sendOut("[tool] " + json.substring(start, end) + "\n");
+            }
+        }
+    }
+
+    /** Returns the index just before the closing {@code "} of a JSON string value. */
+    private static int findJsonStringEnd(String s, int start) {
+        for (int i = start; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\') { i++; continue; }
+            if (c == '"') return i;
+        }
+        return -1;
+    }
+
+    private static String unescapeJson(String s) {
+        return s.replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\");
     }
 
     private String buildPrompt(String description, String projectName,
