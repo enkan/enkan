@@ -94,12 +94,72 @@ class JwtProcessorTest {
                 .hasMessageContaining("none");
     }
 
+    // ----------------------------------------------------------- algorithm confusion attack
+
+    @Test
+    void algorithmConfusionWithPublicKeyAsHmacSecretReturnsNull() throws Exception {
+        // Sign with RSA private key
+        java.security.KeyPairGenerator kpg = java.security.KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        java.security.KeyPair kp = kpg.generateKeyPair();
+        byte[] claims = "{\"sub\":\"attacker\"}".getBytes(StandardCharsets.UTF_8);
+
+        String token = JwtProcessor.sign(new JwtHeader("RS256"), claims, kp.getPrivate());
+        // Attempt to verify with HS256 using the public key bytes as HMAC secret
+        // This is the classic algorithm confusion attack — must return null
+        assertThat(JwtProcessor.verify(token, kp.getPublic())).isNotNull(); // RS256 matches RSA key
+
+        // Craft a token with HS256 header but use the RSA public key as HMAC secret
+        // The key type check should reject this
+        javax.crypto.spec.SecretKeySpec fakeHmacKey =
+                new javax.crypto.spec.SecretKeySpec(kp.getPublic().getEncoded(), "HmacSHA256");
+        String maliciousToken = JwtProcessor.sign(new JwtHeader("HS256"), claims, fakeHmacKey);
+        // Now try to verify with the RSA public key — should fail because PublicKey != SecretKey
+        assertThat(JwtProcessor.verify(maliciousToken, kp.getPublic())).isNull();
+    }
+
+    @Test
+    void verifyWithExpectedAlgorithmRejectsAlgMismatch() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        byte[] claims = "{\"sub\":\"user1\"}".getBytes(StandardCharsets.UTF_8);
+        String token = JwtProcessor.sign(new JwtHeader("HS256"), claims, key);
+
+        // Verify with HS384 expected — should fail because header says HS256
+        assertThat(JwtProcessor.verify(token, JwsAlgorithm.HS384, key)).isNull();
+        // Verify with correct expected algorithm — should succeed
+        assertThat(JwtProcessor.verify(token, JwsAlgorithm.HS256, key)).isNotNull();
+    }
+
+    @Test
+    void unknownAlgorithmInTokenReturnsNull() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        // Craft a token with a fake algorithm
+        String header = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"alg\":\"XX999\"}".getBytes());
+        String payload = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{}".getBytes());
+        String fakeToken = header + "." + payload + ".fakesig";
+        assertThat(JwtProcessor.verify(fakeToken, key)).isNull();
+    }
+
+    @Test
+    void algNoneTokenEndToEndReturnsNull() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        String header = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"alg\":\"none\"}".getBytes());
+        String payload = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"sub\":\"hacker\"}".getBytes());
+        String noneToken = header + "." + payload + ".";
+        assertThat(JwtProcessor.verify(noneToken, key)).isNull();
+    }
+
     // ----------------------------------------------------------- time claims
 
     @Test
     void expiredTokenReturnsNull() throws Exception {
         SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
-        long pastExp = Instant.now().getEpochSecond() - 60;
+        // Must be beyond the 60-second clock skew tolerance
+        long pastExp = Instant.now().getEpochSecond() - 130;
         byte[] claims = ("{\"sub\":\"user1\",\"exp\":" + pastExp + "}").getBytes(StandardCharsets.UTF_8);
 
         String token = JwtProcessor.sign(new JwtHeader("HS256"), claims, key);
@@ -109,6 +169,7 @@ class JwtProcessorTest {
     @Test
     void notYetValidTokenReturnsNull() throws Exception {
         SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        // Must be beyond the 60-second clock skew tolerance
         long futureNbf = Instant.now().getEpochSecond() + 3600;
         byte[] claims = ("{\"sub\":\"user1\",\"nbf\":" + futureNbf + "}").getBytes(StandardCharsets.UTF_8);
 

@@ -52,6 +52,11 @@ public enum CryptoAlgorithm {
         return type;
     }
 
+    /** Returns {@code true} if this is an ECDSA algorithm requiring DER↔P1363 conversion. */
+    public boolean isEcdsa() {
+        return jcaName.contains("ECDSA");
+    }
+
     /**
      * Returns the {@link AlgorithmParameterSpec} required by this algorithm,
      * or {@code null} if the JCA name alone is sufficient.

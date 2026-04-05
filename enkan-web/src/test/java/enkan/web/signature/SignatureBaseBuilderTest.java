@@ -1,7 +1,5 @@
 package enkan.web.signature;
 
-import enkan.web.collection.Headers;
-import enkan.web.data.DefaultHttpRequest;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.util.sf.SfParameters;
@@ -13,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static enkan.util.BeanBuilder.builder;
+import static enkan.web.signature.SignatureTestSupport.buildRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -171,6 +170,82 @@ class SignatureBaseBuilderTest {
         assertThat(base).doesNotEndWith("\n");
     }
 
+    // ----------------------------------------------------------- ;sf canonicalization
+
+    @Test
+    void sfCanonicalizationParsesAndReserializes() {
+        HttpRequest req = buildRequest("GET", "/", null, "http", "example.com", 80);
+        // Set a header with non-canonical SF (extra spaces)
+        req.getHeaders().put("x-dict", "a=1,   b=2");
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("sf", new SfValue.SfBoolean(true));
+        SignatureComponent comp = new SignatureComponent("x-dict", new SfParameters(params));
+        String value = SignatureBaseBuilder.resolveComponentValue(req, null, comp);
+        // Re-serialized should have normalized spacing
+        assertThat(value).isEqualTo("a=1, b=2");
+    }
+
+    // ----------------------------------------------------------- ;key dictionary member
+
+    @Test
+    void keyParamExtractsDictionaryMember() {
+        HttpRequest req = buildRequest("GET", "/", null, "http", "example.com", 80);
+        req.getHeaders().put("x-dict", "a=1, b=2, c=3");
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("key", new SfValue.SfString("b"));
+        SignatureComponent comp = new SignatureComponent("x-dict", new SfParameters(params));
+        String value = SignatureBaseBuilder.resolveComponentValue(req, null, comp);
+        assertThat(value).isEqualTo("2");
+    }
+
+    @Test
+    void keyParamWithMissingMemberThrows() {
+        HttpRequest req = buildRequest("GET", "/", null, "http", "example.com", 80);
+        req.getHeaders().put("x-dict", "a=1");
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("key", new SfValue.SfString("missing"));
+        SignatureComponent comp = new SignatureComponent("x-dict", new SfParameters(params));
+        assertThatThrownBy(() ->
+                SignatureBaseBuilder.resolveComponentValue(req, null, comp))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ----------------------------------------------------------- @query-param edge cases
+
+    @Test
+    void queryParamEmptyValue() {
+        HttpRequest req = buildRequest("GET", "/", "a=&b=2", "http", "example.com", 80);
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("name", new SfValue.SfString("a"));
+        SignatureComponent comp = new SignatureComponent("@query-param", new SfParameters(params));
+        String value = SignatureBaseBuilder.resolveComponentValue(req, null, comp);
+        assertThat(value).isEmpty();
+    }
+
+    @Test
+    void queryParamMissingThrows() {
+        HttpRequest req = buildRequest("GET", "/", "a=1", "http", "example.com", 80);
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("name", new SfValue.SfString("nonexistent"));
+        SignatureComponent comp = new SignatureComponent("@query-param", new SfParameters(params));
+        assertThatThrownBy(() ->
+                SignatureBaseBuilder.resolveComponentValue(req, null, comp))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ----------------------------------------------------------- response header resolution
+
+    @Test
+    void responseHeaderResolvedWhenResponsePresent() {
+        HttpRequest req = buildRequest("GET", "/", null, "http", "example.com", 80);
+        HttpResponse res = builder(HttpResponse.of("ok"))
+                .set(HttpResponse::setStatus, 200)
+                .build();
+        res.getHeaders().put("x-response-header", "resp-value");
+        String value = SignatureBaseBuilder.resolveComponentValue(req, res, SignatureComponent.of("x-response-header"));
+        assertThat(value).isEqualTo("resp-value");
+    }
+
     // ----------------------------------------------------------- serializeSignatureParams
 
     @Test
@@ -187,19 +262,4 @@ class SignatureBaseBuilderTest {
         assertThat(result).isEqualTo("(\"@method\" \"@authority\");keyid=\"key1\"");
     }
 
-    // ----------------------------------------------------------- helpers
-
-    private static HttpRequest buildRequest(String method, String path, String query,
-                                            String scheme, String host, int port) {
-        HttpRequest req = builder(new DefaultHttpRequest())
-                .set(HttpRequest::setRequestMethod, method)
-                .set(HttpRequest::setUri, path)
-                .set(HttpRequest::setQueryString, query)
-                .set(HttpRequest::setScheme, scheme)
-                .set(HttpRequest::setServerName, host)
-                .set(HttpRequest::setServerPort, port)
-                .set(HttpRequest::setHeaders, Headers.empty())
-                .build();
-        return req;
-    }
 }

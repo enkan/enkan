@@ -24,8 +24,9 @@ public final class EcdsaUtils {
     public static byte[] derToP1363(byte[] der, int keyBits) {
         int componentLen = (keyBits + 7) / 8;
         if (der == null || der.length < 8) return null;
+        if (der[0] != 0x30) return null; // must be SEQUENCE tag
 
-        int pos = 1; // skip SEQUENCE tag (0x30)
+        int pos = 1;
         int seqLenByte = der[pos++] & 0xff;
         if ((seqLenByte & 0x80) != 0) {
             int lenLen = seqLenByte & 0x7f;
@@ -35,14 +36,16 @@ public final class EcdsaUtils {
         if (pos + 2 > der.length) return null;
 
         // Parse r
-        pos++; // skip INTEGER tag (0x02)
+        if (der[pos] != 0x02) return null; // must be INTEGER tag
+        pos++;
         int rLen = der[pos++] & 0xff;
         if (pos + rLen + 2 > der.length) return null;
         int rSrc = pos;
         pos += rLen;
 
         // Parse s
-        pos++; // skip INTEGER tag (0x02)
+        if (der[pos] != 0x02) return null; // must be INTEGER tag
+        pos++;
         int sLen = der[pos++] & 0xff;
         if (pos + sLen > der.length) return null;
         int sSrc = pos;

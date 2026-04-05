@@ -53,7 +53,7 @@ public final class JcaVerifier implements Verifier {
 
     private boolean verifyAsymmetric(byte[] input, byte[] signature) throws GeneralSecurityException {
         byte[] sigBytes = signature;
-        if (isEcdsa()) {
+        if (algorithm.isEcdsa()) {
             sigBytes = EcdsaUtils.p1363ToDer(signature);
             if (sigBytes == null) return false;
         }
@@ -66,9 +66,5 @@ public final class JcaVerifier implements Verifier {
         sig.initVerify((PublicKey) key);
         sig.update(input);
         return sig.verify(sigBytes);
-    }
-
-    private boolean isEcdsa() {
-        return algorithm.jcaName().contains("ECDSA");
     }
 }

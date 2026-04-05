@@ -190,15 +190,25 @@ public final class HttpMessageSignatures {
     // Time validation
     // -------------------------------------------------------------------------
 
+    /** Default clock skew tolerance in seconds. */
+    private static final long CLOCK_SKEW_SECONDS = 60;
+
+    /** Default maximum signature age in seconds (5 minutes). */
+    private static final long MAX_SIGNATURE_AGE_SECONDS = 300;
+
     private static boolean validateTimeParams(SfParameters params) {
         long now = Instant.now().getEpochSecond();
         SfValue created = params.get("created");
-        if (created instanceof SfValue.SfInteger c && c.value() > now) {
-            return false;
+        if (created instanceof SfValue.SfInteger c) {
+            // Reject future-dated signatures (with clock skew tolerance)
+            if (c.value() - CLOCK_SKEW_SECONDS > now) return false;
+            // Reject stale signatures to limit replay window
+            if (now - c.value() > MAX_SIGNATURE_AGE_SECONDS) return false;
         }
         SfValue expires = params.get("expires");
-        if (expires instanceof SfValue.SfInteger e && e.value() <= now) {
-            return false;
+        if (expires instanceof SfValue.SfInteger e) {
+            // Reject expired signatures (with clock skew tolerance)
+            if (e.value() + CLOCK_SKEW_SECONDS <= now) return false;
         }
         return true;
     }

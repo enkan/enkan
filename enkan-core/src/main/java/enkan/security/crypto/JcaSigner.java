@@ -61,7 +61,7 @@ public final class JcaSigner implements Signer {
         sig.update(input);
         byte[] raw = sig.sign();
 
-        if (isEcdsa()) {
+        if (algorithm.isEcdsa()) {
             int keyBits = ((ECKey) key).getParams().getOrder().bitLength();
             raw = EcdsaUtils.derToP1363(raw, keyBits);
             if (raw == null) {
@@ -69,9 +69,5 @@ public final class JcaSigner implements Signer {
             }
         }
         return raw;
-    }
-
-    private boolean isEcdsa() {
-        return algorithm.jcaName().contains("ECDSA");
     }
 }

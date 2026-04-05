@@ -1,8 +1,6 @@
 package enkan.web.signature;
 
 import enkan.security.crypto.*;
-import enkan.web.collection.Headers;
-import enkan.web.data.DefaultHttpRequest;
 import enkan.web.data.HttpRequest;
 import enkan.web.util.sf.*;
 import org.junit.jupiter.api.Test;
@@ -15,7 +13,7 @@ import java.security.KeyPairGenerator;
 import java.time.Instant;
 import java.util.*;
 
-import static enkan.util.BeanBuilder.builder;
+import static enkan.web.signature.SignatureTestSupport.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class HttpMessageSignaturesTest {
@@ -149,15 +147,17 @@ class HttpMessageSignaturesTest {
         SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
         HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
 
-        // Manually craft an expired Signature-Input
-        long pastExpires = Instant.now().getEpochSecond() - 60;
-        String sigInput = "(\"@method\");alg=\"hmac-sha256\";keyid=\"k1\";created=1000;expires=" + pastExpires;
+        // Manually craft an expired Signature-Input (beyond the 60-second clock skew tolerance)
+        long pastExpires = Instant.now().getEpochSecond() - 130;
+        // created must be recent enough to pass the 300-second max age check
+        long recentCreated = Instant.now().getEpochSecond() - 10;
+        String sigInput = "(\"@method\");alg=\"hmac-sha256\";keyid=\"k1\";created=" + recentCreated + ";expires=" + pastExpires;
 
         // Sign with the correct base
         Map<String, SfValue> paramMap = new LinkedHashMap<>();
         paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
         paramMap.put("keyid", new SfValue.SfString("k1"));
-        paramMap.put("created", new SfValue.SfInteger(1000));
+        paramMap.put("created", new SfValue.SfInteger(recentCreated));
         paramMap.put("expires", new SfValue.SfInteger(pastExpires));
         SfParameters params = new SfParameters(paramMap);
 
@@ -176,50 +176,68 @@ class HttpMessageSignaturesTest {
         assertThat(results).isEmpty();
     }
 
-    // ----------------------------------------------------------- helpers
+    // ----------------------------------------------------------- future created rejected
 
-    private static HttpRequest buildRequest(String method, String path, String query,
-                                            String scheme, String host, int port) {
-        return builder(new DefaultHttpRequest())
-                .set(HttpRequest::setRequestMethod, method)
-                .set(HttpRequest::setUri, path)
-                .set(HttpRequest::setQueryString, query)
-                .set(HttpRequest::setScheme, scheme)
-                .set(HttpRequest::setServerName, host)
-                .set(HttpRequest::setServerPort, port)
-                .set(HttpRequest::setHeaders, Headers.empty())
-                .build();
+    @Test
+    void verifyAllRejectsFutureCreated() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
+
+        // created far in the future (beyond clock skew tolerance)
+        long futureCreated = Instant.now().getEpochSecond() + 3600;
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
+        paramMap.put("keyid", new SfValue.SfString("k1"));
+        paramMap.put("created", new SfValue.SfInteger(futureCreated));
+        SfParameters params = new SfParameters(paramMap);
+
+        String base = SignatureBaseBuilder.buildSignatureBase(
+                req, List.of(SignatureComponent.of("@method")), params);
+        byte[] sig = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key).sign(
+                base.getBytes(StandardCharsets.UTF_8));
+
+        String sigInput = SignatureBaseBuilder.serializeSignatureParams(
+                List.of(SignatureComponent.of("@method")), params);
+        String sigValue = StructuredFields.serializeItem(new SfItem(new SfValue.SfByteSequence(sig)));
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + sigValue);
+
+        SignatureKeyResolver resolver = testResolver("k1", SignatureAlgorithm.HMAC_SHA256,
+                new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key));
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).isEmpty();
     }
 
-    private static SignatureKeyResolver emptyResolver() {
-        return new SignatureKeyResolver() {
-            @Override
-            public Optional<Verifier> resolveVerifier(String keyId, SignatureAlgorithm algorithm) {
-                return Optional.empty();
-            }
-            @Override
-            public Optional<Signer> resolveSigner(String keyId, SignatureAlgorithm algorithm) {
-                return Optional.empty();
-            }
-        };
+    // ----------------------------------------------------------- stale created rejected
+
+    @Test
+    void verifyAllRejectsStaleCreated() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
+
+        // created too far in the past (beyond 300-second max age)
+        long staleCreated = Instant.now().getEpochSecond() - 600;
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
+        paramMap.put("keyid", new SfValue.SfString("k1"));
+        paramMap.put("created", new SfValue.SfInteger(staleCreated));
+        SfParameters params = new SfParameters(paramMap);
+
+        String base = SignatureBaseBuilder.buildSignatureBase(
+                req, List.of(SignatureComponent.of("@method")), params);
+        byte[] sig = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key).sign(
+                base.getBytes(StandardCharsets.UTF_8));
+
+        String sigInput = SignatureBaseBuilder.serializeSignatureParams(
+                List.of(SignatureComponent.of("@method")), params);
+        String sigValue = StructuredFields.serializeItem(new SfItem(new SfValue.SfByteSequence(sig)));
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + sigValue);
+
+        SignatureKeyResolver resolver = testResolver("k1", SignatureAlgorithm.HMAC_SHA256,
+                new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key));
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).isEmpty();
     }
 
-    private static SignatureKeyResolver testResolver(String expectedKeyId,
-                                                     SignatureAlgorithm expectedAlg,
-                                                     Verifier verifier) {
-        return new SignatureKeyResolver() {
-            @Override
-            public Optional<Verifier> resolveVerifier(String keyId, SignatureAlgorithm algorithm) {
-                if (expectedKeyId.equals(keyId) && expectedAlg == algorithm) {
-                    return Optional.of(verifier);
-                }
-                return Optional.empty();
-            }
-
-            @Override
-            public Optional<Signer> resolveSigner(String keyId, SignatureAlgorithm algorithm) {
-                return Optional.empty();
-            }
-        };
-    }
 }

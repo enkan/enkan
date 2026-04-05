@@ -1,12 +1,15 @@
 package enkan.web.jwt;
 
+import enkan.security.crypto.CryptoAlgorithm;
 import enkan.security.crypto.JcaSigner;
 import enkan.security.crypto.JcaVerifier;
 import enkan.security.crypto.Signer;
 import enkan.security.crypto.Verifier;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.security.PublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.function.Function;
@@ -109,6 +112,12 @@ public final class JwtProcessor {
     /**
      * Verifies a JWT using a JCA key, resolving the algorithm from the header.
      *
+     * <p>The algorithm declared in the token header is validated against the key type
+     * to prevent algorithm confusion attacks (e.g. CVE-2016-5431): symmetric keys
+     * are only accepted with HMAC algorithms, and asymmetric keys only with
+     * asymmetric algorithms. Returns {@code null} if the key type does not match
+     * the algorithm family.
+     *
      * @param token the JWT string
      * @param key   the verification key (SecretKey for HMAC, PublicKey for asymmetric)
      * @return the decoded payload bytes, or {@code null} on failure
@@ -116,8 +125,33 @@ public final class JwtProcessor {
     public static byte[] verify(String token, Key key) {
         JwtHeader header = decodeHeader(token);
         if (header == null || header.alg() == null) return null;
-        JwsAlgorithm alg = JwsAlgorithm.fromJwsName(header.alg());
+        JwsAlgorithm alg;
+        try {
+            alg = JwsAlgorithm.fromJwsName(header.alg());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        if (!isKeyTypeCompatible(alg.crypto(), key)) return null;
         return verify(token, new JcaVerifier(alg.crypto(), key));
+    }
+
+    /**
+     * Verifies a JWT using a JCA key with an explicitly expected algorithm.
+     *
+     * <p>This is the recommended overload: the caller specifies the expected algorithm
+     * rather than trusting the token header, fully preventing algorithm confusion attacks.
+     *
+     * @param token             the JWT string
+     * @param expectedAlgorithm the algorithm the caller expects
+     * @param key               the verification key
+     * @return the decoded payload bytes, or {@code null} on failure
+     */
+    public static byte[] verify(String token, JwsAlgorithm expectedAlgorithm, Key key) {
+        JwtHeader header = decodeHeader(token);
+        if (header == null || header.alg() == null) return null;
+        if (!expectedAlgorithm.jwsName().equals(header.alg())) return null;
+        if (!isKeyTypeCompatible(expectedAlgorithm.crypto(), key)) return null;
+        return verify(token, new JcaVerifier(expectedAlgorithm.crypto(), key));
     }
 
     /**
@@ -162,12 +196,12 @@ public final class JwtProcessor {
         sb.append('{');
         boolean first = true;
         if (header.typ() != null) {
-            sb.append("\"typ\":\"").append(header.typ()).append('"');
+            sb.append("\"typ\":\"").append(escapeJson(header.typ())).append('"');
             first = false;
         }
         if (header.alg() != null) {
             if (!first) sb.append(',');
-            sb.append("\"alg\":\"").append(header.alg()).append('"');
+            sb.append("\"alg\":\"").append(escapeJson(header.alg())).append('"');
             first = false;
         }
         if (header.kid() != null) {
@@ -202,6 +236,13 @@ public final class JwtProcessor {
 
     /**
      * Minimal JSON parser for JOSE header — only extracts typ, alg, kid.
+     *
+     * <p>Limitations: uses naive {@code indexOf}-based key matching, which may
+     * match keys that appear as substrings of other keys or inside string values.
+     * This is acceptable because JOSE headers are machine-generated with a small,
+     * well-known set of keys. The {@code extractJsonNumber} helper only handles
+     * integer values (not decimal or exponential notation), consistent with
+     * RFC 7519's NumericDate definition as an integer epoch.
      */
     static JwtHeader parseHeader(String json) {
         String typ = extractJsonString(json, "typ");
@@ -255,21 +296,39 @@ public final class JwtProcessor {
         return sb.toString();
     }
 
+    /** Default clock skew tolerance in seconds for exp/nbf validation. */
+    private static final long DEFAULT_CLOCK_SKEW_SECONDS = 60;
+
     /**
      * Validates exp and nbf time claims from raw JSON payload bytes.
      * Uses minimal parsing to extract numeric values without a JSON library.
+     * Allows a default tolerance of {@value #DEFAULT_CLOCK_SKEW_SECONDS} seconds
+     * for clock skew in distributed systems.
      */
     private static boolean validateTimeClaims(byte[] payload) {
         String json = new String(payload, StandardCharsets.UTF_8);
         long now = Instant.now().getEpochSecond();
 
         Long exp = extractJsonNumber(json, "exp");
-        if (exp != null && exp <= now) return false;
+        if (exp != null && exp + DEFAULT_CLOCK_SKEW_SECONDS <= now) return false;
 
         Long nbf = extractJsonNumber(json, "nbf");
-        if (nbf != null && nbf > now) return false;
+        if (nbf != null && nbf - DEFAULT_CLOCK_SKEW_SECONDS > now) return false;
 
         return true;
+    }
+
+    /**
+     * Checks that the key type is compatible with the algorithm family.
+     * Prevents algorithm confusion attacks where an asymmetric public key
+     * is used as an HMAC secret (or vice versa).
+     */
+    private static boolean isKeyTypeCompatible(CryptoAlgorithm crypto, Key key) {
+        if (crypto.type() == CryptoAlgorithm.Type.SYMMETRIC) {
+            return key instanceof SecretKey;
+        } else {
+            return key instanceof PublicKey;
+        }
     }
 
     private static Long extractJsonNumber(String json, String key) {
@@ -279,7 +338,7 @@ public final class JwtProcessor {
         int colonIdx = json.indexOf(':', idx + search.length());
         if (colonIdx < 0) return null;
         int start = colonIdx + 1;
-        while (start < json.length() && json.charAt(start) == ' ') start++;
+        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
         int end = start;
         while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) end++;
         if (end == start) return null;
