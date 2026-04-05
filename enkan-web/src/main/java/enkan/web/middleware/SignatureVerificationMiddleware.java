@@ -63,8 +63,8 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
             results = HttpMessageSignatures.verifyAll(request, keyResolver);
         } catch (SfParseException e) {
             return errorResponse(400, "Invalid Signature-Input header");
-        } catch (Exception e) {
-            return errorResponse(400, "Malformed signature headers");
+        } catch (UnsupportedOperationException e) {
+            return errorResponse(501, e.getMessage());
         }
 
         // Check required labels

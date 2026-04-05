@@ -11,10 +11,22 @@ import enkan.security.crypto.CryptoAlgorithm;
 public enum SignatureAlgorithm {
 
     HMAC_SHA256("hmac-sha256", CryptoAlgorithm.HMAC_SHA256),
+    HMAC_SHA384("hmac-sha384", CryptoAlgorithm.HMAC_SHA384),
+    HMAC_SHA512("hmac-sha512", CryptoAlgorithm.HMAC_SHA512),
+
     ED25519("ed25519", CryptoAlgorithm.ED25519),
+
     ECDSA_P256_SHA256("ecdsa-p256-sha256", CryptoAlgorithm.ECDSA_P256_SHA256),
+    ECDSA_P384_SHA384("ecdsa-p384-sha384", CryptoAlgorithm.ECDSA_P384_SHA384),
+    ECDSA_P521_SHA512("ecdsa-p521-sha512", CryptoAlgorithm.ECDSA_P521_SHA512),
+
+    RSA_PSS_SHA256("rsa-pss-sha256", CryptoAlgorithm.RSA_PSS_SHA256),
+    RSA_PSS_SHA384("rsa-pss-sha384", CryptoAlgorithm.RSA_PSS_SHA384),
     RSA_PSS_SHA512("rsa-pss-sha512", CryptoAlgorithm.RSA_PSS_SHA512),
-    RSA_V1_5_SHA256("rsa-v1_5-sha256", CryptoAlgorithm.RSA_V1_5_SHA256);
+
+    RSA_V1_5_SHA256("rsa-v1_5-sha256", CryptoAlgorithm.RSA_V1_5_SHA256),
+    RSA_V1_5_SHA384("rsa-v1_5-sha384", CryptoAlgorithm.RSA_V1_5_SHA384),
+    RSA_V1_5_SHA512("rsa-v1_5-sha512", CryptoAlgorithm.RSA_V1_5_SHA512);
 
     private final String sfName;
     private final CryptoAlgorithm crypto;

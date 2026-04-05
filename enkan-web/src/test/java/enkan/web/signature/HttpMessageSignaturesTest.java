@@ -240,4 +240,84 @@ class HttpMessageSignaturesTest {
         assertThat(results).isEmpty();
     }
 
+    // ----------------------------------------------------------- unknown algorithm is skipped (T1)
+
+    @Test
+    void verifyAllSkipsUnknownAlgorithm() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
+
+        // Manually craft a Signature-Input with an unknown algorithm name
+        long created = Instant.now().getEpochSecond();
+        String sigInput = "(\"@method\");alg=\"future-alg-9999\";keyid=\"k1\";created=" + created;
+
+        // Sign legitimately so the bytes are present (verifier won't be reached anyway)
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
+        paramMap.put("keyid", new SfValue.SfString("k1"));
+        paramMap.put("created", new SfValue.SfInteger(created));
+        String base = SignatureBaseBuilder.buildSignatureBase(
+                req, List.of(SignatureComponent.of("@method")), new SfParameters(paramMap));
+        byte[] sig = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key).sign(
+                base.getBytes(StandardCharsets.UTF_8));
+        String sigValue = StructuredFields.serializeItem(new SfItem(new SfValue.SfByteSequence(sig)));
+
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + sigValue);
+
+        // Should return empty list, not throw
+        SignatureKeyResolver resolver = testResolver("k1", SignatureAlgorithm.HMAC_SHA256,
+                new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key));
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).isEmpty();
+    }
+
+    // ----------------------------------------------------------- multiple signatures (T2)
+
+    @Test
+    void verifyAllHandlesMultipleSignatures() throws Exception {
+        SecretKey key1 = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        SecretKey key2 = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("POST", "/api", null, "https", "example.com", 443);
+        req.getHeaders().put("content-type", "application/json");
+
+        List<SignatureComponent> components1 = List.of(SignatureComponent.of("@method"));
+        List<SignatureComponent> components2 = List.of(
+                SignatureComponent.of("@method"), SignatureComponent.of("content-type"));
+
+        Signer signer1 = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key1);
+        Signer signer2 = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key2);
+        HttpMessageSignatures.SignatureResult r1 = HttpMessageSignatures.sign(
+                req, components1, SignatureAlgorithm.HMAC_SHA256, signer1, "key1", null);
+        HttpMessageSignatures.SignatureResult r2 = HttpMessageSignatures.sign(
+                req, components2, SignatureAlgorithm.HMAC_SHA256, signer2, "key2", null);
+
+        req.getHeaders().put("Signature-Input",
+                "sig1=" + r1.signatureInputValue() + ", sig2=" + r2.signatureInputValue());
+        req.getHeaders().put("Signature",
+                "sig1=" + r1.signatureValue() + ", sig2=" + r2.signatureValue());
+
+        // Resolver knows both keys
+        SignatureKeyResolver resolver = new SignatureKeyResolver() {
+            @Override
+            public Optional<Verifier> resolveVerifier(String keyId, SignatureAlgorithm algorithm) {
+                if ("key1".equals(keyId)) return Optional.of(new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key1));
+                if ("key2".equals(keyId)) return Optional.of(new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key2));
+                return Optional.empty();
+            }
+            @Override
+            public Optional<Signer> resolveSigner(String keyId, SignatureAlgorithm algorithm) {
+                return Optional.empty();
+            }
+        };
+
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).hasSize(2);
+        assertThat(results).extracting(VerifyResult::label).containsExactlyInAnyOrder("sig1", "sig2");
+        assertThat(results.stream().filter(r -> "sig1".equals(r.label())).findFirst().orElseThrow()
+                .coveredValues()).containsKey("@method");
+        assertThat(results.stream().filter(r -> "sig2".equals(r.label())).findFirst().orElseThrow()
+                .coveredValues()).containsKeys("@method", "content-type");
+    }
+
 }

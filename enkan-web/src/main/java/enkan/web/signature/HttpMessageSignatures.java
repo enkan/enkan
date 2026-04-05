@@ -114,6 +114,8 @@ public final class HttpMessageSignatures {
             try {
                 coveredValues.put(comp.name(),
                         SignatureBaseBuilder.resolveComponentValue(request, response, comp));
+            } catch (UnsupportedOperationException e) {
+                throw e; // propagate so callers can return 501
             } catch (Exception e) {
                 return null;
             }

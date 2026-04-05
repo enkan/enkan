@@ -114,15 +114,22 @@ public final class EcdsaUtils {
         int sDerLen = p1363.length - sOff + (sPad ? 1 : 0);
 
         int contentLen = 2 + rDerLen + 2 + sDerLen;
-        boolean longForm = contentLen > 127;
-        byte[] der = new byte[1 + (longForm ? 2 : 1) + contentLen];
+        // DER length encoding: short-form (0x00-0x7f), or long-form 0x81/<1 byte> or 0x82/<2 bytes>
+        int lenFieldSize = contentLen <= 0x7f ? 1 : contentLen <= 0xff ? 2 : 3;
+        byte[] der = new byte[1 + lenFieldSize + contentLen];
 
         int i = 0;
         der[i++] = 0x30; // SEQUENCE tag
-        if (longForm) {
+        if (contentLen <= 0x7f) {
+            der[i++] = (byte) contentLen;
+        } else if (contentLen <= 0xff) {
             der[i++] = (byte) 0x81;
+            der[i++] = (byte) contentLen;
+        } else {
+            der[i++] = (byte) 0x82;
+            der[i++] = (byte) (contentLen >> 8);
+            der[i++] = (byte) contentLen;
         }
-        der[i++] = (byte) contentLen;
 
         der[i++] = 0x02; // INTEGER tag for r
         der[i++] = (byte) rDerLen;

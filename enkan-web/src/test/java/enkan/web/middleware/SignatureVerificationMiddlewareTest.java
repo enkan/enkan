@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -180,6 +181,34 @@ class SignatureVerificationMiddlewareTest {
 
         assertThat(response.getStatus()).isEqualTo(400);
         assertThat((String) response.getHeaders().get("Accept-Signature")).isNull();
+    }
+
+    // ----------------------------------------------------------- ;bs unsupported returns 501
+
+    @Test
+    void bsParameterReturns501() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/api");
+        // x-binary header with ;bs parameter — valid SF syntax but unsupported
+        req.getHeaders().put("x-binary", "dGVzdA==");
+        req.getHeaders().put("content-type", "application/json");
+
+        // Sign only @method (valid)
+        Signer signer = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key);
+        HttpMessageSignatures.SignatureResult result = HttpMessageSignatures.sign(
+                req, List.of(SignatureComponent.of("@method")),
+                SignatureAlgorithm.HMAC_SHA256, signer, "k1", null);
+
+        // Manually inject a Signature-Input that includes a ;bs component
+        long created = Instant.now().getEpochSecond();
+        String sigInput = "(\"@method\" \"x-binary\";bs);alg=\"hmac-sha256\";keyid=\"k1\";created=" + created;
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + result.signatureValue());
+
+        SignatureVerificationMiddleware mw = new SignatureVerificationMiddleware(testResolver("k1", key));
+        HttpResponse response = mw.handle(req, chain);
+
+        assertThat(response.getStatus()).isEqualTo(501);
     }
 
     // ----------------------------------------------------------- helpers
