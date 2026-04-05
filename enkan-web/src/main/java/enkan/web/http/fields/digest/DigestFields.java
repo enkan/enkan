@@ -1,6 +1,6 @@
-package enkan.web.util;
+package enkan.web.http.fields.digest;
 
-import enkan.web.util.sf.*;
+import enkan.web.http.fields.sf.*;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -20,12 +20,12 @@ import java.util.Set;
  * @author kawasima
  * @see <a href="https://www.rfc-editor.org/rfc/rfc9530">RFC 9530</a>
  */
-public final class DigestFieldsUtils {
+public final class DigestFields {
 
     /** Algorithms supported by this implementation. */
     public static final Set<String> SUPPORTED_ALGORITHMS = Set.of("sha-256", "sha-512");
 
-    private DigestFieldsUtils() {}
+    private DigestFields() {}
 
     /**
      * Computes the digest of {@code data} with the given algorithm and returns the

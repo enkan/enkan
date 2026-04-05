@@ -4,8 +4,8 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
-import enkan.web.util.DigestFieldsUtils;
-import enkan.web.util.sf.*;
+import enkan.web.http.fields.digest.DigestFields;
+import enkan.web.http.fields.sf.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -113,7 +113,7 @@ public class DigestValidationMiddleware implements WebMiddleware {
 
         for (var entry : dict.members().entrySet()) {
             String algorithm = entry.getKey();
-            if (!DigestFieldsUtils.SUPPORTED_ALGORITHMS.contains(algorithm)) {
+            if (!DigestFields.SUPPORTED_ALGORITHMS.contains(algorithm)) {
                 continue;
             }
             if (!(entry.getValue() instanceof SfItem item &&
@@ -132,7 +132,7 @@ public class DigestValidationMiddleware implements WebMiddleware {
     private static byte[] computeRaw(byte[] data, String algorithm) {
         try {
             var digest = java.security.MessageDigest.getInstance(
-                    DigestFieldsUtils.toJcaAlgorithm(algorithm));
+                    DigestFields.toJcaAlgorithm(algorithm));
             return digest.digest(data);
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new AssertionError(algorithm + " not available", e);

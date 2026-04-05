@@ -8,7 +8,7 @@ import enkan.web.collection.Headers;
 import enkan.web.data.DefaultHttpRequest;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +47,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void validContentDigestPasses() {
         byte[] body = "hello world".getBytes();
-        String header = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String header = DigestFields.computeDigestHeader(body, "sha-256");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Content-Digest", header))
@@ -62,7 +62,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void tamperedBodyFailsContentDigest() {
         byte[] originalBody = "hello world".getBytes();
-        String header = DigestFieldsUtils.computeDigestHeader(originalBody, "sha-256");
+        String header = DigestFields.computeDigestHeader(originalBody, "sha-256");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Content-Digest", header))
@@ -80,7 +80,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void validReprDigestPasses() {
         byte[] body = "hello world".getBytes();
-        String header = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String header = DigestFields.computeDigestHeader(body, "sha-256");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Repr-Digest", header))
@@ -95,7 +95,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void tamperedBodyFailsReprDigest() {
         byte[] originalBody = "hello world".getBytes();
-        String header = DigestFieldsUtils.computeDigestHeader(originalBody, "sha-512");
+        String header = DigestFields.computeDigestHeader(originalBody, "sha-512");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Repr-Digest", header))
@@ -113,7 +113,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void bodyIsRestoredAfterValidation() throws Exception {
         byte[] body = "hello world".getBytes();
-        String header = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String header = DigestFields.computeDigestHeader(body, "sha-256");
 
         MiddlewareChain<HttpRequest, HttpResponse, ?, ?> capturingChain =
                 new DefaultMiddlewareChain<>(new AnyPredicate<>(), null,
@@ -142,7 +142,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void nullBodyWithDigestHeaderTreatedAsEmpty() {
         byte[] empty = new byte[0];
-        String header = DigestFieldsUtils.computeDigestHeader(empty, "sha-256");
+        String header = DigestFields.computeDigestHeader(empty, "sha-256");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Content-Digest", header))
@@ -187,7 +187,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void mismatchDigestHeaderReturns400WithMismatchMessage() {
         byte[] body = "actual body".getBytes();
-        String wrongDigest = DigestFieldsUtils.computeDigestHeader("wrong body".getBytes(), "sha-256");
+        String wrongDigest = DigestFields.computeDigestHeader("wrong body".getBytes(), "sha-256");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Content-Digest", wrongDigest))
@@ -205,7 +205,7 @@ class DigestValidationMiddlewareTest {
     @Test
     void sha512ValidationPasses() {
         byte[] body = "sha-512 test".getBytes();
-        String header = DigestFieldsUtils.computeDigestHeader(body, "sha-512");
+        String header = DigestFields.computeDigestHeader(body, "sha-512");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of("Content-Digest", header))
@@ -222,8 +222,8 @@ class DigestValidationMiddlewareTest {
     @Test
     void bothHeadersPresentAndValidPasses() {
         byte[] body = "both headers".getBytes();
-        String contentHeader = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
-        String reprHeader    = DigestFieldsUtils.computeDigestHeader(body, "sha-512");
+        String contentHeader = DigestFields.computeDigestHeader(body, "sha-256");
+        String reprHeader    = DigestFields.computeDigestHeader(body, "sha-512");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of(
@@ -240,8 +240,8 @@ class DigestValidationMiddlewareTest {
     @Test
     void contentDigestValidButReprDigestInvalidReturns400() {
         byte[] body = "both headers".getBytes();
-        String goodContent = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
-        String badRepr = DigestFieldsUtils.computeDigestHeader("wrong".getBytes(), "sha-256");
+        String goodContent = DigestFields.computeDigestHeader(body, "sha-256");
+        String badRepr = DigestFields.computeDigestHeader("wrong".getBytes(), "sha-256");
 
         HttpRequest request = builder(new DefaultHttpRequest())
                 .set(HttpRequest::setHeaders, Headers.of(

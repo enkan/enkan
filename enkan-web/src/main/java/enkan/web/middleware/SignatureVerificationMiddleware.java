@@ -5,7 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.signature.*;
-import enkan.web.util.sf.*;
+import enkan.web.http.fields.sf.*;
 
 import java.util.*;
 import java.util.stream.Collectors;

@@ -1,4 +1,4 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
 /**
  * Character classification helpers for RFC 8941 Structured Field parsing and serialization.
