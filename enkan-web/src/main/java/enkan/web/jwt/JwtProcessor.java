@@ -47,7 +47,7 @@ public final class JwtProcessor {
         String encodedHeader = URL_ENCODER.encodeToString(headerJson);
         String encodedPayload = URL_ENCODER.encodeToString(claimsJsonBytes);
 
-        byte[] signingInput = (encodedHeader + "." + encodedPayload).getBytes(StandardCharsets.US_ASCII);
+        byte[] signingInput = buildSigningInput(encodedHeader, encodedPayload);
         byte[] signature = signer.sign(signingInput);
         String encodedSignature = URL_ENCODER.encodeToString(signature);
 
@@ -83,7 +83,7 @@ public final class JwtProcessor {
         String[] parts = token.split("\\.", 4);
         if (parts.length != 3) return null;
 
-        byte[] signingInput = (parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII);
+        byte[] signingInput = buildSigningInput(parts[0], parts[1]);
         byte[] signature;
         try {
             signature = URL_DECODER.decode(parts[2]);
@@ -187,6 +187,17 @@ public final class JwtProcessor {
         }
     }
 
+    /** Builds the ASCII signing input {@code <header>.<payload>} without an intermediate String. */
+    private static byte[] buildSigningInput(String encodedHeader, String encodedPayload) {
+        byte[] h = encodedHeader.getBytes(StandardCharsets.US_ASCII);
+        byte[] p = encodedPayload.getBytes(StandardCharsets.US_ASCII);
+        byte[] out = new byte[h.length + 1 + p.length];
+        System.arraycopy(h, 0, out, 0, h.length);
+        out[h.length] = '.';
+        System.arraycopy(p, 0, out, h.length + 1, p.length);
+        return out;
+    }
+
     // -------------------------------------------------------------------------
     // Minimal JSON handling (no external library dependency)
     // -------------------------------------------------------------------------
@@ -253,15 +264,35 @@ public final class JwtProcessor {
 
     private static String extractJsonString(String json, String key) {
         String search = "\"" + key + "\"";
-        int idx = json.indexOf(search);
-        if (idx < 0) return null;
-        int colonIdx = json.indexOf(':', idx + search.length());
-        if (colonIdx < 0) return null;
-        int quoteStart = json.indexOf('"', colonIdx + 1);
-        if (quoteStart < 0) return null;
-        int quoteEnd = findClosingQuote(json, quoteStart + 1);
-        if (quoteEnd < 0) return null;
-        return unescapeJson(json.substring(quoteStart + 1, quoteEnd));
+        int idx = 0;
+        while (true) {
+            idx = json.indexOf(search, idx);
+            if (idx < 0) return null;
+            // The key must appear at the top level: preceded by '{' or ',' (plus optional whitespace)
+            int pre = idx - 1;
+            while (pre >= 0 && Character.isWhitespace(json.charAt(pre))) pre--;
+            if (pre >= 0 && json.charAt(pre) != '{' && json.charAt(pre) != ',') {
+                idx += search.length();
+                continue;
+            }
+            // After the closing quote there must be only whitespace then ':'
+            int afterKey = idx + search.length();
+            while (afterKey < json.length() && Character.isWhitespace(json.charAt(afterKey))) afterKey++;
+            if (afterKey >= json.length() || json.charAt(afterKey) != ':') {
+                idx += search.length();
+                continue;
+            }
+            int colonIdx = afterKey;
+            int quoteStart = json.indexOf('"', colonIdx + 1);
+            if (quoteStart < 0) return null;
+            // Only whitespace allowed between ':' and opening '"' of value
+            for (int i = colonIdx + 1; i < quoteStart; i++) {
+                if (!Character.isWhitespace(json.charAt(i))) return null;
+            }
+            int quoteEnd = findClosingQuote(json, quoteStart + 1);
+            if (quoteEnd < 0) return null;
+            return unescapeJson(json.substring(quoteStart + 1, quoteEnd));
+        }
     }
 
     private static int findClosingQuote(String json, int from) {
@@ -333,10 +364,26 @@ public final class JwtProcessor {
 
     private static Long extractJsonNumber(String json, String key) {
         String search = "\"" + key + "\"";
-        int idx = json.indexOf(search);
-        if (idx < 0) return null;
-        int colonIdx = json.indexOf(':', idx + search.length());
-        if (colonIdx < 0) return null;
+        int idx = 0;
+        int colonIdx = -1;
+        while (true) {
+            idx = json.indexOf(search, idx);
+            if (idx < 0) return null;
+            int pre = idx - 1;
+            while (pre >= 0 && Character.isWhitespace(json.charAt(pre))) pre--;
+            if (pre >= 0 && json.charAt(pre) != '{' && json.charAt(pre) != ',') {
+                idx += search.length();
+                continue;
+            }
+            int afterKey = idx + search.length();
+            while (afterKey < json.length() && Character.isWhitespace(json.charAt(afterKey))) afterKey++;
+            if (afterKey >= json.length() || json.charAt(afterKey) != ':') {
+                idx += search.length();
+                continue;
+            }
+            colonIdx = afterKey;
+            break;
+        }
         int start = colonIdx + 1;
         while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
         // Allow optional leading minus sign, then digits only

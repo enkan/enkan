@@ -1,7 +1,9 @@
 package enkan.security.crypto;
 
+import enkan.exception.MisconfigurationException;
+
 import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKey;
 import java.security.*;
 import java.security.spec.AlgorithmParameterSpec;
 
@@ -25,8 +27,15 @@ public final class JcaVerifier implements Verifier {
      *
      * @param algorithm the cryptographic algorithm
      * @param key       a {@link javax.crypto.SecretKey} for HMAC or a {@link PublicKey} for asymmetric
+     * @throws MisconfigurationException if the key type is incompatible with the algorithm
      */
     public JcaVerifier(CryptoAlgorithm algorithm, Key key) {
+        if (algorithm.type() == CryptoAlgorithm.Type.SYMMETRIC && !(key instanceof SecretKey)) {
+            throw new MisconfigurationException("crypto.INCOMPATIBLE_KEY_TYPE", algorithm, key.getClass().getSimpleName());
+        }
+        if (algorithm.type() == CryptoAlgorithm.Type.ASYMMETRIC && !(key instanceof PublicKey)) {
+            throw new MisconfigurationException("crypto.INCOMPATIBLE_KEY_TYPE", algorithm, key.getClass().getSimpleName());
+        }
         this.algorithm = algorithm;
         this.key = key;
     }
@@ -46,7 +55,7 @@ public final class JcaVerifier implements Verifier {
 
     private boolean verifyHmac(byte[] input, byte[] signature) throws GeneralSecurityException {
         Mac mac = Mac.getInstance(algorithm.jcaName());
-        mac.init(new SecretKeySpec(key.getEncoded(), algorithm.jcaName()));
+        mac.init((SecretKey) key);
         byte[] expected = mac.doFinal(input);
         return MessageDigest.isEqual(expected, signature);
     }

@@ -77,19 +77,15 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
             }
         }
 
-        // Check required components coverage
+        // Check required components coverage: at least one verified signature must cover all of them
         if (!requiredComponents.isEmpty()) {
-            for (VerifyResult result : results) {
-                for (String component : requiredComponents) {
-                    if (!result.coveredValues().containsKey(component)) {
-                        return errorResponse(401,
-                                "Signature does not cover required component: " + component);
-                    }
-                }
-            }
-            // If there are required components but no valid signatures, reject
             if (results.isEmpty()) {
                 return errorResponse(401, "No valid signature found");
+            }
+            boolean covered = results.stream().anyMatch(r -> r.coveredValues().keySet().containsAll(requiredComponents));
+            if (!covered) {
+                return errorResponse(401,
+                        "No signature covers all required components: " + requiredComponents);
             }
         }
 
