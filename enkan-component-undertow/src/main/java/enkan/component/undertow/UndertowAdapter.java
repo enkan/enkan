@@ -5,7 +5,7 @@ import enkan.component.undertow.digest.DigestConduit;
 import enkan.component.undertow.digest.DigestOuterHandler;
 import enkan.web.application.WebApplication;
 import enkan.web.collection.Headers;
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
@@ -140,13 +140,13 @@ public class UndertowAdapter {
                 // Register digest conduit(s) inside appHandler so they observe pre-compression bytes.
                 if (digestAlgorithm != null) {
                     String wantRepr = exchange.getRequestHeaders().getFirst("Want-Repr-Digest");
-                    String reprAlgo = DigestFieldsUtils.negotiateAlgorithm(wantRepr, digestAlgorithm);
+                    String reprAlgo = DigestFields.negotiateAlgorithm(wantRepr, digestAlgorithm);
 
                     if (!compress) {
                         // No compression: on-wire bytes == representation bytes.
                         // Use a single CombinedDigestConduit to buffer once and set both headers.
                         String wantContent = exchange.getRequestHeaders().getFirst("Want-Content-Digest");
-                        String contentAlgo = DigestFieldsUtils.negotiateAlgorithm(wantContent, digestAlgorithm);
+                        String contentAlgo = DigestFields.negotiateAlgorithm(wantContent, digestAlgorithm);
                         if (reprAlgo != null || contentAlgo != null) {
                             String finalReprAlgo = reprAlgo;
                             String finalContentAlgo = contentAlgo;

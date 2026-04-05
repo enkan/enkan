@@ -1,6 +1,6 @@
 package enkan.component.undertow.digest;
 
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HttpString;
@@ -39,7 +39,7 @@ public class DigestOuterHandler implements HttpHandler {
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
         String wantValue = exchange.getRequestHeaders().getFirst("Want-Content-Digest");
-        String algorithm = DigestFieldsUtils.negotiateAlgorithm(wantValue, defaultAlgorithm);
+        String algorithm = DigestFields.negotiateAlgorithm(wantValue, defaultAlgorithm);
 
         if (algorithm != null) {
             exchange.addResponseWrapper((factory, ex) ->

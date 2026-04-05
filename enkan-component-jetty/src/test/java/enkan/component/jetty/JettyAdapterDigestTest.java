@@ -7,7 +7,7 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.middleware.WebMiddleware;
 import enkan.util.Predicates;
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import org.eclipse.jetty.server.Server;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -105,7 +105,7 @@ class JettyAdapterDigestTest {
 
         // Verify the value matches the body
         byte[] body = conn.getInputStream().readAllBytes();
-        String expected = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String expected = DigestFields.computeDigestHeader(body, "sha-256");
         assertThat(reprDigest).isEqualTo(expected);
     }
 
@@ -120,7 +120,7 @@ class JettyAdapterDigestTest {
 
         // Without compression Content-Digest == Repr-Digest
         byte[] body = conn.getInputStream().readAllBytes();
-        String expected = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String expected = DigestFields.computeDigestHeader(body, "sha-256");
         assertThat(contentDigest).isEqualTo(expected);
     }
 
@@ -173,7 +173,7 @@ class JettyAdapterDigestTest {
 
         // Repr-Digest covers the pre-compression (plain) body
         conn.getInputStream().readAllBytes();
-        String expected = DigestFieldsUtils.computeDigestHeader(
+        String expected = DigestFields.computeDigestHeader(
                 "compressed response body".getBytes(StandardCharsets.UTF_8), "sha-256");
         assertThat(reprDigest).isEqualTo(expected);
     }
@@ -192,7 +192,7 @@ class JettyAdapterDigestTest {
         assertThat(contentDigest).isNotNull().startsWith("sha-256=:");
 
         // Verify digest matches actual on-wire bytes
-        String expected = DigestFieldsUtils.computeDigestHeader(compressedBody, "sha-256");
+        String expected = DigestFields.computeDigestHeader(compressedBody, "sha-256");
         assertThat(contentDigest).isEqualTo(expected);
     }
 }

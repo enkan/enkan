@@ -1,7 +1,7 @@
 package enkan.component.jetty;
 
 import enkan.web.application.WebApplication;
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import enkan.collection.OptionMap;
 import enkan.component.ApplicationComponent;
 import enkan.component.ComponentLifecycle;
@@ -161,7 +161,7 @@ public class JettyComponent extends WebServerComponent<JettyComponent> implement
      * @throws MisconfigurationException if the algorithm is not supported
      */
     public JettyComponent enableDigestFields(String algorithm) {
-        if (!DigestFieldsUtils.SUPPORTED_ALGORITHMS.contains(algorithm)) {
+        if (!DigestFields.SUPPORTED_ALGORITHMS.contains(algorithm)) {
             throw new MisconfigurationException("web.DIGEST_ALGORITHM_UNSUPPORTED", algorithm);
         }
         if (server != null) {

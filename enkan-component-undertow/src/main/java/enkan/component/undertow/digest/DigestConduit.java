@@ -1,6 +1,6 @@
 package enkan.component.undertow.digest;
 
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HttpString;
 import org.xnio.conduits.AbstractStreamSinkConduit;
@@ -107,7 +107,7 @@ public class DigestConduit extends AbstractStreamSinkConduit<StreamSinkConduit> 
     @Override
     public void terminateWrites() throws IOException {
         byte[] allBytes = buffer.toByteArray();
-        String digestValue = DigestFieldsUtils.computeDigestHeader(allBytes, algorithm);
+        String digestValue = DigestFields.computeDigestHeader(allBytes, algorithm);
         exchange.getResponseHeaders().put(header, digestValue);
 
         // Write all buffered bytes to the underlying conduit, then terminate.

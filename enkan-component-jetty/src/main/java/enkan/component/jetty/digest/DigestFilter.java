@@ -1,6 +1,6 @@
 package enkan.component.jetty.digest;
 
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -70,12 +70,12 @@ public class DigestFilter implements Filter {
 
         // Negotiate algorithm per Want-Repr-Digest header
         String wantReprDigest = httpReq.getHeader("Want-Repr-Digest");
-        String reprAlgorithm  = DigestFieldsUtils.negotiateAlgorithm(wantReprDigest, defaultAlgorithm);
+        String reprAlgorithm  = DigestFields.negotiateAlgorithm(wantReprDigest, defaultAlgorithm);
 
         String contentAlgorithm = null;
         if (!compressed) {
             String wantContentDigest = httpReq.getHeader("Want-Content-Digest");
-            contentAlgorithm = DigestFieldsUtils.negotiateAlgorithm(wantContentDigest, defaultAlgorithm);
+            contentAlgorithm = DigestFields.negotiateAlgorithm(wantContentDigest, defaultAlgorithm);
         }
 
         if (reprAlgorithm == null && contentAlgorithm == null) {
@@ -90,13 +90,13 @@ public class DigestFilter implements Filter {
         byte[] body = wrapper.getBuffer();
 
         if (reprAlgorithm != null) {
-            httpResp.setHeader("Repr-Digest", DigestFieldsUtils.computeDigestHeader(body, reprAlgorithm));
+            httpResp.setHeader("Repr-Digest", DigestFields.computeDigestHeader(body, reprAlgorithm));
         }
         if (contentAlgorithm != null) {
             // No compression: Content-Digest == Repr-Digest (or different algorithm if negotiated)
             String header = contentAlgorithm.equals(reprAlgorithm)
                     ? httpResp.getHeader("Repr-Digest")
-                    : DigestFieldsUtils.computeDigestHeader(body, contentAlgorithm);
+                    : DigestFields.computeDigestHeader(body, contentAlgorithm);
             httpResp.setHeader("Content-Digest", header);
         }
 

@@ -7,7 +7,7 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.middleware.WebMiddleware;
 import enkan.util.Predicates;
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -83,7 +83,7 @@ class UndertowAdapterDigestTest {
         String reprDigest = conn.getHeaderField("Repr-Digest");
         assertThat(reprDigest).isNotNull().startsWith("sha-256=:");
 
-        String expected = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String expected = DigestFields.computeDigestHeader(body, "sha-256");
         assertThat(reprDigest).isEqualTo(expected);
     }
 
@@ -101,7 +101,7 @@ class UndertowAdapterDigestTest {
         String contentDigest = conn.getHeaderField("Content-Digest");
         assertThat(contentDigest).isNotNull().startsWith("sha-256=:");
 
-        String expected = DigestFieldsUtils.computeDigestHeader(body, "sha-256");
+        String expected = DigestFields.computeDigestHeader(body, "sha-256");
         assertThat(contentDigest).isEqualTo(expected);
     }
 
@@ -171,7 +171,7 @@ class UndertowAdapterDigestTest {
         String reprDigest = conn.getHeaderField("Repr-Digest");
         assertThat(reprDigest).isNotNull().startsWith("sha-256=:");
 
-        String expected = DigestFieldsUtils.computeDigestHeader(
+        String expected = DigestFields.computeDigestHeader(
                 plainBody.getBytes(StandardCharsets.UTF_8), "sha-256");
         assertThat(reprDigest).isEqualTo(expected);
     }
@@ -193,7 +193,7 @@ class UndertowAdapterDigestTest {
         assertThat(contentDigest).isNotNull().startsWith("sha-256=:");
 
         // Verify digest matches the actual on-wire (gzip-compressed) bytes
-        String expected = DigestFieldsUtils.computeDigestHeader(compressedBody, "sha-256");
+        String expected = DigestFields.computeDigestHeader(compressedBody, "sha-256");
         assertThat(contentDigest).isEqualTo(expected);
     }
 
