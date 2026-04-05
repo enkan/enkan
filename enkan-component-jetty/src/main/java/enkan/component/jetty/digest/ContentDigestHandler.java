@@ -1,6 +1,6 @@
 package enkan.component.jetty.digest;
 
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Response;
@@ -43,7 +43,7 @@ public class ContentDigestHandler extends Handler.Wrapper {
     public boolean handle(Request request, Response response, Callback callback) throws Exception {
         // Negotiate algorithm per Want-Content-Digest request header
         String wantValue = request.getHeaders().get("Want-Content-Digest");
-        String algorithm = DigestFieldsUtils.negotiateAlgorithm(wantValue, defaultAlgorithm);
+        String algorithm = DigestFields.negotiateAlgorithm(wantValue, defaultAlgorithm);
 
         if (algorithm == null) {
             // Client explicitly opted out of all supported algorithms
@@ -90,7 +90,7 @@ public class ContentDigestHandler extends Handler.Wrapper {
 
             if (last) {
                 byte[] allBytes = buffer.toByteArray();
-                String digestHeader = DigestFieldsUtils.computeDigestHeader(allBytes, algorithm);
+                String digestHeader = DigestFields.computeDigestHeader(allBytes, algorithm);
                 getWrapped().getHeaders().put("Content-Digest", digestHeader);
                 // Forward all buffered bytes in a single final write
                 getWrapped().write(true, ByteBuffer.wrap(allBytes), callback);

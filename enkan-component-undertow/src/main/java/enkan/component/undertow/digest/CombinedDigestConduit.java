@@ -1,6 +1,6 @@
 package enkan.component.undertow.digest;
 
-import enkan.web.util.DigestFieldsUtils;
+import enkan.web.http.fields.digest.DigestFields;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HttpString;
 import org.xnio.conduits.AbstractStreamSinkConduit;
@@ -108,13 +108,13 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
 
         if (reprAlgorithm != null) {
             exchange.getResponseHeaders().put(REPR_DIGEST,
-                    DigestFieldsUtils.computeDigestHeader(allBytes, reprAlgorithm));
+                    DigestFields.computeDigestHeader(allBytes, reprAlgorithm));
         }
         if (contentAlgorithm != null) {
             // When algorithms are identical, reuse the already-computed header value
             String contentValue = contentAlgorithm.equals(reprAlgorithm)
                     ? exchange.getResponseHeaders().getFirst(REPR_DIGEST)
-                    : DigestFieldsUtils.computeDigestHeader(allBytes, contentAlgorithm);
+                    : DigestFields.computeDigestHeader(allBytes, contentAlgorithm);
             exchange.getResponseHeaders().put(CONTENT_DIGEST, contentValue);
         }
 
