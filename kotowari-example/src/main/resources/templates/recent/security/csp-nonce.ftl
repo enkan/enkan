@@ -1,4 +1,4 @@
-<#import "layout/defaultLayout.ftl" as layout>
+<#import "/layout/defaultLayout.ftl" as layout>
 <@layout.layout "CSP Nonce Demo">
   <h1>CSP Nonce Demo</h1>
   <p>このページは <code>CspNonceMiddleware</code> を <code>/recent/security/csp-nonce</code> のみに適用しています。</p>
