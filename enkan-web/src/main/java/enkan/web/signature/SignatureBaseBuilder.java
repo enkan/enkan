@@ -1,5 +1,6 @@
 package enkan.web.signature;
 
+import enkan.exception.MisconfigurationException;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.util.sf.*;
@@ -116,7 +117,7 @@ public final class SignatureBaseBuilder {
             case "@query-param" -> resolveQueryParam(request, component);
             case "@status" -> {
                 if (response == null) {
-                    throw new IllegalArgumentException("@status requires a response context");
+                    throw new MisconfigurationException("web.SIGNATURE_STATUS_REQUIRES_RESPONSE");
                 }
                 yield String.valueOf(response.getStatus());
             }
@@ -146,7 +147,7 @@ public final class SignatureBaseBuilder {
     private static String resolveQueryParam(HttpRequest request, SignatureComponent component) {
         String paramName = component.nameParam();
         if (paramName == null) {
-            throw new IllegalArgumentException("@query-param requires ;name parameter");
+            throw new MisconfigurationException("web.SIGNATURE_QUERY_PARAM_NAME_REQUIRED");
         }
         String qs = request.getQueryString();
         if (qs == null) {

@@ -1,5 +1,6 @@
 package enkan.web.signature;
 
+import enkan.exception.MisconfigurationException;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.util.sf.SfParameters;
@@ -107,7 +108,7 @@ class SignatureBaseBuilderTest {
         HttpRequest req = buildRequest("GET", "/", null, "http", "example.com", 80);
         assertThatThrownBy(() ->
                 SignatureBaseBuilder.resolveComponentValue(req, null, SignatureComponent.of("@status")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(MisconfigurationException.class);
     }
 
     // ----------------------------------------------------------- header components
@@ -231,6 +232,16 @@ class SignatureBaseBuilderTest {
         assertThatThrownBy(() ->
                 SignatureBaseBuilder.resolveComponentValue(req, null, comp))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void queryParamWithoutNameParamThrows() {
+        HttpRequest req = buildRequest("GET", "/", "a=1", "http", "example.com", 80);
+        // @query-param with no ;name parameter is a developer misconfiguration
+        SignatureComponent comp = new SignatureComponent("@query-param", SfParameters.EMPTY);
+        assertThatThrownBy(() ->
+                SignatureBaseBuilder.resolveComponentValue(req, null, comp))
+                .isInstanceOf(MisconfigurationException.class);
     }
 
     // ----------------------------------------------------------- response header resolution
