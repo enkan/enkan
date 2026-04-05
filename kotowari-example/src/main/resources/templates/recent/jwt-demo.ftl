@@ -31,48 +31,5 @@
     <li>Verify returns <code>401</code> when the token is missing, tampered, or expired (tokens expire in 5 minutes).</li>
   </ul>
 
-  <script>
-    let currentToken = null;
-
-    document.getElementById('issue-btn').addEventListener('click', function () {
-      var sub = document.getElementById('sub-input').value.trim() || 'alice';
-      document.getElementById('issue-result').textContent = 'Issuing token for sub=' + sub + ' ...';
-
-      fetch('/api/recent/jwt/issue?sub=' + encodeURIComponent(sub))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          currentToken = data.token;
-          var claims = data.claims || {};
-          document.getElementById('issue-result').textContent =
-            'Token:\n' + data.token +
-            '\n\nDecoded Claims:\n' + JSON.stringify(claims, null, 2);
-          document.getElementById('verify-btn').disabled = false;
-          document.getElementById('curl-issue').textContent =
-            'curl "http://localhost:3000/api/recent/jwt/issue?sub=' + encodeURIComponent(sub) + '"';
-          document.getElementById('curl-verify').textContent =
-            'curl -i "http://localhost:3000/api/recent/jwt/verify" \\\n' +
-            '  -H "Authorization: Bearer ' + data.token + '"';
-        })
-        .catch(function(err) {
-          document.getElementById('issue-result').textContent = 'Error: ' + err;
-        });
-    });
-
-    document.getElementById('verify-btn').addEventListener('click', function () {
-      if (!currentToken) return;
-      document.getElementById('verify-result').textContent = 'Verifying ...';
-
-      fetch('/api/recent/jwt/verify', {
-        headers: { 'Authorization': 'Bearer ' + currentToken }
-      })
-        .then(function(r) { return r.json().then(function(b) { return { status: r.status, body: b }; }); })
-        .then(function(res) {
-          document.getElementById('verify-result').textContent =
-            'HTTP ' + res.status + '\n' + JSON.stringify(res.body, null, 2);
-        })
-        .catch(function(err) {
-          document.getElementById('verify-result').textContent = 'Error: ' + err;
-        });
-    });
-  </script>
+  <script src="/assets/js/recent-jwt-demo.js"></script>
 </@layout.layout>

@@ -11,7 +11,7 @@
   <div class="container">
     <#nested/>
   </div>
-  <script src="/x-enkan/repl/enkan-repl.js" data-ws-port="3001"></script>
+  <script src="/x-enkan/repl/enkan-repl.js"></script>
 </body>
 </html>
 </#macro>

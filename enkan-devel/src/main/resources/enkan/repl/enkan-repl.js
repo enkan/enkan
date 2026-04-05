@@ -1,7 +1,6 @@
 (function() {
     var SCRIPT = document.currentScript;
     var BASE_PATH = SCRIPT.src.substring(0, SCRIPT.src.lastIndexOf('/') + 1);
-    var WS_PORT = parseInt(SCRIPT.getAttribute('data-ws-port'), 10) || 3001;
     var PROMPT = 'enkan> ';
     var MAX_OUTPUT_LOG = 500;
 
@@ -314,6 +313,13 @@
     // --- WebSocket ---
 
     function connect() {
+        fetch('/x-enkan/dev-info')
+            .then(function(r) { return r.json(); })
+            .then(function(info) { doConnect(info.wsPort); })
+            .catch(function() { doConnect(3001); });
+    }
+
+    function doConnect(WS_PORT) {
         ws = new WebSocket('ws://localhost:' + WS_PORT + '/repl');
         ws.onopen = function() {
             var msg = 'Connected to enkan REPL on port ' + WS_PORT;

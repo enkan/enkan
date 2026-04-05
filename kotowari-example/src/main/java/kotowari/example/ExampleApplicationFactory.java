@@ -113,6 +113,7 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
             // Recent feature demos (HTML)
             r.get("/recent/jwt/demo").to(RecentFeaturesDemoController.class, "jwtDemoPage");
             r.get("/recent/idempotency/demo").to(RecentFeaturesDemoController.class, "idempotencyDemoPage");
+            r.get("/recent/sse/demo").to(RecentFeaturesDemoController.class, "sseDemoPage");
             r.get("/recent/http-integrity/demo").to(HttpIntegrityDemoController.class, "demoPage");
 
             // Recent security/runtime demos (HTML)
@@ -171,7 +172,7 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
         app.use(path("^/recent/security/csp-nonce$"), new CspNonceMiddleware());
         app.use(builder(new SecurityHeadersMiddleware())
                 .set(SecurityHeadersMiddleware::setContentSecurityPolicy,
-                        "default-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' ws://localhost:*")
+                        "default-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' ws://localhost:* http://localhost:*")
                 .build());
         app.use(new TracingMiddleware());
         app.use(none(), new ServiceUnavailableMiddleware<>(new ResourceEndpoint("/public/html/503.html")));
@@ -186,6 +187,11 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
         app.use(new NormalizationMiddleware());
         app.use(new NestedParamsMiddleware());
         app.use(new CookiesMiddleware());
+        // Dev endpoints: must be before SessionMiddleware to avoid NPE on null response
+        app.use(PathPredicate.ANY("^/x-enkan/repl/.*"),
+                new LazyLoadMiddleware<>("enkan.endpoint.devel.ReplConsoleEndpoint"));
+        app.use(path("^/x-enkan/dev-info$"),
+                new LazyLoadMiddleware<>("enkan.endpoint.devel.DevInfoEndpoint"));
         app.use(path("^/api/http-integrity/verify$"), new DigestValidationMiddleware());
         app.use(path("^/api/http-integrity/verify$"), integritySignature);
         app.use(path("^/api/recent/idempotency/.*$"), idempotencyDemo);
@@ -203,9 +209,6 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
                         HttpResponseUtils.redirect("/guestbook/login?url=" + req.getUri(),
                                 HttpResponseUtils.RedirectStatusCode.TEMPORARY_REDIRECT));
         app.use(new ContentNegotiationMiddleware());
-        // Kotowari
-        app.use(PathPredicate.ANY("^/x-enkan/repl/.*"),
-                new LazyLoadMiddleware<>("enkan.endpoint.devel.ReplConsoleEndpoint"));
         app.use(new ResourceMiddleware());
         app.use(new RenderTemplateMiddleware());
         app.use(new RoutingMiddleware(routes));

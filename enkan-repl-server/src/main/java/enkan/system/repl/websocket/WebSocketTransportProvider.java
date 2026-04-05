@@ -5,6 +5,7 @@ import enkan.system.repl.TransportProvider;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A {@link TransportProvider} that starts a WebSocket server for browser-based REPL access.
@@ -50,6 +51,12 @@ public class WebSocketTransportProvider implements TransportProvider {
         wsThread.setDaemon(true);
         wsThread.setName("enkan-repl-websocket");
         wsThread.start();
+        try {
+            wsServer.awaitBound(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        System.setProperty("enkan.repl.ws.port", String.valueOf(wsServer.getPort()));
     }
 
     /**

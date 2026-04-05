@@ -14,6 +14,7 @@
     <li><a href="/recent/http-integrity/demo">HTTP Integrity demo (RFC 9530 + RFC 9421)</a></li>
     <li><a href="/recent/idempotency/demo">Idempotency-Key demo</a></li>
     <li><a href="/recent/jwt/demo">JWT demo (HS256)</a></li>
+    <li><a href="/recent/sse/demo">SSE demo (Server-Sent Events)</a></li>
     <li><a href="/recent/security/csp-nonce">CSP Nonce demo</a></li>
     <li><a href="/recent/security/request-timeout">Request Timeout demo</a></li>
     <li><a href="/recent/security/fetch-metadata">Fetch Metadata demo</a></li>

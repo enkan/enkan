@@ -12,18 +12,7 @@
   <button id="fetch-btn" class="btn btn-primary">Call protected API</button>
   <pre id="fetch-result" style="margin-top: 12px;">No request yet.</pre>
 
-  <script>
-    document.getElementById("fetch-btn").addEventListener("click", function() {
-      fetch("${apiPath}")
-        .then(function(r) { return r.text().then(function(t) { return {status: r.status, text: t}; }); })
-        .then(function(r) {
-          document.getElementById("fetch-result").textContent = "HTTP " + r.status + "\n" + r.text;
-        })
-        .catch(function(e) {
-          document.getElementById("fetch-result").textContent = "Error: " + e;
-        });
-    });
-  </script>
+  <script src="/assets/js/recent-security-fetch-metadata.js" data-api-path="${apiPath}"></script>
 
   <h3>Cross-site Reproduction (curl)</h3>
   <pre>curl -i "http://localhost:3000${apiPath}" \

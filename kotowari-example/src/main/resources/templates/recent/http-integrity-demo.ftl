@@ -33,51 +33,5 @@
     <li>The <code>Content-Digest</code> is checked first (body integrity), then the signature (authenticity).</li>
   </ul>
 
-  <script>
-    var sampleData = null;
-
-    document.getElementById('sample-btn').addEventListener('click', function () {
-      document.getElementById('sample-result').textContent = 'Fetching sample...';
-      fetch('/api/http-integrity/sample')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          sampleData = data;
-          var headersText = Object.entries(data.headers || {})
-            .map(function(e) { return e[0] + ': ' + e[1]; })
-            .join('\n');
-          document.getElementById('sample-result').textContent =
-            'Algorithm: ' + data.algorithm +
-            '\nKey ID: ' + data.keyId +
-            '\nCovered Components: ' + (data.coveredComponents || []).join(', ') +
-            '\nPayload: ' + data.payload +
-            '\n\nHeaders:\n' + headersText;
-          document.getElementById('verify-btn').disabled = false;
-          document.getElementById('curl-cmd').textContent = data.curl || '(no curl command returned)';
-        })
-        .catch(function(err) {
-          document.getElementById('sample-result').textContent = 'Error: ' + err;
-        });
-    });
-
-    document.getElementById('verify-btn').addEventListener('click', function () {
-      if (!sampleData) return;
-      document.getElementById('verify-result').textContent = 'Sending signed request...';
-
-      var headers = Object.assign({}, sampleData.headers || {});
-
-      fetch('/api/http-integrity/verify', {
-        method: 'POST',
-        headers: headers,
-        body: sampleData.payload
-      })
-        .then(function(r) { return r.json().then(function(b) { return { status: r.status, body: b }; }); })
-        .then(function(res) {
-          document.getElementById('verify-result').textContent =
-            'HTTP ' + res.status + '\n' + JSON.stringify(res.body, null, 2);
-        })
-        .catch(function(err) {
-          document.getElementById('verify-result').textContent = 'Error: ' + err;
-        });
-    });
-  </script>
+  <script src="/assets/js/recent-http-integrity-demo.js"></script>
 </@layout.layout>

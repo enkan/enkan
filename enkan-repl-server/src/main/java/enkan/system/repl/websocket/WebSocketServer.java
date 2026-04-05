@@ -10,6 +10,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -28,6 +30,7 @@ public class WebSocketServer implements Runnable, Closeable {
     private final int port;
     private final BiConsumer<WebSocketSession, String> messageHandler;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    private final CountDownLatch boundLatch = new CountDownLatch(1);
     private volatile ServerSocket serverSocket;
     private volatile boolean stopped;
     private volatile Consumer<String> onDisconnect;
@@ -45,7 +48,8 @@ public class WebSocketServer implements Runnable, Closeable {
     public void run() {
         try {
             serverSocket = new ServerSocket(port);
-            LOG.info("WebSocket server listening on port " + port);
+            boundLatch.countDown();
+            LOG.info("WebSocket server listening on port " + serverSocket.getLocalPort());
 
             while (!stopped) {
                 Socket client;
@@ -195,6 +199,17 @@ public class WebSocketServer implements Runnable, Closeable {
      */
     public void setOnDisconnect(Consumer<String> onDisconnect) {
         this.onDisconnect = onDisconnect;
+    }
+
+    /**
+     * Block until the server socket is bound, or the timeout elapses.
+     *
+     * @param timeout maximum time to wait
+     * @param unit    time unit
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public void awaitBound(long timeout, TimeUnit unit) throws InterruptedException {
+        boundLatch.await(timeout, unit);
     }
 
     /**

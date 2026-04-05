@@ -25,7 +25,7 @@ public class DevMain {
                     r.registerLocalCommand("autoreset", new AutoResetCommand(repl));
                     r.registerLocalCommand("compile", new CompileCommand());
                 })
-                .transport(new WebSocketTransportProvider(3001))
+                .transport(new WebSocketTransportProvider())
                 .onReady("/start")
                 .start();
 

@@ -43,6 +43,10 @@ public class RecentFeaturesDemoController {
         return templateEngine.render("recent/idempotency-demo");
     }
 
+    public HttpResponse sseDemoPage() {
+        return templateEngine.render("recent/sse-demo");
+    }
+
     public HttpResponse idempotencySample(HttpRequest request) {
         String url = baseUrl(request) + "/api/recent/idempotency/echo";
         String key = "\"demo-idempotency-key-1\"";
@@ -66,7 +70,8 @@ public class RecentFeaturesDemoController {
     }
 
     public HttpResponse idempotencyEcho(Parameters params, Object body) {
-        long delayMs = Math.max(0L, params.getLong("delayMs", 0L));
+        Long delayMsParam = params.getLong("delayMs");
+        long delayMs = delayMsParam != null ? Math.max(0L, delayMsParam) : 0L;
         if (delayMs > 0) {
             try {
                 Thread.sleep(Math.min(delayMs, 10_000L));
