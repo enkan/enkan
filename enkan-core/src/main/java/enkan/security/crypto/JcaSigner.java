@@ -37,6 +37,9 @@ public final class JcaSigner implements Signer {
         if (algorithm.type() == CryptoAlgorithm.Type.ASYMMETRIC && !(key instanceof PrivateKey)) {
             throw new MisconfigurationException("crypto.INCOMPATIBLE_KEY_TYPE", algorithm, key.getClass().getSimpleName());
         }
+        if (algorithm.isEcdsa() && !(key instanceof ECKey)) {
+            throw new MisconfigurationException("crypto.INCOMPATIBLE_KEY_TYPE", algorithm, key.getClass().getSimpleName());
+        }
         this.algorithm = algorithm;
         this.key = key;
     }

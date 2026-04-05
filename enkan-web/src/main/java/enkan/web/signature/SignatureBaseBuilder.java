@@ -134,6 +134,11 @@ public final class SignatureBaseBuilder {
     }
 
     private static String resolveAuthority(HttpRequest request) {
+        // RFC 9421 §2.2.5: prefer the Host header when present (reflects what the client signed)
+        Object hostHeader = request.getHeaders().get("host");
+        if (hostHeader != null) {
+            return hostHeader.toString().strip().toLowerCase(Locale.ROOT);
+        }
         String host = request.getServerName().toLowerCase(Locale.ROOT);
         int port = request.getServerPort();
         String scheme = request.getScheme();
