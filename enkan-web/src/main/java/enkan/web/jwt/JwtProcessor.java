@@ -339,8 +339,10 @@ public final class JwtProcessor {
         if (colonIdx < 0) return null;
         int start = colonIdx + 1;
         while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
+        // Allow optional leading minus sign, then digits only
         int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) end++;
+        if (end < json.length() && json.charAt(end) == '-') end++;
+        while (end < json.length() && Character.isDigit(json.charAt(end))) end++;
         if (end == start) return null;
         try {
             return Long.parseLong(json.substring(start, end));

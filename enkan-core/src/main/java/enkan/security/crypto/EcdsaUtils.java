@@ -36,17 +36,37 @@ public final class EcdsaUtils {
         if (pos + 2 > der.length) return null;
 
         // Parse r
-        if (der[pos] != 0x02) return null; // must be INTEGER tag
+        if (pos >= der.length || der[pos] != 0x02) return null; // must be INTEGER tag
         pos++;
-        int rLen = der[pos++] & 0xff;
+        if (pos >= der.length) return null;
+        int rLenByte = der[pos++] & 0xff;
+        int rLen;
+        if ((rLenByte & 0x80) != 0) {
+            int lenLen = rLenByte & 0x7f;
+            if (lenLen == 0 || pos + lenLen > der.length) return null;
+            rLen = 0;
+            for (int k = 0; k < lenLen; k++) rLen = (rLen << 8) | (der[pos++] & 0xff);
+        } else {
+            rLen = rLenByte;
+        }
         if (pos + rLen + 2 > der.length) return null;
         int rSrc = pos;
         pos += rLen;
 
         // Parse s
-        if (der[pos] != 0x02) return null; // must be INTEGER tag
+        if (pos >= der.length || der[pos] != 0x02) return null; // must be INTEGER tag
         pos++;
-        int sLen = der[pos++] & 0xff;
+        if (pos >= der.length) return null;
+        int sLenByte = der[pos++] & 0xff;
+        int sLen;
+        if ((sLenByte & 0x80) != 0) {
+            int lenLen = sLenByte & 0x7f;
+            if (lenLen == 0 || pos + lenLen > der.length) return null;
+            sLen = 0;
+            for (int k = 0; k < lenLen; k++) sLen = (sLen << 8) | (der[pos++] & 0xff);
+        } else {
+            sLen = sLenByte;
+        }
         if (pos + sLen > der.length) return null;
         int sSrc = pos;
 
