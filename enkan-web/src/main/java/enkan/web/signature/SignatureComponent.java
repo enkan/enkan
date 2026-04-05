@@ -21,11 +21,8 @@ public record SignatureComponent(String name, SfParameters parameters) {
 
     /** Creates a component with no parameters. */
     public static SignatureComponent of(String name) {
-        // RFC 9421 §2.1: HTTP field component identifiers MUST be lowercase
-        if (!name.startsWith("@")) {
-            name = name.toLowerCase(Locale.ROOT);
-        }
-        return new SignatureComponent(name, SfParameters.EMPTY);
+        // RFC 9421 §2.1: all component identifiers (field and derived) MUST be lowercase
+        return new SignatureComponent(name.toLowerCase(Locale.ROOT), SfParameters.EMPTY);
     }
 
     /** Creates a component from an {@link SfItem} in a parsed {@code Signature-Input} inner list. */
@@ -33,12 +30,8 @@ public record SignatureComponent(String name, SfParameters parameters) {
         if (!(item.value() instanceof SfValue.SfString s)) {
             throw new IllegalArgumentException("Component identifier must be an SF String, got: " + item.value());
         }
-        // RFC 9421 §2.1: HTTP field component identifiers MUST be lowercase
-        String name = s.value();
-        if (!name.startsWith("@")) {
-            name = name.toLowerCase(Locale.ROOT);
-        }
-        return new SignatureComponent(name, item.parameters());
+        // RFC 9421 §2.1: all component identifiers (field and derived) MUST be lowercase
+        return new SignatureComponent(s.value().toLowerCase(Locale.ROOT), item.parameters());
     }
 
     /** Returns {@code true} if this is a derived component (name starts with {@code @}). */

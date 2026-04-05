@@ -230,15 +230,17 @@ public final class SignatureBaseBuilder {
 
         String raw = normalizeHeaderValue(headerObj);
 
-        if (component.isSf()) {
-            return canonicalizeSf(raw);
+        if (component.isBs()) {
+            throw new UnsupportedOperationException(";bs parameter is not yet supported");
         }
         String keyParam = component.keyParam();
         if (keyParam != null) {
-            return extractDictionaryMember(raw, keyParam);
+            // ;key extraction applies first, then ;sf canonicalization if also present
+            String member = extractDictionaryMember(raw, keyParam);
+            return component.isSf() ? canonicalizeSf(member) : member;
         }
-        if (component.isBs()) {
-            throw new UnsupportedOperationException(";bs parameter is not yet supported");
+        if (component.isSf()) {
+            return canonicalizeSf(raw);
         }
         return raw;
     }

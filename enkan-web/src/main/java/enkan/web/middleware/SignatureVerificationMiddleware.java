@@ -8,6 +8,7 @@ import enkan.web.signature.*;
 import enkan.web.util.sf.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static enkan.util.BeanBuilder.builder;
 
@@ -62,7 +63,7 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
         try {
             results = HttpMessageSignatures.verifyAll(request, keyResolver);
         } catch (SfParseException e) {
-            return errorResponse(400, "Invalid Signature-Input header");
+            return errorResponse(400, "Invalid Signature or Signature-Input header");
         } catch (UnsupportedOperationException e) {
             return errorResponse(501, e.getMessage());
         }
@@ -140,9 +141,12 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
     /**
      * Sets the component identifiers that must be covered by at least one valid signature.
      * A request is rejected if no single verified signature covers all of the specified components.
+     * Component names are normalized to lowercase to match {@link SignatureComponent} normalization.
      */
     public void setRequiredComponents(Set<String> requiredComponents) {
-        this.requiredComponents = requiredComponents;
+        this.requiredComponents = requiredComponents.stream()
+                .map(c -> c.toLowerCase(java.util.Locale.ROOT))
+                .collect(Collectors.toSet());
     }
 
     /**

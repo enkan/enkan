@@ -142,7 +142,12 @@ public final class HttpMessageSignatures {
         SfParameters params = signatureInput.parameters();
         String keyId = params.get("keyid") instanceof SfValue.SfString s ? s.value() : null;
         String algName = params.get("alg") instanceof SfValue.SfString s ? s.value() : null;
-        SignatureAlgorithm algorithm = algName != null ? SignatureAlgorithm.fromSfName(algName) : null;
+        SignatureAlgorithm algorithm;
+        try {
+            algorithm = algName != null ? SignatureAlgorithm.fromSfName(algName) : null;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
 
         return new VerifyResult(label, keyId, algorithm, Collections.unmodifiableMap(coveredValues));
     }

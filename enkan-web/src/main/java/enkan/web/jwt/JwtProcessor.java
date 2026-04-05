@@ -63,8 +63,14 @@ public final class JwtProcessor {
      * @return the signed JWT string
      */
     public static String sign(JwtHeader header, byte[] claimsJsonBytes, Key key) {
+        // serializeHeader validates alg is present before we attempt JwsAlgorithm lookup
+        byte[] headerJson = serializeHeader(header);
         JwsAlgorithm alg = JwsAlgorithm.fromJwsName(header.alg());
-        return sign(header, claimsJsonBytes, new JcaSigner(alg.crypto(), key));
+        String encodedHeader = URL_ENCODER.encodeToString(headerJson);
+        String encodedPayload = URL_ENCODER.encodeToString(claimsJsonBytes);
+        byte[] signingInput = buildSigningInput(encodedHeader, encodedPayload);
+        byte[] signature = new JcaSigner(alg.crypto(), key).sign(signingInput);
+        return encodedHeader + "." + encodedPayload + "." + URL_ENCODER.encodeToString(signature);
     }
 
     /**
