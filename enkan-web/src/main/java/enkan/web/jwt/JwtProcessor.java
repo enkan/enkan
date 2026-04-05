@@ -124,6 +124,13 @@ public final class JwtProcessor {
      * asymmetric algorithms. Returns {@code null} if the key type does not match
      * the algorithm family.
      *
+     * <p><strong>Security note:</strong> This overload trusts the {@code alg} field in the
+     * token header, which means an attacker who can control the header could attempt to
+     * switch algorithm families (mitigated by the key-type check) or supply an unrecognised
+     * algorithm name.  For maximum security, use
+     * {@link #verify(String, JwsAlgorithm, Key)} instead — it ignores the header {@code alg}
+     * entirely and enforces the caller-specified algorithm.
+     *
      * @param token the JWT string
      * @param key   the verification key (SecretKey for HMAC, PublicKey for asymmetric)
      * @return the decoded payload bytes, or {@code null} on failure

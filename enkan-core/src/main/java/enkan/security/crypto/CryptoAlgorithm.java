@@ -15,32 +15,34 @@ import java.security.spec.PSSParameterSpec;
  */
 public enum CryptoAlgorithm {
 
-    HMAC_SHA256("HmacSHA256", Type.SYMMETRIC),
-    HMAC_SHA384("HmacSHA384", Type.SYMMETRIC),
-    HMAC_SHA512("HmacSHA512", Type.SYMMETRIC),
+    HMAC_SHA256("HmacSHA256", Type.SYMMETRIC, false),
+    HMAC_SHA384("HmacSHA384", Type.SYMMETRIC, false),
+    HMAC_SHA512("HmacSHA512", Type.SYMMETRIC, false),
 
-    ED25519("Ed25519", Type.ASYMMETRIC),
+    ED25519("Ed25519", Type.ASYMMETRIC, false),
 
-    ECDSA_P256_SHA256("SHA256withECDSA", Type.ASYMMETRIC),
-    ECDSA_P384_SHA384("SHA384withECDSA", Type.ASYMMETRIC),
-    ECDSA_P521_SHA512("SHA512withECDSA", Type.ASYMMETRIC),
+    ECDSA_P256_SHA256("SHA256withECDSA", Type.ASYMMETRIC, true),
+    ECDSA_P384_SHA384("SHA384withECDSA", Type.ASYMMETRIC, true),
+    ECDSA_P521_SHA512("SHA512withECDSA", Type.ASYMMETRIC, true),
 
-    RSA_PSS_SHA256("RSASSA-PSS", Type.ASYMMETRIC),
-    RSA_PSS_SHA384("RSASSA-PSS", Type.ASYMMETRIC),
-    RSA_PSS_SHA512("RSASSA-PSS", Type.ASYMMETRIC),
+    RSA_PSS_SHA256("RSASSA-PSS", Type.ASYMMETRIC, false),
+    RSA_PSS_SHA384("RSASSA-PSS", Type.ASYMMETRIC, false),
+    RSA_PSS_SHA512("RSASSA-PSS", Type.ASYMMETRIC, false),
 
-    RSA_V1_5_SHA256("SHA256withRSA", Type.ASYMMETRIC),
-    RSA_V1_5_SHA384("SHA384withRSA", Type.ASYMMETRIC),
-    RSA_V1_5_SHA512("SHA512withRSA", Type.ASYMMETRIC);
+    RSA_V1_5_SHA256("SHA256withRSA", Type.ASYMMETRIC, false),
+    RSA_V1_5_SHA384("SHA384withRSA", Type.ASYMMETRIC, false),
+    RSA_V1_5_SHA512("SHA512withRSA", Type.ASYMMETRIC, false);
 
     public enum Type { SYMMETRIC, ASYMMETRIC }
 
     private final String jcaName;
     private final Type type;
+    private final boolean ecdsa;
 
-    CryptoAlgorithm(String jcaName, Type type) {
+    CryptoAlgorithm(String jcaName, Type type, boolean ecdsa) {
         this.jcaName = jcaName;
         this.type = type;
+        this.ecdsa = ecdsa;
     }
 
     /** Returns the JCA algorithm name for use with {@code Mac} or {@code Signature}. */
@@ -54,7 +56,7 @@ public enum CryptoAlgorithm {
 
     /** Returns {@code true} if this is an ECDSA algorithm requiring DER↔P1363 conversion. */
     public boolean isEcdsa() {
-        return jcaName.contains("ECDSA");
+        return ecdsa;
     }
 
     /**

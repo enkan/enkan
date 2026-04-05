@@ -6,6 +6,16 @@ package enkan.security.crypto;
  *
  * <p>All methods are pure byte-array operations with no external dependencies.
  *
+ * <h2>DER structure reference</h2>
+ * <pre>
+ * SEQUENCE (tag=0x30, length)
+ *   INTEGER (tag=0x02, length, [0x00 pad if high bit set], r bytes)
+ *   INTEGER (tag=0x02, length, [0x00 pad if high bit set], s bytes)
+ * </pre>
+ * The 0x00 pad is required by DER when the first byte of r or s has its high bit set,
+ * to avoid being interpreted as a negative number.  P1363 format simply concatenates
+ * r and s, each zero-padded on the left to {@code (keyBits+7)/8} bytes.
+ *
  * @author kawasima
  */
 public final class EcdsaUtils {

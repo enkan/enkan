@@ -275,6 +275,76 @@ class HttpMessageSignaturesTest {
         assertThat(results).isEmpty();
     }
 
+    // ----------------------------------------------------------- clock skew boundary
+
+    @Test
+    void verifyAllAcceptsSignatureJustInsideClockSkew() throws Exception {
+        // expires = now - 59s: still within the 60-second tolerance → must be accepted
+        // created must precede expires, so use created = now - 120 (older than expires)
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
+
+        long now = Instant.now().getEpochSecond();
+        long almostExpired = now - 59; // within tolerance
+        long recentCreated = almostExpired - 10; // created before expires; also within max age
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
+        paramMap.put("keyid", new SfValue.SfString("k1"));
+        paramMap.put("created", new SfValue.SfInteger(recentCreated));
+        paramMap.put("expires", new SfValue.SfInteger(almostExpired));
+        SfParameters params = new SfParameters(paramMap);
+
+        String base = SignatureBaseBuilder.buildSignatureBase(
+                req, List.of(SignatureComponent.of("@method")), params);
+        byte[] sig = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key).sign(
+                base.getBytes(StandardCharsets.UTF_8));
+
+        String sigInput = SignatureBaseBuilder.serializeSignatureParams(
+                List.of(SignatureComponent.of("@method")), params);
+        String sigValue = StructuredFields.serializeItem(new SfItem(new SfValue.SfByteSequence(sig)));
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + sigValue);
+
+        SignatureKeyResolver resolver = testResolver("k1", SignatureAlgorithm.HMAC_SHA256,
+                new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key));
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).hasSize(1);
+    }
+
+    @Test
+    void verifyAllRejectsSignatureJustOutsideClockSkew() throws Exception {
+        // expires = now - 61s: just beyond the 60-second tolerance → must be rejected
+        // created must precede expires to avoid the expires-before-created rejection
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        HttpRequest req = buildRequest("GET", "/", null, "https", "example.com", 443);
+
+        long now = Instant.now().getEpochSecond();
+        long justExpired = now - 61; // beyond tolerance
+        long recentCreated = justExpired - 10; // created before expires; within max age
+        Map<String, SfValue> paramMap = new LinkedHashMap<>();
+        paramMap.put("alg", new SfValue.SfString("hmac-sha256"));
+        paramMap.put("keyid", new SfValue.SfString("k1"));
+        paramMap.put("created", new SfValue.SfInteger(recentCreated));
+        paramMap.put("expires", new SfValue.SfInteger(justExpired));
+        SfParameters params = new SfParameters(paramMap);
+
+        String base = SignatureBaseBuilder.buildSignatureBase(
+                req, List.of(SignatureComponent.of("@method")), params);
+        byte[] sig = new JcaSigner(CryptoAlgorithm.HMAC_SHA256, key).sign(
+                base.getBytes(StandardCharsets.UTF_8));
+
+        String sigInput = SignatureBaseBuilder.serializeSignatureParams(
+                List.of(SignatureComponent.of("@method")), params);
+        String sigValue = StructuredFields.serializeItem(new SfItem(new SfValue.SfByteSequence(sig)));
+        req.getHeaders().put("Signature-Input", "sig1=" + sigInput);
+        req.getHeaders().put("Signature", "sig1=" + sigValue);
+
+        SignatureKeyResolver resolver = testResolver("k1", SignatureAlgorithm.HMAC_SHA256,
+                new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, key));
+        List<VerifyResult> results = HttpMessageSignatures.verifyAll(req, resolver);
+        assertThat(results).isEmpty();
+    }
+
     // ----------------------------------------------------------- unknown algorithm is skipped (T1)
 
     @Test

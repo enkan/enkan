@@ -214,6 +214,8 @@ public final class SignatureBaseBuilder {
 
     private static String resolveHeader(HttpRequest request, HttpResponse response,
                                         SignatureComponent component) {
+        // Headers stores keys in ASCII lowercase (see Headers class Javadoc), so the
+        // lowercase component.name() from SignatureComponent always matches the stored key.
         // ;req flag: resolve from request even when signing a response
         Object headerObj;
         if (component.isReq() && response != null) {

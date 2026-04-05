@@ -202,6 +202,16 @@ class JwtProcessorTest {
     }
 
     @Test
+    void malformedBase64InPayloadReturnsNull() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        // Valid header, invalid base64 payload, dummy signature
+        String header = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String fakeToken = header + ".!!!invalid-base64!!!.fakesig";
+        assertThat(JwtProcessor.verify(fakeToken, key)).isNull();
+    }
+
+    @Test
     void tamperedPayloadReturnsNull() throws Exception {
         SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
         byte[] claims = "{\"sub\":\"user1\"}".getBytes(StandardCharsets.UTF_8);
