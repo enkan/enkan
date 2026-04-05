@@ -78,12 +78,17 @@ public class InitCommand implements SystemCommand {
                 "--verbose",
                 "--include-partial-messages",
                 "--allowedTools", "Write",
-                "--add-dir", outPath.toString(),
-                prompt
+                "--add-dir", outPath.toString()
         );
         pb.directory(outPath.toFile());
         pb.redirectErrorStream(false);
         Process process = pb.start();
+
+        // Write prompt to claude's stdin, then close it
+        try (var stdin = new PrintWriter(new OutputStreamWriter(
+                process.getOutputStream(), StandardCharsets.UTF_8))) {
+            stdin.print(prompt);
+        }
 
         try (var reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
