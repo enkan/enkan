@@ -8,6 +8,7 @@ module enkan.core {
     exports enkan.middleware;
     exports enkan.predicate;
     exports enkan.security;
+    exports enkan.security.crypto;
     exports enkan.util;
 
     requires transitive jakarta.inject;
