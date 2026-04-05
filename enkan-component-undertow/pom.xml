@@ -15,7 +15,7 @@
     <name>enkan-component-undertow</name>
 
     <properties>
-        <undertow.version>2.3.23.Final</undertow.version>
+        <undertow.version>2.3.24.Final</undertow.version>
     </properties>
 
     <dependencies>
