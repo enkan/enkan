@@ -1,8 +1,8 @@
 package enkan.web.signature;
 
-import enkan.web.util.sf.SfItem;
-import enkan.web.util.sf.SfParameters;
-import enkan.web.util.sf.SfValue;
+import enkan.web.http.fields.sf.SfItem;
+import enkan.web.http.fields.sf.SfParameters;
+import enkan.web.http.fields.sf.SfValue;
 
 import java.util.Locale;
 

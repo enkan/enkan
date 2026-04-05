@@ -2,7 +2,7 @@ package enkan.web.signature;
 
 import enkan.security.crypto.*;
 import enkan.web.data.HttpRequest;
-import enkan.web.util.sf.*;
+import enkan.web.http.fields.sf.*;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.KeyGenerator;

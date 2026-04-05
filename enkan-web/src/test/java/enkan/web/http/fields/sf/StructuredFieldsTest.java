@@ -1,6 +1,6 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
-import enkan.web.util.sf.SfValue.*;
+import enkan.web.http.fields.sf.SfValue.*;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

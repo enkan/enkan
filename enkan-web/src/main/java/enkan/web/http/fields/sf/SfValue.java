@@ -1,4 +1,4 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
 import java.util.Arrays;
 import java.util.Base64;

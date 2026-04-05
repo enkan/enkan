@@ -1,4 +1,4 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
 /**
  * Thrown when a Structured Fields header value cannot be parsed per RFC 8941.

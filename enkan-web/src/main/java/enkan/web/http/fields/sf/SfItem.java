@@ -1,4 +1,4 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
 /**
  * An Item in an RFC 8941 Structured Field (§3.3).

@@ -1,7 +1,7 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
-import enkan.web.util.sf.SfValue.*;
-import static enkan.web.util.sf.SfChars.*;
+import enkan.web.http.fields.sf.SfValue.*;
+import static enkan.web.http.fields.sf.SfChars.*;
 
 import java.util.Base64;
 import java.util.Iterator;

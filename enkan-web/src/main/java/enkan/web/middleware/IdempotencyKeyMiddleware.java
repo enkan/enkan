@@ -7,10 +7,10 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.middleware.idempotency.IdempotencyEntry;
 import enkan.web.middleware.session.KeyValueStore;
-import enkan.web.util.sf.SfItem;
-import enkan.web.util.sf.SfParseException;
-import enkan.web.util.sf.SfValue.SfString;
-import enkan.web.util.sf.StructuredFields;
+import enkan.web.http.fields.sf.SfItem;
+import enkan.web.http.fields.sf.SfParseException;
+import enkan.web.http.fields.sf.SfValue.SfString;
+import enkan.web.http.fields.sf.StructuredFields;
 
 import enkan.exception.MisconfigurationException;
 import jakarta.inject.Inject;

@@ -3,8 +3,8 @@ package enkan.web.signature;
 import enkan.exception.MisconfigurationException;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
-import enkan.web.util.sf.SfParameters;
-import enkan.web.util.sf.SfValue;
+import enkan.web.http.fields.sf.SfParameters;
+import enkan.web.http.fields.sf.SfValue;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -116,9 +116,9 @@ class SignatureBaseBuilderTest {
     @Test
     void fromSfItemNormalizesHeaderNameToLowerCase() {
         // Verify that mixed-case header names are lowercased per RFC 9421 §2.1
-        enkan.web.util.sf.SfItem item = new enkan.web.util.sf.SfItem(
-                new enkan.web.util.sf.SfValue.SfString("Content-Type"),
-                enkan.web.util.sf.SfParameters.EMPTY);
+        enkan.web.http.fields.sf.SfItem item = new enkan.web.http.fields.sf.SfItem(
+                new enkan.web.http.fields.sf.SfValue.SfString("Content-Type"),
+                enkan.web.http.fields.sf.SfParameters.EMPTY);
         SignatureComponent comp = SignatureComponent.fromSfItem(item);
         assertThat(comp.name()).isEqualTo("content-type");
     }

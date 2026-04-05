@@ -1,4 +1,4 @@
-package enkan.web.util.sf;
+package enkan.web.http.fields.sf;
 
 /**
  * A member of a List or Dictionary in an RFC 8941 Structured Field.
