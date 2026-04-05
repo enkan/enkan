@@ -1,6 +1,7 @@
 package enkan.system.repl.client;
 
 import enkan.system.ReplResponse;
+import enkan.system.repl.command.InitCommand;
 import enkan.system.repl.serdes.Fressian;
 import enkan.system.repl.serdes.ReplResponseReader;
 import enkan.system.repl.serdes.ReplResponseWriter;
@@ -17,15 +18,17 @@ import zmq.ZError;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.nio.charset.Charset;
 
 import static enkan.system.ReplResponse.ResponseStatus.DONE;
 import static enkan.system.ReplResponse.ResponseStatus.SHUTDOWN;
@@ -45,6 +48,7 @@ public class ReplClient {
         private ZMQ.Socket completerSock;
         private final LineReader reader;
         private final Fressian fressian;
+        private final Map<String, InitCommand> clientLocalCommands = new LinkedHashMap<>();
         private final AtomicBoolean isAvailable = new AtomicBoolean(true);
         private final AtomicBoolean pendingExit = new AtomicBoolean(false);
         private final AtomicBoolean serverDisconnected = new AtomicBoolean(false);
@@ -57,6 +61,7 @@ public class ReplClient {
             fressian.putReadHandler(ReplResponse.ResponseStatus.class, new ResponseStatusReader());
             fressian.putWriteHandler(ReplResponse.class, new ReplResponseWriter());
             fressian.putWriteHandler(ReplResponse.ResponseStatus.class, new ReplResponseWriter());
+            clientLocalCommands.put("init", new InitCommand());
         }
 
         public void connect(int port) {
@@ -193,6 +198,25 @@ public class ReplClient {
                         }
                         closeQuietly();
                         return;
+                    } else if (line.startsWith("/")) {
+                        String cmdName = line.substring(1).split("\\s+")[0];
+                        InitCommand localCmd = clientLocalCommands.get(cmdName);
+                        if (localCmd != null) {
+                            localCmd.execute(null, new JLineTransport(reader));
+                        } else if (this.socket == null) {
+                            reader.getTerminal().writer().println("Unconnected to enkan system.");
+                        } else {
+                            reader.getHistory().save();
+                            this.socket.send(line);
+                            String serverInstruction = null;
+                            while (isAvailable.get() && serverInstruction == null) {
+                                serverInstruction = rendererSock.recvStr(500);
+                            }
+                            if (Objects.equals(serverInstruction, "shutdown") || !isAvailable.get()) {
+                                closeQuietly();
+                                break;
+                            }
+                        }
                     } else {
                         if (this.socket == null) {
                             reader.getTerminal().writer().println("Unconnected to enkan system.");

@@ -1,4 +1,4 @@
-package enkan.system.devel.command;
+package enkan.system.repl.command;
 
 import enkan.system.EnkanSystem;
 import enkan.system.SystemCommand;
@@ -20,6 +20,9 @@ import java.nio.file.Path;
  * <p>The command prompts the user for a project description and basic settings,
  * then invokes {@code claude -p} with a tailored prompt that includes Enkan
  * framework reference code. Claude generates the project files directly.
+ *
+ * <p>This command is a client-local command: it can be run without a REPL server
+ * connection, making it usable directly from the {@code enkan-repl} CLI client.
  *
  * @author kawasima
  */
@@ -199,9 +202,7 @@ public class InitCommand implements SystemCommand {
     }
 
     static String inferProjectName(String description) {
-        // Extract a simple name from the description
         String lower = description.toLowerCase();
-        // Remove common filler words
         String cleaned = lower.replaceAll("\\b(a|an|the|for|with|and|or|that|which|using|build|create|make|want|to|i)\\b", "")
                 .replaceAll("[^a-z0-9\\s]", "")
                 .trim()
@@ -209,7 +210,6 @@ public class InitCommand implements SystemCommand {
         if (cleaned.isEmpty() || cleaned.length() > 30) {
             return "my-app";
         }
-        // Take first 2-3 words
         String[] parts = cleaned.split("-");
         int limit = Math.min(parts.length, 3);
         return String.join("-", java.util.Arrays.copyOf(parts, limit));

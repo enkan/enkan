@@ -3,7 +3,7 @@ package enkan.system.devel;
 import enkan.system.Repl;
 import enkan.system.devel.command.AutoResetCommand;
 import enkan.system.devel.command.CompileCommand;
-import enkan.system.devel.command.InitCommand;
+import enkan.system.repl.command.InitCommand;
 import enkan.system.devel.compiler.MavenCompiler;
 import enkan.system.repl.SystemCommandRegister;
 
