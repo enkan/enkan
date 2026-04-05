@@ -75,6 +75,8 @@ public class InitCommand implements SystemCommand {
         ProcessBuilder pb = new ProcessBuilder(
                 "claude", "-p",
                 "--output-format", "stream-json",
+                "--verbose",
+                "--include-partial-messages",
                 "--allowedTools", "Write",
                 "--add-dir", outPath.toString(),
                 prompt
@@ -105,37 +107,39 @@ public class InitCommand implements SystemCommand {
      * Parses one stream-json line from Claude CLI and forwards relevant events
      * to the transport without pulling in a JSON library.
      *
-     * <p>Relevant event types:
+     * <p>Handled event types (with --include-partial-messages):
      * <ul>
-     *   <li>{@code assistant} with {@code text} content delta — printed as-is</li>
-     *   <li>{@code assistant} with {@code tool_use} — prints the tool name</li>
+     *   <li>{@code stream_event / content_block_delta / text_delta} — real-time text</li>
+     *   <li>{@code stream_event / content_block_start / tool_use} — tool invocation name</li>
      * </ul>
      */
     private void streamJsonLine(Transport transport, String json) {
-        // Only process assistant message events
-        if (!json.contains("\"type\":\"assistant\"")) return;
+        if (!json.contains("\"type\":\"stream_event\"")) return;
 
-        // text delta
-        int textIdx = json.indexOf("\"text\":\"");
-        if (textIdx >= 0) {
-            int start = textIdx + 8;
-            int end = findJsonStringEnd(json, start);
-            if (end > start) {
-                String text = unescapeJson(json.substring(start, end));
-                if (!text.isBlank()) {
-                    transport.sendOut(text);
+        // Real-time text delta: {"type":"stream_event","event":{"type":"content_block_delta",
+        //   "delta":{"type":"text_delta","text":"..."}}}
+        if (json.contains("\"type\":\"text_delta\"")) {
+            int textIdx = json.indexOf("\"text\":\"");
+            if (textIdx >= 0) {
+                int start = textIdx + 8;
+                int end = findJsonStringEnd(json, start);
+                if (end > start) {
+                    transport.sendOut(unescapeJson(json.substring(start, end)));
                 }
             }
             return;
         }
 
-        // tool_use — print the tool name so user sees progress
-        int nameIdx = json.indexOf("\"name\":\"");
-        if (nameIdx >= 0) {
-            int start = nameIdx + 8;
-            int end = findJsonStringEnd(json, start);
-            if (end > start) {
-                transport.sendOut("[tool] " + json.substring(start, end) + "\n");
+        // Tool use start: {"type":"stream_event","event":{"type":"content_block_start",
+        //   "content_block":{"type":"tool_use","name":"..."}}}
+        if (json.contains("\"type\":\"tool_use\"")) {
+            int nameIdx = json.indexOf("\"name\":\"");
+            if (nameIdx >= 0) {
+                int start = nameIdx + 8;
+                int end = findJsonStringEnd(json, start);
+                if (end > start) {
+                    transport.sendOut("\n[tool] " + json.substring(start, end) + "\n");
+                }
             }
         }
     }
