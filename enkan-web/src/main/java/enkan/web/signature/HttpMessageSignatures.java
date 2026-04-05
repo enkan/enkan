@@ -2,6 +2,7 @@ package enkan.web.signature;
 
 import enkan.security.crypto.Signer;
 import enkan.security.crypto.Verifier;
+import enkan.web.collection.Headers;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.util.sf.*;
@@ -42,8 +43,8 @@ public final class HttpMessageSignatures {
      * @throws UnsupportedOperationException if an unsupported feature (e.g. {@code ;bs}) is encountered (→ HTTP 501)
      */
     public static List<VerifyResult> verifyAll(HttpRequest request, SignatureKeyResolver keyResolver) {
-        String signatureHeader = request.getHeaders().get("Signature");
-        String signatureInputHeader = request.getHeaders().get("Signature-Input");
+        String signatureHeader = getHeaderForParsing(request.getHeaders(), "Signature");
+        String signatureInputHeader = getHeaderForParsing(request.getHeaders(), "Signature-Input");
         if (signatureHeader == null || signatureInputHeader == null) {
             return List.of();
         }
@@ -196,6 +197,39 @@ public final class HttpMessageSignatures {
      * to add to the {@code Signature-Input} and {@code Signature} dictionaries.
      */
     public record SignatureResult(String signatureInputValue, String signatureValue) {}
+
+    // -------------------------------------------------------------------------
+    // Header normalization
+    // -------------------------------------------------------------------------
+
+    /**
+     * Retrieves a header value and normalizes it for SF parsing.
+     *
+     * <p>{@code Headers.get(String)} returns {@code val.toString()}, which for a
+     * multi-value {@code List} produces {@code "[v1, v2]"} — not a valid SF string.
+     * This method retrieves the raw object via the {@code Map<String,Object>} view
+     * and joins list values with {@code ", "} before SF parsing.
+     */
+    private static String getHeaderForParsing(Headers headers, String name) {
+        // Parameters.get() overrides Map.get() to return val.toString(), losing List structure.
+        // Use entrySet() to access the raw Object value for proper multi-value joining.
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        for (Map.Entry<String, Object> entry : headers.entrySet()) {
+            if (lowerName.equals(entry.getKey())) {
+                Object val = entry.getValue();
+                if (val instanceof List<?> list) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < list.size(); i++) {
+                        if (i > 0) sb.append(", ");
+                        sb.append(list.get(i).toString().strip());
+                    }
+                    return sb.toString();
+                }
+                return val.toString();
+            }
+        }
+        return null;
+    }
 
     // -------------------------------------------------------------------------
     // Time validation

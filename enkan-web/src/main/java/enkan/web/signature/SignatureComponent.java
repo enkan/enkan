@@ -21,6 +21,10 @@ public record SignatureComponent(String name, SfParameters parameters) {
 
     /** Creates a component with no parameters. */
     public static SignatureComponent of(String name) {
+        // RFC 9421 §2.1: HTTP field component identifiers MUST be lowercase
+        if (!name.startsWith("@")) {
+            name = name.toLowerCase(Locale.ROOT);
+        }
         return new SignatureComponent(name, SfParameters.EMPTY);
     }
 

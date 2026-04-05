@@ -138,7 +138,8 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
     }
 
     /**
-     * Sets the component identifiers that must be covered by every valid signature.
+     * Sets the component identifiers that must be covered by at least one valid signature.
+     * A request is rejected if no single verified signature covers all of the specified components.
      */
     public void setRequiredComponents(Set<String> requiredComponents) {
         this.requiredComponents = requiredComponents;

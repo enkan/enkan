@@ -7,10 +7,8 @@ import enkan.web.util.sf.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * Builds the signature base string per RFC 9421 §2.5.
@@ -276,6 +274,10 @@ public final class SignatureBaseBuilder {
 
     /**
      * Extracts a single member from an SF Dictionary and serializes it.
+     *
+     * <p>The member is serialized as a bare item or inner list, without the dictionary
+     * key prefix. Serializing via a single-member list handles boolean true correctly
+     * (which would serialize without {@code =} in dictionary form).
      */
     private static String extractDictionaryMember(String raw, String key) {
         SfDictionary dict = StructuredFields.parseDictionary(raw);
@@ -283,13 +285,7 @@ public final class SignatureBaseBuilder {
         if (member == null) {
             throw new IllegalArgumentException("Dictionary member '" + key + "' not found");
         }
-        // Serialize the member as a single-entry dictionary, then strip the key prefix
-        Map<String, SfMember> single = new LinkedHashMap<>();
-        single.put(key, member);
-        String serialized = StructuredFields.serializeDictionary(new SfDictionary(single));
-        // Result is "key=value" or "key=(inner-list)"; strip "key="
-        int eq = serialized.indexOf('=');
-        return eq >= 0 ? serialized.substring(eq + 1) : serialized;
+        return StructuredFields.serializeList(new SfList(List.of(member)));
     }
 
     /**
