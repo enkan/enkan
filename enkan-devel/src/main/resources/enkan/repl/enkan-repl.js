@@ -341,6 +341,8 @@
             }
             if (msg.status && msg.status.indexOf('DONE') !== -1) {
                 showPrompt();
+            } else if (msg.status && msg.status.indexOf('NEED_INPUT') !== -1) {
+                waitingForResponse = false;
             }
         };
         ws.onerror = function() {

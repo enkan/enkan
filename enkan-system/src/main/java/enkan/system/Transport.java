@@ -81,4 +81,17 @@ public interface Transport {
         return recv(-1);
     }
 
+    /**
+     * Sends a prompt message to the client and signals that user input is
+     * expected.  The client should display the prompt text and allow the user
+     * to type a response, which will be delivered via {@link #recv()}.
+     *
+     * @param prompt the prompt text to display to the user
+     */
+    default void sendPrompt(String prompt) {
+        ReplResponse res = ReplResponse.withOut(prompt);
+        res.getStatus().add(NEED_INPUT);
+        send(res);
+    }
+
 }
