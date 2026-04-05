@@ -279,6 +279,17 @@ class SignatureBaseBuilderTest {
         assertThat(value).isEqualTo("hello+world");
     }
 
+    @Test
+    void queryParamPercentDecodedValue() {
+        // %20 → space, %2B → +, %3D → = (RFC 3986 percent-decoding only, not form-encoding)
+        HttpRequest req = buildRequest("GET", "/", "q=%20hello%2Bworld%3D1", "http", "example.com", 80);
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("name", new SfValue.SfString("q"));
+        SignatureComponent comp = new SignatureComponent("@query-param", new SfParameters(params));
+        String value = SignatureBaseBuilder.resolveComponentValue(req, null, comp);
+        assertThat(value).isEqualTo(" hello+world=1");
+    }
+
     // ----------------------------------------------------------- response header resolution
 
     @Test

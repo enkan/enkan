@@ -265,6 +265,17 @@ class JwtProcessorTest {
                 .hasMessageContaining("alg");
     }
 
+    @Test
+    void nonJsonPayloadDoesNotFailVerification() throws Exception {
+        // A valid base64 payload that is not JSON has no time claims, so verify succeeds
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        byte[] nonJsonPayload = "not-json-at-all".getBytes(StandardCharsets.UTF_8);
+        String token = JwtProcessor.sign(new JwtHeader("HS256"), nonJsonPayload, key);
+        byte[] result = JwtProcessor.verify(token, key);
+        assertThat(result).isNotNull();
+        assertThat(new String(result, StandardCharsets.UTF_8)).isEqualTo("not-json-at-all");
+    }
+
     // ----------------------------------------------------------- custom deserializer
 
     @Test
