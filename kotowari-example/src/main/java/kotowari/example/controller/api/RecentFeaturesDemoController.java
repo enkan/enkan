@@ -8,6 +8,8 @@ import enkan.web.data.HttpResponse;
 import enkan.web.jwt.JwsAlgorithm;
 import enkan.web.jwt.JwtHeader;
 import enkan.web.jwt.JwtProcessor;
+import kotowari.component.TemplateEngine;
+import jakarta.inject.Inject;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -23,12 +25,23 @@ import static enkan.util.BeanBuilder.builder;
  * Demos for recently added web features (JWT and Idempotency-Key).
  */
 public class RecentFeaturesDemoController {
+    @Inject
+    private TemplateEngine<?> templateEngine;
+
     private static final ObjectMapper JSON = JsonMapper.builder().build();
     private static final String JWT_KEY_ID = "demo-jwt-key";
     private static final SecretKey JWT_KEY = new SecretKeySpec(
             System.getenv().getOrDefault("JWT_DEMO_SECRET", "kotowari-demo-jwt-secret")
                     .getBytes(StandardCharsets.UTF_8),
             "HmacSHA256");
+
+    public HttpResponse jwtDemoPage() {
+        return templateEngine.render("recent/jwt-demo");
+    }
+
+    public HttpResponse idempotencyDemoPage() {
+        return templateEngine.render("recent/idempotency-demo");
+    }
 
     public HttpResponse idempotencySample(HttpRequest request) {
         String url = baseUrl(request) + "/api/recent/idempotency/echo";

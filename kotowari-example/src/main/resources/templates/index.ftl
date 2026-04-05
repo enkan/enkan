@@ -11,9 +11,9 @@
   <hr/>
   <h3>Recent Security/Runtime Demos</h3>
   <ul>
-    <li><a href="/api/http-integrity/sample">HTTP Integrity demo (RFC 9530 + RFC 9421)</a></li>
-    <li><a href="/api/recent/idempotency/sample">Idempotency-Key demo</a></li>
-    <li><a href="/api/recent/jwt/issue">JWT demo (issue token)</a></li>
+    <li><a href="/recent/http-integrity/demo">HTTP Integrity demo (RFC 9530 + RFC 9421)</a></li>
+    <li><a href="/recent/idempotency/demo">Idempotency-Key demo</a></li>
+    <li><a href="/recent/jwt/demo">JWT demo (HS256)</a></li>
     <li><a href="/recent/security/csp-nonce">CSP Nonce demo</a></li>
     <li><a href="/recent/security/request-timeout">Request Timeout demo</a></li>
     <li><a href="/recent/security/fetch-metadata">Fetch Metadata demo</a></li>

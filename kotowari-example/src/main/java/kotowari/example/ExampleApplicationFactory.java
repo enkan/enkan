@@ -110,6 +110,11 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
             r.get("/api/recent/jwt/issue").to(RecentFeaturesDemoController.class, "jwtIssue");
             r.get("/api/recent/jwt/verify").to(RecentFeaturesDemoController.class, "jwtVerify");
 
+            // Recent feature demos (HTML)
+            r.get("/recent/jwt/demo").to(RecentFeaturesDemoController.class, "jwtDemoPage");
+            r.get("/recent/idempotency/demo").to(RecentFeaturesDemoController.class, "idempotencyDemoPage");
+            r.get("/recent/http-integrity/demo").to(HttpIntegrityDemoController.class, "demoPage");
+
             // Recent security/runtime demos (HTML)
             r.get("/recent/security/csp-nonce").to(RecentSecurityDemoController.class, "cspNoncePage");
             r.get("/recent/security/request-timeout").to(RecentSecurityDemoController.class, "requestTimeoutPage");

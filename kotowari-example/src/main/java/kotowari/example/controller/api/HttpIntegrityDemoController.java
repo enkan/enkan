@@ -16,6 +16,9 @@ import enkan.web.signature.SignatureComponent;
 import enkan.web.signature.VerifyResult;
 import enkan.web.http.fields.digest.DigestFields;
 
+import kotowari.component.TemplateEngine;
+import jakarta.inject.Inject;
+
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -32,11 +35,18 @@ public class HttpIntegrityDemoController {
     public static final String KEY_ID = "demo-hmac-key";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
+    @Inject
+    private TemplateEngine<?> templateEngine;
+
     // Demo secret for example only. Override with HTTP_INTEGRITY_DEMO_SECRET when needed.
     private static final SecretKey DEMO_KEY = new SecretKeySpec(
             System.getenv().getOrDefault("HTTP_INTEGRITY_DEMO_SECRET", "kotowari-demo-shared-secret")
                     .getBytes(StandardCharsets.UTF_8),
             "HmacSHA256");
+
+    public HttpResponse demoPage() {
+        return templateEngine.render("recent/http-integrity-demo");
+    }
 
     public HttpResponse sample(HttpRequest request) {
         String digestHeader = DigestFields.computeDigestHeader(
