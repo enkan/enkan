@@ -17,22 +17,36 @@ import enkan.middleware.doma2.DomaTransactionMiddleware;
 import enkan.middleware.opentelemetry.TracingMiddleware;
 import enkan.web.middleware.session.MemoryStore;
 import enkan.predicate.PathPredicate;
+import enkan.security.crypto.CryptoAlgorithm;
+import enkan.security.crypto.JcaVerifier;
 import enkan.web.security.backend.SessionBackend;
+import enkan.web.signature.SignatureAlgorithm;
+import enkan.web.signature.SignatureComponent;
+import enkan.web.signature.SignatureKeyResolver;
 import enkan.system.inject.ComponentInjector;
 import enkan.web.util.HttpResponseUtils;
 import kotowari.example.controller.*;
+import kotowari.example.controller.api.HttpIntegrityDemoController;
+import kotowari.example.controller.api.RecentFeaturesDemoController;
+import kotowari.example.controller.api.RecentSecurityDemoController;
 import kotowari.example.controller.api.SseController;
 import kotowari.example.controller.api.TodoApiController;
 import kotowari.example.controller.guestbook.GuestbookController;
 import kotowari.example.controller.guestbook.LoginController;
 import kotowari.example.jaxrs.JsonBodyReader;
 import kotowari.example.jaxrs.JsonBodyWriter;
+import kotowari.example.middleware.RequestTimeoutDemoMiddleware;
 import kotowari.middleware.*;
 import kotowari.middleware.serdes.ToStringBodyWriter;
 import kotowari.routing.Routes;
 import jakarta.ws.rs.ext.MessageBodyWriter;
 
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static enkan.util.BeanBuilder.*;
 import static enkan.util.Predicates.*;
@@ -85,10 +99,71 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
             r.post("/api/todo").to(TodoApiController.class, "create");
             r.put("/api/todo/:id").to(TodoApiController.class, "update");
             r.delete("/api/todo/:id").to(TodoApiController.class, "delete");
+
+            // RFC 9530 + RFC 9421 API
+            r.get("/api/http-integrity/sample").to(HttpIntegrityDemoController.class, "sample");
+            r.post("/api/http-integrity/verify").to(HttpIntegrityDemoController.class, "verify");
+
+            // Recent features demos
+            r.get("/api/recent/idempotency/sample").to(RecentFeaturesDemoController.class, "idempotencySample");
+            r.post("/api/recent/idempotency/echo").to(RecentFeaturesDemoController.class, "idempotencyEcho");
+            r.get("/api/recent/jwt/issue").to(RecentFeaturesDemoController.class, "jwtIssue");
+            r.get("/api/recent/jwt/verify").to(RecentFeaturesDemoController.class, "jwtVerify");
+
+            // Recent security/runtime demos (HTML)
+            r.get("/recent/security/csp-nonce").to(RecentSecurityDemoController.class, "cspNoncePage");
+            r.get("/recent/security/request-timeout").to(RecentSecurityDemoController.class, "requestTimeoutPage");
+            r.get("/recent/security/fetch-metadata").to(RecentSecurityDemoController.class, "fetchMetadataPage");
+
+            // Recent security/runtime demos (JSON API)
+            r.get("/api/recent/security/timeout-echo").to(RecentSecurityDemoController.class, "timeoutEcho");
+            r.get("/api/recent/security/fetch-metadata-echo").to(RecentSecurityDemoController.class, "fetchMetadataEcho");
         }).compile();
+
+        var demoKey = new SecretKeySpec(
+                System.getenv().getOrDefault("HTTP_INTEGRITY_DEMO_SECRET", "kotowari-demo-shared-secret")
+                        .getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256");
+        SignatureKeyResolver demoResolver = new SignatureKeyResolver() {
+            @Override
+            public Optional<enkan.security.crypto.Verifier> resolveVerifier(String keyId, SignatureAlgorithm algorithm) {
+                if (HttpIntegrityDemoController.KEY_ID.equals(keyId)
+                        && algorithm == SignatureAlgorithm.HMAC_SHA256) {
+                    return Optional.of(new JcaVerifier(CryptoAlgorithm.HMAC_SHA256, demoKey));
+                }
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<enkan.security.crypto.Signer> resolveSigner(String keyId, SignatureAlgorithm algorithm) {
+                return Optional.empty();
+            }
+        };
+        SignatureVerificationMiddleware integritySignature = new SignatureVerificationMiddleware(demoResolver);
+        integritySignature.setRequiredLabels(Set.of("sig1"));
+        integritySignature.setRequiredComponents(Set.of("@method", "@path", "content-digest"));
+        integritySignature.setAcceptSignature(
+                "sig1",
+                List.of(
+                        SignatureComponent.of("@method"),
+                        SignatureComponent.of("@path"),
+                        SignatureComponent.of("content-digest")
+                ),
+                SignatureAlgorithm.HMAC_SHA256,
+                HttpIntegrityDemoController.KEY_ID
+        );
+
+        MemoryStore idempotencyStore = new MemoryStore();
+        idempotencyStore.setTtlSeconds(24 * 60 * 60L);
+        IdempotencyKeyMiddleware idempotencyDemo = new IdempotencyKeyMiddleware();
+        idempotencyDemo.setStore(idempotencyStore);
+        idempotencyDemo.setMethods(Set.of("POST"));
+        RequestTimeoutDemoMiddleware recentTimeout = new RequestTimeoutDemoMiddleware(200);
+        FetchMetadataMiddleware recentFetchMetadata = new FetchMetadataMiddleware();
 
         // Enkan
         app.use(new DefaultCharsetMiddleware());
+        app.use(path("^/recent/security/csp-nonce$"), new CspNonceMiddleware());
         app.use(builder(new SecurityHeadersMiddleware())
                 .set(SecurityHeadersMiddleware::setContentSecurityPolicy,
                         "default-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' ws://localhost:*")
@@ -106,6 +181,11 @@ public class ExampleApplicationFactory implements ApplicationFactory<HttpRequest
         app.use(new NormalizationMiddleware());
         app.use(new NestedParamsMiddleware());
         app.use(new CookiesMiddleware());
+        app.use(path("^/api/http-integrity/verify$"), new DigestValidationMiddleware());
+        app.use(path("^/api/http-integrity/verify$"), integritySignature);
+        app.use(path("^/api/recent/idempotency/.*$"), idempotencyDemo);
+        app.use(path("^/api/recent/security/timeout-echo$"), recentTimeout);
+        app.use(path("^/api/recent/security/fetch-metadata-echo$"), recentFetchMetadata);
 
         app.use(builder(new SessionMiddleware())
                 .set(SessionMiddleware::setStore, new MemoryStore())
