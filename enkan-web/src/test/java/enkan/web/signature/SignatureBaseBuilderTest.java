@@ -244,6 +244,17 @@ class SignatureBaseBuilderTest {
                 .isInstanceOf(MisconfigurationException.class);
     }
 
+    @Test
+    void queryParamMultipleValuesJoined() {
+        // RFC 9421 §2.2.8: multiple occurrences of a parameter are joined with ", "
+        HttpRequest req = buildRequest("GET", "/", "tag=a&id=1&tag=b&tag=c", "http", "example.com", 80);
+        Map<String, SfValue> params = new LinkedHashMap<>();
+        params.put("name", new SfValue.SfString("tag"));
+        SignatureComponent comp = new SignatureComponent("@query-param", new SfParameters(params));
+        String value = SignatureBaseBuilder.resolveComponentValue(req, null, comp);
+        assertThat(value).isEqualTo("a, b, c");
+    }
+
     // ----------------------------------------------------------- response header resolution
 
     @Test

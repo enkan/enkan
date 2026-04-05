@@ -203,6 +203,9 @@ public final class JwtProcessor {
     // -------------------------------------------------------------------------
 
     private static byte[] serializeHeader(JwtHeader header) {
+        if (header.alg() == null) {
+            throw new IllegalArgumentException("JWT header 'alg' field is required (RFC 7515 §4.1.1)");
+        }
         StringBuilder sb = new StringBuilder(64);
         sb.append('{');
         boolean first = true;
@@ -210,13 +213,10 @@ public final class JwtProcessor {
             sb.append("\"typ\":\"").append(escapeJson(header.typ())).append('"');
             first = false;
         }
-        if (header.alg() != null) {
-            if (!first) sb.append(',');
-            sb.append("\"alg\":\"").append(escapeJson(header.alg())).append('"');
-            first = false;
-        }
+        if (!first) sb.append(',');
+        sb.append("\"alg\":\"").append(escapeJson(header.alg())).append('"');
         if (header.kid() != null) {
-            if (!first) sb.append(',');
+            sb.append(',');
             sb.append("\"kid\":\"").append(escapeJson(header.kid())).append('"');
         }
         sb.append('}');
@@ -312,12 +312,27 @@ public final class JwtProcessor {
             if (c == '\\' && i + 1 < s.length()) {
                 char next = s.charAt(++i);
                 switch (next) {
-                    case '"' -> sb.append('"');
+                    case '"'  -> sb.append('"');
                     case '\\' -> sb.append('\\');
-                    case '/' -> sb.append('/');
-                    case 'n' -> sb.append('\n');
-                    case 'r' -> sb.append('\r');
-                    case 't' -> sb.append('\t');
+                    case '/'  -> sb.append('/');
+                    case 'b'  -> sb.append('\b');
+                    case 'f'  -> sb.append('\f');
+                    case 'n'  -> sb.append('\n');
+                    case 'r'  -> sb.append('\r');
+                    case 't'  -> sb.append('\t');
+                    case 'u'  -> {
+                        if (i + 4 < s.length()) {
+                            String hex = s.substring(i + 1, i + 5);
+                            try {
+                                sb.append((char) Integer.parseInt(hex, 16));
+                                i += 4;
+                            } catch (NumberFormatException e) {
+                                sb.append('\\').append(next);
+                            }
+                        } else {
+                            sb.append('\\').append(next);
+                        }
+                    }
                     default -> { sb.append('\\'); sb.append(next); }
                 }
             } else {

@@ -7,6 +7,7 @@ import enkan.web.util.sf.*;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -153,15 +154,19 @@ public final class SignatureBaseBuilder {
         if (qs == null) {
             throw new IllegalArgumentException("Query parameter '" + paramName + "' not found (no query string)");
         }
-        // Parse query string to find the named parameter
+        // RFC 9421 §2.2.8: if the parameter appears multiple times, all values are collected
+        List<String> values = new ArrayList<>();
         for (String pair : qs.split("&")) {
             int eq = pair.indexOf('=');
             String name = eq >= 0 ? URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8) : pair;
             if (paramName.equals(name)) {
-                return eq >= 0 ? URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8) : "";
+                values.add(eq >= 0 ? URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8) : "");
             }
         }
-        throw new IllegalArgumentException("Query parameter '" + paramName + "' not found");
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("Query parameter '" + paramName + "' not found");
+        }
+        return String.join(", ", values);
     }
 
     // -------------------------------------------------------------------------

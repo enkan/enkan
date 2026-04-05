@@ -231,6 +231,30 @@ class JwtProcessorTest {
         assertThat(decoded.kid()).isEqualTo("my-key-1");
     }
 
+    // ----------------------------------------------------------- JSON escape sequences
+
+    @Test
+    void headerWithUnicodeEscapeInKidIsDecoded() throws Exception {
+        // \u00e9 = é
+        String headerJson = "{\"alg\":\"HS256\",\"kid\":\"key\\u00e9\"}";
+        String encodedHeader = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+        String fakeToken = encodedHeader + ".e30.";
+        JwtHeader decoded = JwtProcessor.decodeHeader(fakeToken);
+        assertThat(decoded).isNotNull();
+        assertThat(decoded.kid()).isEqualTo("key\u00e9");
+    }
+
+    @Test
+    void signWithNullAlgThrows() throws Exception {
+        SecretKey key = KeyGenerator.getInstance("HmacSHA256").generateKey();
+        byte[] claims = "{}".getBytes(StandardCharsets.UTF_8);
+        JwtHeader nullAlgHeader = new JwtHeader(null, null, null);
+        assertThatThrownBy(() -> JwtProcessor.sign(nullAlgHeader, claims, key))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("alg");
+    }
+
     // ----------------------------------------------------------- custom deserializer
 
     @Test

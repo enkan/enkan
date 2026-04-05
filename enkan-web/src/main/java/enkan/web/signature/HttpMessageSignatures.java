@@ -25,12 +25,21 @@ public final class HttpMessageSignatures {
      *
      * <p>Parses {@code Signature} and {@code Signature-Input} headers, resolves
      * keys via the provided resolver, and returns a list of successfully verified
-     * results. Signatures with unknown key IDs or failed verification are silently
-     * skipped.
+     * results. Signatures with unknown key IDs, unknown algorithms, or failed
+     * verification are silently skipped.
+     *
+     * <p>Time-based validation (when {@code created} / {@code expires} are present):
+     * <ul>
+     *   <li>{@code created} more than {@value #CLOCK_SKEW_SECONDS}s in the future → rejected</li>
+     *   <li>{@code created} more than {@value #MAX_SIGNATURE_AGE_SECONDS}s in the past → rejected</li>
+     *   <li>{@code expires} more than {@value #CLOCK_SKEW_SECONDS}s in the past → rejected</li>
+     * </ul>
      *
      * @param request     the HTTP request
      * @param keyResolver resolves verifiers by key ID and algorithm
      * @return list of successfully verified signatures (may be empty)
+     * @throws SfParseException if either signature header is structurally malformed (→ HTTP 400)
+     * @throws UnsupportedOperationException if an unsupported feature (e.g. {@code ;bs}) is encountered (→ HTTP 501)
      */
     public static List<VerifyResult> verifyAll(HttpRequest request, SignatureKeyResolver keyResolver) {
         String signatureHeader = request.getHeaders().get("Signature");
