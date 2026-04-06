@@ -32,6 +32,25 @@ Read more: [Why Enkan?](https://enkan.github.io/guide/why-enkan.html)
 
 ## Get Started
 
+The fastest way to scaffold a new Enkan project is the AI-powered `/init` command
+in the REPL client. It interactively collects your requirements, lets you review
+and revise the generated plan, writes a compilable project skeleton (including
+`DevMain`, `pom.xml`, and a `SystemFactory`), runs `mvn compile` with an
+automatic fix loop, and optionally launches the app and connects the REPL.
+
+```bash
+# Download the standalone client jar from the latest release:
+#   https://github.com/enkan/enkan/releases/latest
+export ENKAN_AI_API_KEY=sk-...        # any OpenAI-compatible endpoint
+java -jar enkan-repl-client.jar
+enkan ✗  ❯ /init
+```
+
+See [Getting Started](https://enkan.github.io/getting-started.html) for a
+walkthrough of `/init`, configuration options, and the manual setup path.
+
+If you prefer to wire everything by hand, add the dependencies to your `pom.xml`:
+
 ```xml
 <dependency>
   <groupId>net.unit8.enkan</groupId>

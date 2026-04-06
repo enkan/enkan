@@ -114,7 +114,7 @@ git push origin develop
 ### 4. Post-release checklist
 
 - Update `docs/src/content/getting-started.md` version references
-- Update `README.md` archetype version (`-DarchetypeVersion=`)
+- Update `README.md` dependency version references
 - Verify artifacts on Maven Central (may take ~30 min to propagate)
 
 ## Improvement Proposals (ADR)

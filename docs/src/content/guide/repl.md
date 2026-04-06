@@ -23,6 +23,29 @@ You can:
 - Inspect the live middleware stack and routing table
 - Execute arbitrary Java expressions against live components (database, cache, etc.)
 - Test domain objects interactively without writing test classes
+- Scaffold an entirely new Enkan project with [`/init`](../reference/repl.html#init) (AI-assisted)
+
+---
+
+## The `enkan-repl-client` Standalone Client
+
+Enkan ships a standalone client jar (`enkan-repl-client.jar`) published with every
+[release](https://github.com/enkan/enkan/releases/latest). It has two primary uses:
+
+- **Scaffolding a new project** from scratch via the client-local `/init` command —
+  no project checkout, no build setup required. See
+  [Getting Started](../getting-started.html) for the walkthrough.
+- **Attaching to a running Enkan application** over ZeroMQ, to inspect or manipulate
+  the live system (see [Connecting to a Remote Process](#connecting-to-a-remote-process) below).
+
+```bash
+java -jar enkan-repl-client.jar           # disconnected shell; /init and /connect work
+java -jar enkan-repl-client.jar 64815     # connect immediately to port 64815
+```
+
+At the disconnected prompt (`enkan ✗  ❯`), the client-local commands
+(`/init`, `/help`, `/connect`, `/exit`) are available. Once connected
+(`enkan(64815)❯`), all commands registered on the server are also available.
 
 ---
 
