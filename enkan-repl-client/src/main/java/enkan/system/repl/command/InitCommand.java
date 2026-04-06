@@ -15,10 +15,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 
 /**
@@ -54,10 +56,12 @@ public class InitCommand implements SystemCommand {
             .connectTimeout(Duration.ofSeconds(30))
             .build();
 
-    /** Reference files fetched once per {@link #execute} call and shared between planning and generation. */
-    private Map<String, String> referenceCache = Collections.emptyMap();
-    /** Tracks whether we have already attempted a fetch, so offline failures do not retry every call. */
-    private boolean referencesFetched = false;
+    /**
+     * Reference files fetched from GitHub, shared between planning and generation phases.
+     * {@code null} means "not yet attempted"; an empty map means "fetched but everything failed"
+     * (so offline runs do not re-hit the network on every prompt).
+     */
+    private Map<String, String> referenceCache = null;
 
     private static final String[] FORBIDDEN_MARKERS = {
             "springframework",
@@ -112,39 +116,27 @@ public class InitCommand implements SystemCommand {
             return false;
         }
 
-        String description;
-        String projectName;
-        String groupId;
-        String outputDir;
-        String approvedPlan;
         try {
             transport.sendOut(section("Project Setup"));
-            description = askRequired(transport,
+            String description = askRequired(transport,
                     CYAN + "?" + RESET + " What kind of application do you want to build? ");
-            projectName = askWithDefault(transport,
+            String projectName = askWithDefault(transport,
                     CYAN + "?" + RESET + " Project name", inferProjectName(description));
-            groupId = askWithDefault(transport,
+            String groupId = askWithDefault(transport,
                     CYAN + "?" + RESET + " Group ID", "com.example");
-            outputDir = askWithDefault(transport,
+            String outputDir = askWithDefault(transport,
                     CYAN + "?" + RESET + " Output directory", "./" + projectName);
-            approvedPlan = reviewPlanInteractively(transport, description, projectName, groupId, outputDir);
-        } catch (PromptAbortedException ignored) {
-            transport.sendErr("Init cancelled.");
-            return false;
-        }
-        if (approvedPlan == null) {
-            transport.sendErr("Init cancelled.");
-            return false;
-        }
+            String approvedPlan = reviewPlanInteractively(transport, description, projectName, groupId, outputDir);
+            if (approvedPlan == null) {
+                transport.sendErr("Init cancelled.");
+                return false;
+            }
 
-        Path outPath = Path.of(outputDir).toAbsolutePath();
-        transport.sendOut(section("Generating") + DIM + "  " + outPath + RESET + "\n");
-
-        try {
+            Path outPath = Path.of(outputDir).toAbsolutePath();
+            transport.sendOut(section("Generating") + DIM + "  " + outPath + RESET + "\n");
             Files.createDirectories(outPath);
             generateWithApi(transport, mergeRequirements(description, approvedPlan), projectName, groupId, outPath);
         } catch (PromptAbortedException ignored) {
-            // User aborted an interactive prompt inside generateWithApi (e.g. launchAndConnect).
             transport.sendErr("Init cancelled.");
         } catch (Exception e) {
             LOG.error("Project generation failed", e);
@@ -273,7 +265,6 @@ public class InitCommand implements SystemCommand {
         String basePackage = groupId + "." + projectName.replace("-", "").replace("_", "");
         String systemFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "SystemFactory";
 
-        // Write fixed templates first
         writeFixedTemplates(outPath, basePackage, systemFactoryClass, projectName, groupId);
 
         String[] prompts = buildPrompt(description, projectName, groupId, outPath);
@@ -305,17 +296,14 @@ public class InitCommand implements SystemCommand {
             String projectName, String groupId) throws IOException {
         String basePath = basePackage.replace('.', '/');
 
-        // DevMain.java
         Path devMain = outPath.resolve("src/dev/java/" + basePath + "/DevMain.java");
         Files.createDirectories(devMain.getParent());
         Files.writeString(devMain, devMainTemplate(basePackage, systemFactoryClass), StandardCharsets.UTF_8);
 
-        // pom.xml
         Path pom = outPath.resolve("pom.xml");
         Files.createDirectories(pom.getParent());
         Files.writeString(pom, pomTemplate(groupId, projectName, basePackage), StandardCharsets.UTF_8);
 
-        // SystemFactory skeleton
         Path sf = outPath.resolve("src/main/java/" + basePath + "/" + systemFactoryClass + ".java");
         Files.createDirectories(sf.getParent());
         Files.writeString(sf, systemFactoryTemplate(basePackage, systemFactoryClass, projectName), StandardCharsets.UTF_8);
@@ -661,7 +649,7 @@ public class InitCommand implements SystemCommand {
                 throw new IOException("API error " + response.statusCode() + ": " + body);
             }
 
-            var fullResponse = new StringBuilder();
+            var fullResponse = new StringBuilder(32768);
             try (var reader = new java.io.BufferedReader(
                     new java.io.InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
                 String line;
@@ -735,7 +723,6 @@ public class InitCommand implements SystemCommand {
             int idx = data.indexOf(key, searchFrom);
             if (idx < 0) return null;
             if (excludeKey != null) {
-                // Check if this match is actually inside excludeKey
                 int excludeStart = idx - (excludeKey.length() - key.length());
                 if (excludeStart >= 0 && data.regionMatches(excludeStart, excludeKey, 0, excludeKey.length())) {
                     searchFrom = idx + key.length();
@@ -765,6 +752,7 @@ public class InitCommand implements SystemCommand {
      */
     int writeGeneratedFiles(Path outPath, String response, Transport transport)
             throws IOException {
+        Path normalizedOut = outPath.normalize();
         int count = 0;
         String[] lines = response.split("\n");
         String currentFile = null;
@@ -773,7 +761,6 @@ public class InitCommand implements SystemCommand {
 
         for (String line : lines) {
             if (!inBlock) {
-                // Detect file path header: ### some/path/File.java or **`path`**
                 String path = extractFilePath(line);
                 if (path != null) {
                     currentFile = isFixedTemplateFile(path) ? null : path;
@@ -786,10 +773,9 @@ public class InitCommand implements SystemCommand {
                 }
             } else {
                 if (line.startsWith("```")) {
-                    // End of code block — write the file
                     if (currentFile != null && codeLines.length() > 0) {
                         Path filePath = outPath.resolve(currentFile).normalize();
-                        if (!filePath.startsWith(outPath.normalize())) {
+                        if (!filePath.startsWith(normalizedOut)) {
                             LOG.warn("Skipping path that escapes project root: {}", currentFile);
                         } else {
                             Files.createDirectories(filePath.getParent());
@@ -973,16 +959,9 @@ public class InitCommand implements SystemCommand {
         return new String[]{sys.toString(), user.toString()};
     }
 
-    /**
-     * Returns the reference cache, fetching from GitHub on the first call.
-     * The fetch is attempted exactly once per {@link InitCommand} instance —
-     * subsequent calls return whatever was cached, even if the first fetch
-     * failed (so offline runs do not re-hit the network on every prompt).
-     */
     private Map<String, String> getOrFetchReferenceCache() {
-        if (!referencesFetched) {
+        if (referenceCache == null) {
             referenceCache = fetchAllReferences();
-            referencesFetched = true;
         }
         return referenceCache;
     }
@@ -999,39 +978,44 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
-     * Fetches all reference URLs and returns them as a filename → content map.
-     * Called once per {@link #execute} invocation so both the planning and
-     * generation prompts share the same in-memory copies.
+     * Fetches all reference URLs in parallel and returns them as a filename → content map.
+     * Results preserve the declaration order of {@link #REFERENCE_URLS}.
      */
     private Map<String, String> fetchAllReferences() {
-        Map<String, String> cache = new LinkedHashMap<>();
+        List<CompletableFuture<Map.Entry<String, String>>> futures = new ArrayList<>();
         for (String url : REFERENCE_URLS) {
-            String filename = url.substring(url.lastIndexOf('/') + 1);
-            String content = fetchReference(url);
-            if (content != null) {
-                cache.put(filename, content);
+            futures.add(fetchReferenceAsync(url));
+        }
+        Map<String, String> cache = new LinkedHashMap<>();
+        for (CompletableFuture<Map.Entry<String, String>> f : futures) {
+            Map.Entry<String, String> entry = f.join();
+            if (entry != null) {
+                cache.put(entry.getKey(), entry.getValue());
             }
         }
         return cache;
     }
 
-    private String fetchReference(String url) {
-        try {
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .timeout(Duration.ofSeconds(10))
-                    .GET()
-                    .build();
-            HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (res.statusCode() == 200) {
-                return res.body();
-            }
-            LOG.warn("Failed to fetch reference (HTTP {}): {}", res.statusCode(), url);
-        } catch (Exception e) {
-            LOG.warn("Failed to fetch reference: {}", url, e);
-        }
-        return null;
+    private CompletableFuture<Map.Entry<String, String>> fetchReferenceAsync(String url) {
+        String filename = url.substring(url.lastIndexOf('/') + 1);
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .version(HttpClient.Version.HTTP_1_1)
+                .timeout(Duration.ofSeconds(10))
+                .GET()
+                .build();
+        return httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .handle((res, ex) -> {
+                    if (ex != null) {
+                        LOG.warn("Failed to fetch reference: {}", url, ex);
+                        return null;
+                    }
+                    if (res.statusCode() != 200) {
+                        LOG.warn("Failed to fetch reference (HTTP {}): {}", res.statusCode(), url);
+                        return null;
+                    }
+                    return Map.entry(filename, res.body());
+                });
     }
 
     void verifyApiReachable(String apiUrl, String apiKey) throws IOException, InterruptedException {
