@@ -28,7 +28,7 @@ import java.util.function.Consumer;
  *
  * @author kawasima
  */
-public class JLineTransport implements Transport {
+public class JLineTransport implements Transport, AutoCloseable {
     private static final String[] SPINNER_FRAMES = {"|", "/", "-", "\\"};
 
     private final LineReader reader;
@@ -108,5 +108,11 @@ public class JLineTransport implements Transport {
             writer.print("\r\033[2K");
             writer.flush();
         }
+    }
+
+    @Override
+    public void close() {
+        stopSpinner();
+        scheduler.shutdown();
     }
 }

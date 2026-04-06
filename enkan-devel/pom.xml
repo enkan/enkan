@@ -24,11 +24,6 @@
             <artifactId>enkan-system</artifactId>
         </dependency>
         <dependency>
-            <groupId>net.unit8.enkan</groupId>
-            <artifactId>enkan-repl</artifactId>
-            <version>${enkan.version}</version>
-        </dependency>
-        <dependency>
             <groupId>net.unit8.moshas</groupId>
             <artifactId>moshas</artifactId>
             <version>0.3.1</version>

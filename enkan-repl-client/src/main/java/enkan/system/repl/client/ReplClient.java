@@ -236,16 +236,17 @@ public class ReplClient {
                         }
                         closeQuietly();
                         return;
-                    } else if (line.startsWith("/help") && this.socket == null) {
+                    } else if (line.startsWith("/help")) {
                         reader.getTerminal().writer().println(formatLocalHelp(line));
                         reader.getTerminal().writer().flush();
                     } else if (line.startsWith("/")) {
                         String cmdName = line.substring(1).split("\\s+")[0];
                         SystemCommand localCmd = clientLocalCommands.get(cmdName);
                         if (localCmd != null) {
-                            JLineTransport t = new JLineTransport(reader);
-                            t.setConnectCallback(this::connect);
-                            localCmd.execute(null, t);
+                            try (JLineTransport t = new JLineTransport(reader)) {
+                                t.setConnectCallback(this::connect);
+                                localCmd.execute(null, t);
+                            } catch (Exception ignored) {}
                         } else if (this.socket == null) {
                             reader.getTerminal().writer().println("Unconnected to enkan system.");
                         } else {

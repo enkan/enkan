@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -63,7 +64,7 @@ public class InitCommand implements SystemCommand {
             .build();
 
     /** Reference files fetched once per {@link #execute} call and shared between planning and generation. */
-    private Map<String, String> referenceCache;
+    private Map<String, String> referenceCache = Collections.emptyMap();
 
     private static final String[] FORBIDDEN_MARKERS = {
             "springframework",
@@ -104,7 +105,7 @@ public class InitCommand implements SystemCommand {
         transport.sendOut(BOLD + CYAN + "\n  Enkan Project Generator" + RESET + "\n");
 
         // Pre-fetch reference files once; shared between planning and generation phases.
-        referenceCache = fetchAllReferences();
+        referenceCache = fetchAllReferences(); // eager load at execute() entry
 
         String apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
         String apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");
@@ -249,7 +250,7 @@ public class InitCommand implements SystemCommand {
 
                 """);
 
-        referenceCache.forEach((filename, content) -> {
+        getOrFetchReferenceCache().forEach((filename, content) -> {
             sys.append("## ").append(filename).append("\n");
             sys.append("```\n").append(content).append("\n```\n\n");
         });
@@ -750,7 +751,7 @@ public class InitCommand implements SystemCommand {
             }
             int start = idx + key.length();
             int end = findJsonStringEnd(data, start);
-            if (end <= start) return null;
+            if (end < 0 || end == start) return null;
             return unescapeJson(data.substring(start, end));
         }
     }
@@ -929,7 +930,7 @@ public class InitCommand implements SystemCommand {
 
                 """);
 
-        referenceCache.forEach((filename, content) -> {
+        getOrFetchReferenceCache().forEach((filename, content) -> {
             sys.append("## ").append(filename).append("\n");
             sys.append("```java\n").append(content).append("\n```\n\n");
         });
@@ -977,6 +978,18 @@ public class InitCommand implements SystemCommand {
                 """);
 
         return new String[]{sys.toString(), user.toString()};
+    }
+
+    /**
+     * Returns the reference cache, fetching from GitHub if not yet populated.
+     * Using this accessor ensures planning and generation phases both get the
+     * same content even when called outside of {@link #execute} (e.g. in tests).
+     */
+    private Map<String, String> getOrFetchReferenceCache() {
+        if (referenceCache.isEmpty()) {
+            referenceCache = fetchAllReferences();
+        }
+        return referenceCache;
     }
 
     /**
