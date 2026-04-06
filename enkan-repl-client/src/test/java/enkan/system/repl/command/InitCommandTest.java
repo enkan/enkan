@@ -90,12 +90,14 @@ class InitCommandTest {
 
     @Test
     void cancelsImmediatelyWhenPromptInputIsInterrupted() {
+        // Explicit verifyApiReachable override to keep the test independent from real connectivity.
         InitCommand command = new InitCommand() {
             @Override
             void verifyApiReachable(String apiUrl, String apiKey) {
             }
         };
         CapturingTransport transport = new CapturingTransport();
+        // No inputs queued → recv() returns null → PromptAbortedException path
         System.setProperty("enkan.ai.apiKey", "dummy-key");
         try {
             command.execute(EnkanSystem.of(), transport);
@@ -196,5 +198,85 @@ class InitCommandTest {
 
         assertThat(InitCommand.containsForbiddenFramework(bad)).isTrue();
         assertThat(InitCommand.containsForbiddenFramework(good)).isFalse();
+    }
+
+    @Test
+    void enkanVersionReturnsUnknownOutsidePackagedJar() {
+        // When running from tests/IDE, the package has no Implementation-Version manifest.
+        // The fallback should be "UNKNOWN" so stale values never silently leak into generated poms.
+        String version = InitCommand.enkanVersion();
+        assertThat(version).isNotBlank();
+        // In a packaged jar this would be an actual version; in tests we expect the fallback.
+        assertThat(version).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void inferProjectNameStripsStopWordsAndLimitsLength() {
+        assertThat(InitCommand.inferProjectName("I want to build a todo app"))
+                .isEqualTo("todo-app");
+        assertThat(InitCommand.inferProjectName("a REST API for a bookstore"))
+                .isEqualTo("rest-api-bookstore");
+    }
+
+    @Test
+    void inferProjectNameFallsBackForEmptyOrOverlongInput() {
+        assertThat(InitCommand.inferProjectName(""))
+                .isEqualTo("my-app");
+        // After stop-word removal, only stop words remain → empty → "my-app"
+        assertThat(InitCommand.inferProjectName("a the for with and or"))
+                .isEqualTo("my-app");
+        // A long description exceeding 30 chars after cleaning falls back to "my-app"
+        String longInput = "implementing distributed microservice orchestration platform system";
+        assertThat(InitCommand.inferProjectName(longInput))
+                .isEqualTo("my-app");
+    }
+
+    @Test
+    void inferProjectNameHandlesNumbersAndSymbols() {
+        // Non-alphanumeric is stripped, numbers are kept.
+        assertThat(InitCommand.inferProjectName("chat v2.0 app!"))
+                .isEqualTo("chat-v20-app");
+    }
+
+    @Test
+    void isApprovalInputAcceptsEnglishAndJapanese() {
+        assertThat(InitCommand.isApprovalInput("yes")).isTrue();
+        assertThat(InitCommand.isApprovalInput("  YES  ")).isTrue();
+        assertThat(InitCommand.isApprovalInput("y")).isTrue();
+        assertThat(InitCommand.isApprovalInput("ok")).isTrue();
+        assertThat(InitCommand.isApprovalInput("承認")).isTrue();
+        assertThat(InitCommand.isApprovalInput("maybe")).isFalse();
+        assertThat(InitCommand.isApprovalInput("")).isFalse();
+    }
+
+    @Test
+    void isCancelInputAcceptsEnglishAndJapanese() {
+        assertThat(InitCommand.isCancelInput("cancel")).isTrue();
+        assertThat(InitCommand.isCancelInput("  Cancel ")).isTrue();
+        assertThat(InitCommand.isCancelInput("キャンセル")).isTrue();
+        assertThat(InitCommand.isCancelInput("中止")).isTrue();
+        assertThat(InitCommand.isCancelInput("proceed")).isFalse();
+        assertThat(InitCommand.isCancelInput("")).isFalse();
+    }
+
+    @Test
+    void markdownRendererHandlesNullAndBlank() {
+        assertThat(InitCommand.renderMarkdownForTerminal(null)).isEmpty();
+        assertThat(InitCommand.renderMarkdownForTerminal("")).isEmpty();
+        assertThat(InitCommand.renderMarkdownForTerminal("   \n  ")).isEmpty();
+    }
+
+    @Test
+    void forbiddenFrameworkDetectionHandlesNullAndBlank() {
+        assertThat(InitCommand.containsForbiddenFramework(null)).isFalse();
+        assertThat(InitCommand.containsForbiddenFramework("")).isFalse();
+        assertThat(InitCommand.containsForbiddenFramework("   ")).isFalse();
+    }
+
+    @Test
+    void forbiddenFrameworkDetectionIsCaseInsensitive() {
+        assertThat(InitCommand.containsForbiddenFramework("ORG.SPRINGFRAMEWORK.boot.Foo")).isTrue();
+        assertThat(InitCommand.containsForbiddenFramework("@SpringBootApplication")).isTrue();
+        assertThat(InitCommand.containsForbiddenFramework("SpringApplication.run(App.class)")).isTrue();
     }
 }

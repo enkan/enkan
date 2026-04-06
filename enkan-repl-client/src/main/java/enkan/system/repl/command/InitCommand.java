@@ -48,11 +48,13 @@ public class InitCommand implements SystemCommand {
 
     /**
      * Reads the Enkan version from this jar's manifest ({@code Implementation-Version}).
-     * Falls back to {@code "0.14.2-SNAPSHOT"} when running outside a packaged jar (e.g. tests).
+     * Returns {@code "UNKNOWN"} when running outside a packaged jar (e.g. tests, IDE).
+     * An "UNKNOWN" marker in the generated {@code pom.xml} makes manifest-read failures
+     * obvious, rather than silently pinning a value that will be stale after the next release.
      */
     static String enkanVersion() {
         String v = InitCommand.class.getPackage().getImplementationVersion();
-        return (v != null && !v.isBlank()) ? v : "0.14.2-SNAPSHOT";
+        return (v != null && !v.isBlank()) ? v : "UNKNOWN";
     }
     private static final Pattern HEADING_PATTERN = Pattern.compile("^\\s{0,3}#{1,6}\\s+");
     private static final int MAX_GENERATION_ATTEMPTS = 2;
@@ -103,9 +105,6 @@ public class InitCommand implements SystemCommand {
     @Override
     public boolean execute(EnkanSystem system, Transport transport, String... args) {
         transport.sendOut(BOLD + CYAN + "\n  Enkan Project Generator" + RESET + "\n");
-
-        // Pre-fetch reference files once; shared between planning and generation phases.
-        referenceCache = fetchAllReferences(); // eager load at execute() entry
 
         String apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
         String apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");

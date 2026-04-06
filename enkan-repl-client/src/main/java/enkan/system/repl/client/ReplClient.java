@@ -246,7 +246,7 @@ public class ReplClient {
                             try (JLineTransport t = new JLineTransport(reader)) {
                                 t.setConnectCallback(this::connect);
                                 localCmd.execute(null, t);
-                            } catch (Exception ignored) {}
+                            }
                         } else if (this.socket == null) {
                             reader.getTerminal().writer().println("Unconnected to enkan system.");
                         } else {
