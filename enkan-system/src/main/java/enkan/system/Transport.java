@@ -94,4 +94,25 @@ public interface Transport {
         send(res);
     }
 
+    /**
+     * Starts an animated "thinking" indicator. No-op by default.
+     *
+     * @param label text shown next to the spinner, e.g. {@code "Thinking"}
+     */
+    default void startSpinner(String label) {}
+
+    /**
+     * Stops the animated "thinking" indicator and clears it from the terminal.
+     * No-op by default.
+     */
+    default void stopSpinner() {}
+
+    /**
+     * Requests the client to connect to a REPL server on the given port.
+     * No-op by default.
+     *
+     * @param port the server port to connect to
+     */
+    default void requestConnect(int port) {}
+
 }
