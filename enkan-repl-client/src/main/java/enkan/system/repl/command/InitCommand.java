@@ -45,17 +45,6 @@ public class InitCommand implements SystemCommand {
 
     private static final String DEFAULT_API_URL = "https://api.anthropic.com/v1";
     private static final String DEFAULT_MODEL = "claude-sonnet-4-5";
-
-    /**
-     * Reads the Enkan version from this jar's manifest ({@code Implementation-Version}).
-     * Returns {@code "UNKNOWN"} when running outside a packaged jar (e.g. tests, IDE).
-     * An "UNKNOWN" marker in the generated {@code pom.xml} makes manifest-read failures
-     * obvious, rather than silently pinning a value that will be stale after the next release.
-     */
-    static String enkanVersion() {
-        String v = InitCommand.class.getPackage().getImplementationVersion();
-        return (v != null && !v.isBlank()) ? v : "UNKNOWN";
-    }
     private static final Pattern HEADING_PATTERN = Pattern.compile("^\\s{0,3}#{1,6}\\s+");
     private static final int MAX_GENERATION_ATTEMPTS = 2;
 
@@ -67,6 +56,8 @@ public class InitCommand implements SystemCommand {
 
     /** Reference files fetched once per {@link #execute} call and shared between planning and generation. */
     private Map<String, String> referenceCache = Collections.emptyMap();
+    /** Tracks whether we have already attempted a fetch, so offline failures do not retry every call. */
+    private boolean referencesFetched = false;
 
     private static final String[] FORBIDDEN_MARKERS = {
             "springframework",
@@ -152,9 +143,12 @@ public class InitCommand implements SystemCommand {
         try {
             Files.createDirectories(outPath);
             generateWithApi(transport, mergeRequirements(description, approvedPlan), projectName, groupId, outPath);
+        } catch (PromptAbortedException ignored) {
+            // User aborted an interactive prompt inside generateWithApi (e.g. launchAndConnect).
+            transport.sendErr("Init cancelled.");
         } catch (Exception e) {
             LOG.error("Project generation failed", e);
-            transport.sendErr("Generation failed: " + e.getMessage());
+            transport.sendErr("Generation failed: " + safeMessage(e));
         }
         return false;
     }
@@ -735,7 +729,7 @@ public class InitCommand implements SystemCommand {
      * Extracts a JSON string value identified by {@code key} from {@code data},
      * skipping any occurrence that is actually part of {@code excludeKey}.
      */
-    private String extractJsonStringField(String data, String key, String excludeKey) {
+    String extractJsonStringField(String data, String key, String excludeKey) {
         int searchFrom = 0;
         while (true) {
             int idx = data.indexOf(key, searchFrom);
@@ -769,7 +763,7 @@ public class InitCommand implements SystemCommand {
      *
      * @return number of files written
      */
-    private int writeGeneratedFiles(Path outPath, String response, Transport transport)
+    int writeGeneratedFiles(Path outPath, String response, Transport transport)
             throws IOException {
         int count = 0;
         String[] lines = response.split("\n");
@@ -817,7 +811,7 @@ public class InitCommand implements SystemCommand {
      * Extracts a relative file path from a markdown header line.
      * Handles formats like {@code ### src/main/java/Foo.java} or {@code **src/main/java/Foo.java**}.
      */
-    private static String extractFilePath(String line) {
+    static String extractFilePath(String line) {
         // ### path/to/file
         if (line.startsWith("### ")) {
             String candidate = line.substring(4).trim();
@@ -831,7 +825,7 @@ public class InitCommand implements SystemCommand {
         return null;
     }
 
-    private static boolean isFixedTemplateFile(String path) {
+    static boolean isFixedTemplateFile(String path) {
         String normalized = path.replace('\\', '/');
         String filename = normalized.substring(normalized.lastIndexOf('/') + 1);
         return filename.equals("pom.xml")
@@ -855,7 +849,7 @@ public class InitCommand implements SystemCommand {
         return -1;
     }
 
-    private static String unescapeJson(String s) {
+    static String unescapeJson(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
@@ -980,15 +974,28 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
-     * Returns the reference cache, fetching from GitHub if not yet populated.
-     * Using this accessor ensures planning and generation phases both get the
-     * same content even when called outside of {@link #execute} (e.g. in tests).
+     * Returns the reference cache, fetching from GitHub on the first call.
+     * The fetch is attempted exactly once per {@link InitCommand} instance —
+     * subsequent calls return whatever was cached, even if the first fetch
+     * failed (so offline runs do not re-hit the network on every prompt).
      */
     private Map<String, String> getOrFetchReferenceCache() {
-        if (referenceCache.isEmpty()) {
+        if (!referencesFetched) {
             referenceCache = fetchAllReferences();
+            referencesFetched = true;
         }
         return referenceCache;
+    }
+
+    /**
+     * Reads the Enkan version from this jar's manifest ({@code Implementation-Version}).
+     * Returns {@code "UNKNOWN"} when running outside a packaged jar (e.g. tests, IDE).
+     * An "UNKNOWN" marker in the generated {@code pom.xml} makes manifest-read failures
+     * obvious, rather than silently pinning a value that will be stale after the next release.
+     */
+    static String enkanVersion() {
+        String v = InitCommand.class.getPackage().getImplementationVersion();
+        return (v != null && !v.isBlank()) ? v : "UNKNOWN";
     }
 
     /**
