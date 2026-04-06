@@ -1,6 +1,8 @@
 package enkan.system.repl.client;
 
 import enkan.system.ReplResponse;
+import enkan.system.SystemCommand;
+import enkan.system.repl.command.InitCommand;
 import enkan.system.repl.serdes.Fressian;
 import enkan.system.repl.serdes.ReplResponseReader;
 import enkan.system.repl.serdes.ReplResponseWriter;
@@ -10,30 +12,40 @@ import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.reader.impl.completer.AggregateCompleter;
+import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStringBuilder;
+import org.jline.utils.AttributedStyle;
 import org.zeromq.*;
 import zmq.ZError;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.nio.charset.Charset;
 
 import static enkan.system.ReplResponse.ResponseStatus.DONE;
+import static enkan.system.ReplResponse.ResponseStatus.NEED_INPUT;
 import static enkan.system.ReplResponse.ResponseStatus.SHUTDOWN;
 
 /**
  * @author kawasima
  */
 public class ReplClient {
+    private static final String LOCAL_HELP_HEADER = "Client commands (available without server connection):";
+    private static final Map<String, String> LOCAL_COMMAND_HELP = createLocalCommandHelp();
     private final ExecutorService clientThread = Executors.newSingleThreadExecutor();
     private ConsoleHandler consoleHandler;
 
@@ -45,9 +57,11 @@ public class ReplClient {
         private ZMQ.Socket completerSock;
         private final LineReader reader;
         private final Fressian fressian;
+        private final Map<String, SystemCommand> clientLocalCommands = new LinkedHashMap<>();
         private final AtomicBoolean isAvailable = new AtomicBoolean(true);
         private final AtomicBoolean pendingExit = new AtomicBoolean(false);
         private final AtomicBoolean serverDisconnected = new AtomicBoolean(false);
+        private volatile int connectedPort = -1;
 
         public ConsoleHandler(LineReader reader) {
             this.reader = reader;
@@ -57,6 +71,7 @@ public class ReplClient {
             fressian.putReadHandler(ReplResponse.ResponseStatus.class, new ResponseStatusReader());
             fressian.putWriteHandler(ReplResponse.class, new ReplResponseWriter());
             fressian.putWriteHandler(ReplResponse.ResponseStatus.class, new ReplResponseWriter());
+            clientLocalCommands.put("init", new InitCommand());
         }
 
         public void connect(int port) {
@@ -129,12 +144,14 @@ public class ReplClient {
                 completerSock.connect("tcp://" + host + ":" + Integer.parseInt(completerPort));
                 if (reader instanceof org.jline.reader.impl.LineReaderImpl) {
                     RemoteCompleter completer = new RemoteCompleter(completerSock);
-                    ((org.jline.reader.impl.LineReaderImpl) reader).setCompleter(completer);
+                    ((org.jline.reader.impl.LineReaderImpl) reader)
+                            .setCompleter(new AggregateCompleter(new StringsCompleter(localCommandNames()), completer));
                 } else {
                     System.err.println("Reader is not an instance of LineReaderImpl: " + reader.getClass());
                 }
             }
-            reader.getTerminal().writer().println("Connected to server (port = " + port +")");
+            connectedPort = port;
+            printInfo(reader, "Connected to server (port = " + port + ")");
             reader.getTerminal().writer().flush();
 
             rendererSock = ZThread.fork(ctx, (args, c, pipe) -> {
@@ -142,15 +159,24 @@ public class ReplClient {
                     try {
                         ZMsg msg = ZMsg.recvMsg(this.socket);
                         ReplResponse res = fressian.read(msg.pop().getData(), ReplResponse.class);
+                        boolean needsInput = res.getStatus().contains(NEED_INPUT);
                         if (res.getOut() != null) {
-                            reader.getTerminal().writer().println(res.getOut());
+                            // NEED_INPUT messages are prompts — keep the cursor on the same line.
+                            if (needsInput) {
+                                reader.getTerminal().writer().print(res.getOut());
+                            } else {
+                                reader.getTerminal().writer().println(res.getOut());
+                            }
                         } else if (res.getErr() != null) {
-                            reader.getTerminal().writer().println(res.getErr());
+                            printErr(reader, res.getErr());
                         }
                         if (res.getStatus().contains(SHUTDOWN)) {
                             reader.getTerminal().writer().flush();
                             pipe.send("shutdown");
                             break;
+                        } else if (needsInput) {
+                            // Unblock the main loop so the user can type a response.
+                            pipe.send("need-input");
                         } else if (res.getStatus().contains(DONE)) {
                             pipe.send("done");
                         }
@@ -166,12 +192,39 @@ public class ReplClient {
             });
         }
 
+        private String buildPrompt() {
+            AttributedStringBuilder sb = new AttributedStringBuilder();
+            if (connectedPort > 0) {
+                sb.append("enkan", AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN).bold());
+                sb.append("(" + connectedPort + ")", AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN));
+                sb.append("❯ ", AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN).bold());
+            } else {
+                sb.append("enkan", AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW).bold());
+                sb.append("✗", AttributedStyle.DEFAULT.foreground(AttributedStyle.RED).bold());
+                sb.append(" ❯ ", AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW).bold());
+            }
+            return sb.toAnsi(reader.getTerminal());
+        }
+
+        private static void printErr(LineReader reader, String message) {
+            String colored = new AttributedString(message,
+                    AttributedStyle.DEFAULT.foreground(AttributedStyle.RED))
+                    .toAnsi(reader.getTerminal());
+            reader.getTerminal().writer().println(colored);
+        }
+
+        private static void printInfo(LineReader reader, String message) {
+            String colored = new AttributedString(message,
+                    AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN))
+                    .toAnsi(reader.getTerminal());
+            reader.getTerminal().writer().println(colored);
+        }
+
         @Override
         public void run() {
             while(isAvailable.get()) {
                 try {
-                    String prompt = "enkan> ";
-                    String line = reader.readLine(prompt);
+                    String line = reader.readLine(buildPrompt());
                     pendingExit.set(false);
                     if (line == null) continue;
                     line = line.trim();
@@ -193,6 +246,31 @@ public class ReplClient {
                         }
                         closeQuietly();
                         return;
+                    } else if (line.startsWith("/help")) {
+                        reader.getTerminal().writer().println(formatLocalHelp(line));
+                        reader.getTerminal().writer().flush();
+                    } else if (line.startsWith("/")) {
+                        String cmdName = line.substring(1).split("\\s+")[0];
+                        SystemCommand localCmd = clientLocalCommands.get(cmdName);
+                        if (localCmd != null) {
+                            try (JLineTransport t = new JLineTransport(reader)) {
+                                t.setConnectCallback(this::connect);
+                                localCmd.execute(null, t);
+                            }
+                        } else if (this.socket == null) {
+                            reader.getTerminal().writer().println("Unconnected to enkan system.");
+                        } else {
+                            reader.getHistory().save();
+                            this.socket.send(line);
+                            String serverInstruction = null;
+                            while (isAvailable.get() && serverInstruction == null) {
+                                serverInstruction = rendererSock.recvStr(500);
+                            }
+                            if (Objects.equals(serverInstruction, "shutdown") || !isAvailable.get()) {
+                                closeQuietly();
+                                break;
+                            }
+                        }
                     } else {
                         if (this.socket == null) {
                             reader.getTerminal().writer().println("Unconnected to enkan system.");
@@ -214,7 +292,7 @@ public class ReplClient {
                     return;
                 } catch (UserInterruptException e) {
                     if (serverDisconnected.get()) {
-                        reader.getTerminal().writer().println("Server disconnected.");
+                        printErr(reader, "Server disconnected.");
                         reader.getTerminal().writer().flush();
                         return;
                     }
@@ -223,7 +301,7 @@ public class ReplClient {
                         return;
                     }
                     pendingExit.set(true);
-                    reader.getTerminal().writer().println("(Press Ctrl+C again to exit, or press Enter to continue)");
+                    printInfo(reader, "(Press Ctrl+C again to exit, or press Enter to continue)");
                     reader.getTerminal().writer().flush();
                 } catch (ZMQException e) {
                     if (e.getErrorCode() == ZError.ETERM) {
@@ -266,25 +344,36 @@ public class ReplClient {
                 try {
                     completerSock.close();
                     completerSock = null;
-                } catch (Exception ignore) {
+                } catch (Throwable ignore) {
                 }
             }
             if (rendererSock != null) {
                 try {
                     rendererSock.close();
                     rendererSock = null;
-                } catch (Exception ignore) {
+                } catch (Throwable ignore) {
                 }
             }
             if (socket != null) {
-                socket.send("/disconnect", ZMQ.DONTWAIT);
-                socket.close();
-                socket = null;
+                try {
+                    socket.send("/disconnect", ZMQ.DONTWAIT);
+                } catch (Throwable ignore) {
+                }
+                try {
+                    socket.close();
+                } catch (Throwable ignore) {
+                } finally {
+                    socket = null;
+                }
             }
 
             if (ctx != null) {
-                ctx.close();
-                ctx = null;
+                try {
+                    ctx.close();
+                } catch (Throwable ignore) {
+                } finally {
+                    ctx = null;
+                }
             }
         }
     }
@@ -302,6 +391,7 @@ public class ReplClient {
             LineReader reader = LineReaderBuilder.builder()
                     .terminal(terminal)
                     .parser(parser)
+                    .completer(new StringsCompleter(localCommandNames()))
                     .option(LineReader.Option.AUTO_FRESH_LINE, true)
                     .option(LineReader.Option.COMPLETE_IN_WORD, true)
                     .option(LineReader.Option.AUTO_MENU, true)
@@ -333,6 +423,7 @@ public class ReplClient {
             LineReader reader = LineReaderBuilder.builder()
                     .terminal(terminal)
                     .parser(parser)
+                    .completer(new StringsCompleter(localCommandNames()))
                     .option(LineReader.Option.AUTO_FRESH_LINE, true)
                     .option(LineReader.Option.COMPLETE_IN_WORD, true)
                     .option(LineReader.Option.AUTO_MENU, true)
@@ -389,6 +480,40 @@ public class ReplClient {
             }
         }
         return Path.of(System.getProperty("user.home"), ".enkan-repl-port");
+    }
+
+    static String[] localCommandNames() {
+        return LOCAL_COMMAND_HELP.keySet().stream()
+                .map(name -> "/" + name)
+                .toArray(String[]::new);
+    }
+
+    static String formatLocalHelp(String line) {
+        String[] arguments = line.trim().split("\\s+");
+        if (arguments.length >= 2) {
+            String command = arguments[1].startsWith("/") ? arguments[1].substring(1) : arguments[1];
+            String detail = LOCAL_COMMAND_HELP.get(command);
+            if (detail != null) {
+                return "/" + command + " " + detail;
+            } else {
+                return "Unknown client command: " + arguments[1];
+            }
+        }
+
+        StringBuilder help = new StringBuilder(LOCAL_HELP_HEADER).append('\n');
+        for (Map.Entry<String, String> entry : LOCAL_COMMAND_HELP.entrySet()) {
+            help.append('/').append(entry.getKey()).append(' ').append(entry.getValue()).append('\n');
+        }
+        return help.toString().trim();
+    }
+
+    private static Map<String, String> createLocalCommandHelp() {
+        Map<String, String> commands = new LinkedHashMap<>();
+        commands.put("connect", "[host] port  Connect to enkan system.");
+        commands.put("help", "[command]    Show client help.");
+        commands.put("init", "            Generate a new Enkan project using AI.");
+        commands.put("exit", "            Exit this client.");
+        return commands;
     }
 
     public static void main(String[] args) {

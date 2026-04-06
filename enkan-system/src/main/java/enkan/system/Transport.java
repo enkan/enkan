@@ -81,4 +81,38 @@ public interface Transport {
         return recv(-1);
     }
 
+    /**
+     * Sends a prompt message to the client and signals that user input is
+     * expected.  The client should display the prompt text and allow the user
+     * to type a response, which will be delivered via {@link #recv()}.
+     *
+     * @param prompt the prompt text to display to the user
+     */
+    default void sendPrompt(String prompt) {
+        ReplResponse res = ReplResponse.withOut(prompt);
+        res.getStatus().add(NEED_INPUT);
+        send(res);
+    }
+
+    /**
+     * Starts an animated "thinking" indicator. No-op by default.
+     *
+     * @param label text shown next to the spinner, e.g. {@code "Thinking"}
+     */
+    default void startSpinner(String label) {}
+
+    /**
+     * Stops the animated "thinking" indicator and clears it from the terminal.
+     * No-op by default.
+     */
+    default void stopSpinner() {}
+
+    /**
+     * Requests the client to connect to a REPL server on the given port.
+     * No-op by default.
+     *
+     * @param port the server port to connect to
+     */
+    default void requestConnect(int port) {}
+
 }

@@ -47,7 +47,7 @@ public class ReplResponse implements Serializable {
 
 
     public enum ResponseStatus {
-        SHUTDOWN, UNKNOWN_COMMAND, ERROR, DONE
+        SHUTDOWN, UNKNOWN_COMMAND, ERROR, DONE, NEED_INPUT
     }
 
     public String getId() {
