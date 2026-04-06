@@ -119,9 +119,8 @@ class InitCommandTest {
     void planReviewProceedsWithNaturalYes() {
         InitCommand command = new InitCommand() {
             @Override
-            String generatePlanWithApi(String apiUrl, String apiKey, String model,
-                    String description, String projectName, String groupId, String outputDir,
-                    Transport transport) {
+            String generatePlanWithApi(String description, String projectName, String groupId,
+                    String outputDir, Transport transport) {
                 return "draft-plan";
             }
         };
@@ -137,16 +136,14 @@ class InitCommandTest {
     void planReviewCanReviseThenApprove() {
         InitCommand command = new InitCommand() {
             @Override
-            String generatePlanWithApi(String apiUrl, String apiKey, String model,
-                    String description, String projectName, String groupId, String outputDir,
-                    Transport transport) {
+            String generatePlanWithApi(String description, String projectName, String groupId,
+                    String outputDir, Transport transport) {
                 return "plan-v1";
             }
 
             @Override
-            String revisePlanWithApi(String apiUrl, String apiKey, String model, String description,
-                    String projectName, String groupId, String outputDir, String currentPlan, String feedback,
-                    Transport transport) {
+            String revisePlanWithApi(String description, String projectName, String groupId,
+                    String outputDir, String currentPlan, String feedback, Transport transport) {
                 return "plan-v2";
             }
         };
@@ -163,9 +160,8 @@ class InitCommandTest {
     void planReviewCanCancelByNaturalInput() {
         InitCommand command = new InitCommand() {
             @Override
-            String generatePlanWithApi(String apiUrl, String apiKey, String model,
-                    String description, String projectName, String groupId, String outputDir,
-                    Transport transport) {
+            String generatePlanWithApi(String description, String projectName, String groupId,
+                    String outputDir, Transport transport) {
                 return "draft-plan";
             }
         };

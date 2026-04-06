@@ -20,7 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.regex.Pattern;
 
 /**
@@ -55,6 +57,11 @@ public class InitCommand implements SystemCommand {
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(30))
             .build();
+
+    /** LLM API configuration resolved once per {@link #execute} call from env vars or system properties. */
+    private String apiUrl;
+    private String apiKey;
+    private String model;
 
     /**
      * Reference files fetched from GitHub, shared between planning and generation phases.
@@ -101,8 +108,9 @@ public class InitCommand implements SystemCommand {
     public boolean execute(EnkanSystem system, Transport transport, String... args) {
         transport.sendOut(BOLD + CYAN + "\n  Enkan Project Generator" + RESET + "\n");
 
-        String apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
-        String apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");
+        this.apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
+        this.apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");
+        this.model  = config("ENKAN_AI_MODEL",   "enkan.ai.model",  DEFAULT_MODEL);
 
         if (apiKey.isBlank()) {
             transport.sendErr("LLM API key is not configured. Set ENKAN_AI_API_KEY or enkan.ai.apiKey.");
@@ -152,13 +160,9 @@ public class InitCommand implements SystemCommand {
 
     String reviewPlanInteractively(Transport transport, String description,
             String projectName, String groupId, String outputDir) {
-        String apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
-        String apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");
-        String model  = config("ENKAN_AI_MODEL",   "enkan.ai.model",  DEFAULT_MODEL);
-
         String plan;
         try {
-            plan = generatePlanWithApi(apiUrl, apiKey, model, description, projectName, groupId, outputDir, transport);
+            plan = generatePlanWithApi(description, projectName, groupId, outputDir, transport);
         } catch (Exception e) {
             transport.sendErr("Failed to create initial plan: " + safeMessage(e));
             return null;
@@ -179,8 +183,8 @@ public class InitCommand implements SystemCommand {
                 return plan;
             }
             try {
-                String revised = revisePlanWithApi(apiUrl, apiKey, model,
-                        description, projectName, groupId, outputDir, plan, feedback, transport);
+                String revised = revisePlanWithApi(description, projectName, groupId, outputDir,
+                        plan, feedback, transport);
                 if (revised == null || revised.isBlank()) {
                     transport.sendErr("Plan revision returned empty result. Please try rephrasing.");
                 } else {
@@ -192,8 +196,7 @@ public class InitCommand implements SystemCommand {
         }
     }
 
-    String generatePlanWithApi(String apiUrl, String apiKey, String model,
-            String description, String projectName, String groupId, String outputDir,
+    String generatePlanWithApi(String description, String projectName, String groupId, String outputDir,
             Transport transport)
             throws IOException, InterruptedException {
         LOG.info("Generating init plan via LLM");
@@ -202,11 +205,10 @@ public class InitCommand implements SystemCommand {
                 + "Project name: " + projectName + "\n"
                 + "Group ID: " + groupId + "\n"
                 + "Output directory: " + outputDir + "\n";
-        return requestChatCompletion(apiUrl, apiKey, model, systemPrompt, userPrompt, "Planning", transport);
+        return requestChatCompletion(systemPrompt, userPrompt, "Planning", transport);
     }
 
-    String revisePlanWithApi(String apiUrl, String apiKey, String model,
-            String description, String projectName, String groupId, String outputDir,
+    String revisePlanWithApi(String description, String projectName, String groupId, String outputDir,
             String currentPlan, String feedback, Transport transport)
             throws IOException, InterruptedException {
         LOG.info("Revising init plan via LLM");
@@ -217,7 +219,7 @@ public class InitCommand implements SystemCommand {
                 + "Output directory: " + outputDir + "\n\n"
                 + "Current plan:\n" + currentPlan + "\n\n"
                 + "User feedback:\n" + feedback;
-        return requestChatCompletion(apiUrl, apiKey, model, systemPrompt, userPrompt, "Revising", transport);
+        return requestChatCompletion(systemPrompt, userPrompt, "Revising", transport);
     }
 
     /**
@@ -258,10 +260,6 @@ public class InitCommand implements SystemCommand {
     void generateWithApi(Transport transport, String description,
             String projectName, String groupId, Path outPath)
             throws IOException, InterruptedException {
-        String apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
-        String apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");
-        String model  = config("ENKAN_AI_MODEL",   "enkan.ai.model",  DEFAULT_MODEL);
-
         String basePackage = groupId + "." + projectName.replace("-", "").replace("_", "");
         String systemFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "SystemFactory";
 
@@ -271,7 +269,7 @@ public class InitCommand implements SystemCommand {
         String currentUserPrompt = prompts[1];
         String fullResponse = "";
         for (int attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
-            fullResponse = requestChatCompletion(apiUrl, apiKey, model, prompts[0], currentUserPrompt, "Generating", transport);
+            fullResponse = requestChatCompletion(prompts[0], currentUserPrompt, "Generating", transport);
             if (!containsForbiddenFramework(fullResponse)) {
                 break;
             }
@@ -286,7 +284,7 @@ public class InitCommand implements SystemCommand {
         }
         int written = writeGeneratedFiles(outPath, fullResponse.toString(), transport);
         transport.sendOut(GREEN + BOLD + "\n✓ Done!" + RESET + " Created " + written + " file(s) at " + DIM + outPath + RESET + "\n");
-        if (!compileAndFix(transport, apiUrl, apiKey, model, outPath)) {
+        if (!compileAndFix(transport, outPath)) {
             return;
         }
         launchAndConnect(transport, outPath);
@@ -474,8 +472,7 @@ public class InitCommand implements SystemCommand {
      * @return true if compilation eventually succeeded, false if the user
      *         should abort
      */
-    private boolean compileAndFix(Transport transport, String apiUrl, String apiKey,
-            String model, Path outPath) {
+    private boolean compileAndFix(Transport transport, Path outPath) {
         for (int attempt = 1; attempt <= MAX_FIX_ATTEMPTS; attempt++) {
             transport.sendOut(section("Compiling") + DIM + "  mvn compile" + RESET + "\n");
             String errors = runMvnCompile(outPath);
@@ -490,7 +487,7 @@ public class InitCommand implements SystemCommand {
             transport.sendOut(CYAN + "  Asking AI to fix errors..." + RESET + "\n");
             String fixResponse;
             try {
-                fixResponse = requestChatCompletion(apiUrl, apiKey, model,
+                fixResponse = requestChatCompletion(
                         buildFixSystemPrompt(), buildFixUserPrompt(errors, outPath),
                         "Fixing", transport);
             } catch (Exception e) {
@@ -626,8 +623,7 @@ public class InitCommand implements SystemCommand {
         return -1;
     }
 
-    String requestChatCompletion(String apiUrl, String apiKey, String model,
-            String systemPrompt, String userPrompt, String spinnerLabel, Transport transport)
+    String requestChatCompletion(String systemPrompt, String userPrompt, String spinnerLabel, Transport transport)
             throws IOException, InterruptedException {
         if (transport != null) transport.startSpinner(spinnerLabel);
         try {
@@ -979,7 +975,9 @@ public class InitCommand implements SystemCommand {
 
     /**
      * Fetches all reference URLs in parallel and returns them as a filename → content map.
-     * Results preserve the declaration order of {@link #REFERENCE_URLS}.
+     * Results preserve the declaration order of {@link #REFERENCE_URLS}. Any future that
+     * completes exceptionally is logged and skipped (so a single failure does not abort
+     * the whole init run).
      */
     private Map<String, String> fetchAllReferences() {
         List<CompletableFuture<Map.Entry<String, String>>> futures = new ArrayList<>();
@@ -988,9 +986,13 @@ public class InitCommand implements SystemCommand {
         }
         Map<String, String> cache = new LinkedHashMap<>();
         for (CompletableFuture<Map.Entry<String, String>> f : futures) {
-            Map.Entry<String, String> entry = f.join();
-            if (entry != null) {
-                cache.put(entry.getKey(), entry.getValue());
+            try {
+                Map.Entry<String, String> entry = f.join();
+                if (entry != null) {
+                    cache.put(entry.getKey(), entry.getValue());
+                }
+            } catch (CompletionException | CancellationException e) {
+                LOG.warn("Reference fetch future failed unexpectedly", e);
             }
         }
         return cache;
