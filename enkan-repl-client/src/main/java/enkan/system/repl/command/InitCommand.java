@@ -15,7 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -42,8 +44,27 @@ public class InitCommand implements SystemCommand {
 
     private static final String DEFAULT_API_URL = "https://api.anthropic.com/v1";
     private static final String DEFAULT_MODEL = "claude-sonnet-4-5";
+
+    /**
+     * Reads the Enkan version from this jar's manifest ({@code Implementation-Version}).
+     * Falls back to {@code "0.14.2-SNAPSHOT"} when running outside a packaged jar (e.g. tests).
+     */
+    static String enkanVersion() {
+        String v = InitCommand.class.getPackage().getImplementationVersion();
+        return (v != null && !v.isBlank()) ? v : "0.14.2-SNAPSHOT";
+    }
     private static final Pattern HEADING_PATTERN = Pattern.compile("^\\s{0,3}#{1,6}\\s+");
     private static final int MAX_GENERATION_ATTEMPTS = 2;
+
+    /** Shared HTTP client reused for all outgoing requests within one command invocation. */
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(Duration.ofSeconds(30))
+            .build();
+
+    /** Reference files fetched once per {@link #execute} call and shared between planning and generation. */
+    private Map<String, String> referenceCache;
+
     private static final String[] FORBIDDEN_MARKERS = {
             "springframework",
             "@springbootapplication",
@@ -81,6 +102,9 @@ public class InitCommand implements SystemCommand {
     @Override
     public boolean execute(EnkanSystem system, Transport transport, String... args) {
         transport.sendOut(BOLD + CYAN + "\n  Enkan Project Generator" + RESET + "\n");
+
+        // Pre-fetch reference files once; shared between planning and generation phases.
+        referenceCache = fetchAllReferences();
 
         String apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
         String apiKey = config("ENKAN_AI_API_KEY", "enkan.ai.apiKey", "");
@@ -225,14 +249,10 @@ public class InitCommand implements SystemCommand {
 
                 """);
 
-        for (String url : REFERENCE_URLS) {
-            String filename = url.substring(url.lastIndexOf('/') + 1);
-            String content = fetchReference(url);
-            if (content != null) {
-                sys.append("## ").append(filename).append("\n");
-                sys.append("```\n").append(content).append("\n```\n\n");
-            }
-        }
+        referenceCache.forEach((filename, content) -> {
+            sys.append("## ").append(filename).append("\n");
+            sys.append("```\n").append(content).append("\n```\n\n");
+        });
 
         sys.append("""
                 Create an implementation plan (no code), concise and concrete.
@@ -349,7 +369,7 @@ public class InitCommand implements SystemCommand {
                 + "    <parent>\n"
                 + "        <groupId>net.unit8.enkan</groupId>\n"
                 + "        <artifactId>enkan-parent</artifactId>\n"
-                + "        <version>0.14.2-SNAPSHOT</version>\n"
+                + "        <version>" + enkanVersion() + "</version>\n"
                 + "    </parent>\n"
                 + "    <groupId>" + groupId + "</groupId>\n"
                 + "    <artifactId>" + projectName + "</artifactId>\n"
@@ -586,10 +606,11 @@ public class InitCommand implements SystemCommand {
         }
         transport.sendOut(YELLOW + "⚡ Starting app" + RESET + " (mvn compile exec:exec -Pdev)...\n");
         try {
-            new ProcessBuilder("mvn", "compile", "exec:exec", "-Pdev")
+            Process appProcess = new ProcessBuilder("mvn", "compile", "exec:exec", "-Pdev")
                     .directory(outPath.toFile())
                     .inheritIO()
                     .start();
+            LOG.info("Started app process (pid={})", appProcess.pid());
             transport.startSpinner("Waiting for REPL server");
             int port = waitForPort(outPath, 60);
             transport.stopSpinner();
@@ -638,12 +659,7 @@ public class InitCommand implements SystemCommand {
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
                     .build();
 
-            HttpClient client = HttpClient.newBuilder()
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .connectTimeout(Duration.ofSeconds(30))
-                    .build();
-
-            HttpResponse<java.io.InputStream> response = client.send(request,
+            HttpResponse<java.io.InputStream> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
@@ -840,11 +856,24 @@ public class InitCommand implements SystemCommand {
     }
 
     private static String unescapeJson(String s) {
-        return s.replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t")
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\");
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char next = s.charAt(++i);
+                switch (next) {
+                    case 'n'  -> sb.append('\n');
+                    case 'r'  -> sb.append('\r');
+                    case 't'  -> sb.append('\t');
+                    case '"'  -> sb.append('"');
+                    case '\\' -> sb.append('\\');
+                    default   -> { sb.append('\\'); sb.append(next); }
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     private String buildRequestBody(String model, String systemPrompt, String userPrompt, boolean stream) {
@@ -900,14 +929,10 @@ public class InitCommand implements SystemCommand {
 
                 """);
 
-        for (String url : REFERENCE_URLS) {
-            String filename = url.substring(url.lastIndexOf('/') + 1);
-            String content = fetchReference(url);
-            if (content != null) {
-                sys.append("## ").append(filename).append("\n");
-                sys.append("```java\n").append(content).append("\n```\n\n");
-            }
-        }
+        referenceCache.forEach((filename, content) -> {
+            sys.append("## ").append(filename).append("\n");
+            sys.append("```java\n").append(content).append("\n```\n\n");
+        });
 
         sys.append("""
                 Output EVERY file using EXACTLY this format — no exceptions:
@@ -954,6 +979,23 @@ public class InitCommand implements SystemCommand {
         return new String[]{sys.toString(), user.toString()};
     }
 
+    /**
+     * Fetches all reference URLs and returns them as a filename → content map.
+     * Called once per {@link #execute} invocation so both the planning and
+     * generation prompts share the same in-memory copies.
+     */
+    private Map<String, String> fetchAllReferences() {
+        Map<String, String> cache = new LinkedHashMap<>();
+        for (String url : REFERENCE_URLS) {
+            String filename = url.substring(url.lastIndexOf('/') + 1);
+            String content = fetchReference(url);
+            if (content != null) {
+                cache.put(filename, content);
+            }
+        }
+        return cache;
+    }
+
     private String fetchReference(String url) {
         try {
             HttpRequest req = HttpRequest.newBuilder()
@@ -962,10 +1004,7 @@ public class InitCommand implements SystemCommand {
                     .timeout(Duration.ofSeconds(10))
                     .GET()
                     .build();
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(5))
-                    .build();
-            HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (res.statusCode() == 200) {
                 return res.body();
             }
@@ -984,12 +1023,8 @@ public class InitCommand implements SystemCommand {
                 .header("Authorization", "Bearer " + apiKey)
                 .GET()
                 .build();
-        HttpClient client = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
         // Any HTTP response means connectivity is OK (2xx/4xx/5xx all reachable).
-        client.send(request, HttpResponse.BodyHandlers.discarding());
+        httpClient.send(request, HttpResponse.BodyHandlers.discarding());
     }
 
     private static String config(String envVar, String sysProp, String defaultValue) {
