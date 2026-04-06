@@ -26,14 +26,20 @@ import java.util.concurrent.CompletionException;
 import java.util.regex.Pattern;
 
 /**
- * REPL command that interactively generates a new Enkan application project
- * using an OpenAI-compatible chat completion API (Anthropic, OpenAI, LM Studio, Ollama, etc.).
+ * REPL command that interactively generates a new Enkan application project using an
+ * OpenAI-compatible chat completion API. Works with providers that expose the OpenAI
+ * {@code /chat/completions} protocol (OpenAI, Anthropic's OpenAI-compatible endpoint,
+ * LM Studio, Ollama, vLLM, etc.).
  *
  * <p>Usage: {@code /init}
  *
  * <p>Configuration via environment variables or system properties:
  * <ul>
- *   <li>{@code ENKAN_AI_API_URL} / {@code enkan.ai.apiUrl} — base URL (default: {@code https://api.anthropic.com/v1})</li>
+ *   <li>{@code ENKAN_AI_API_URL} / {@code enkan.ai.apiUrl} — base URL for the
+ *       OpenAI-compatible endpoint. If the URL already ends with {@code /chat/completions}
+ *       it is used verbatim; otherwise {@code /chat/completions} is appended.
+ *       Default: {@code https://api.anthropic.com/v1} (Anthropic's OpenAI-compatible
+ *       endpoint; see <a href="https://docs.anthropic.com/en/api/openai-sdk">docs</a>).</li>
  *   <li>{@code ENKAN_AI_API_KEY} / {@code enkan.ai.apiKey} — API key</li>
  *   <li>{@code ENKAN_AI_MODEL} / {@code enkan.ai.model} — model name (default: {@code claude-sonnet-4-5})</li>
  * </ul>
@@ -59,9 +65,9 @@ public class InitCommand implements SystemCommand {
             .build();
 
     /** LLM API configuration resolved once per {@link #execute} call from env vars or system properties. */
-    private String apiUrl;
-    private String apiKey;
-    private String model;
+    String apiUrl;
+    String apiKey;
+    String model;
 
     /**
      * Reference files fetched from GitHub, shared between planning and generation phases.
@@ -623,16 +629,30 @@ public class InitCommand implements SystemCommand {
         return -1;
     }
 
+    /**
+     * Resolves the chat-completion endpoint URI from {@link #apiUrl}. If the configured
+     * URL already ends with {@code /chat/completions} it is used verbatim; otherwise
+     * {@code /chat/completions} is appended. A trailing slash on the base URL is tolerated.
+     */
+    URI resolveChatCompletionUri() {
+        String base = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
+        if (base.endsWith("/chat/completions")) {
+            return URI.create(base);
+        }
+        return URI.create(base + "/chat/completions");
+    }
+
     String requestChatCompletion(String systemPrompt, String userPrompt, String spinnerLabel, Transport transport)
             throws IOException, InterruptedException {
         if (transport != null) transport.startSpinner(spinnerLabel);
         try {
             String requestBody = buildRequestBody(model, systemPrompt, userPrompt, true);
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl + "/chat/completions"))
+                    .uri(resolveChatCompletionUri())
                     .version(HttpClient.Version.HTTP_1_1)
                     .timeout(Duration.ofMinutes(10))
                     .header("Content-Type", "application/json")
+                    .header("Accept", "text/event-stream")
                     .header("Authorization", "Bearer " + apiKey)
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
                     .build();
@@ -754,16 +774,23 @@ public class InitCommand implements SystemCommand {
         String currentFile = null;
         var codeLines = new StringBuilder();
         boolean inBlock = false;
+        // When a header names a fixed-template file we still need to consume its fenced
+        // block, otherwise code lines inside it could be misread as new headers.
+        boolean skipBlock = false;
 
         for (String line : lines) {
             if (!inBlock) {
                 String path = extractFilePath(line);
                 if (path != null) {
-                    currentFile = isFixedTemplateFile(path) ? null : path;
-                    if (currentFile != null) {
+                    if (isFixedTemplateFile(path)) {
+                        currentFile = null;
+                        skipBlock = true;
+                    } else {
+                        currentFile = path;
+                        skipBlock = false;
                         transport.sendOut(GREEN + "  ✓" + RESET + " " + currentFile + "\n");
                     }
-                } else if (currentFile != null && (line.startsWith("```"))) {
+                } else if ((currentFile != null || skipBlock) && line.startsWith("```")) {
                     inBlock = true;
                     codeLines.setLength(0);
                 }
@@ -781,7 +808,8 @@ public class InitCommand implements SystemCommand {
                     }
                     inBlock = false;
                     currentFile = null;
-                } else {
+                    skipBlock = false;
+                } else if (!skipBlock) {
                     codeLines.append(line).append("\n");
                 }
             }

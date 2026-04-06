@@ -331,8 +331,15 @@
         };
         ws.onmessage = function(e) {
             var msg = JSON.parse(e.data);
+            var needInput = msg.status && msg.status.indexOf('NEED_INPUT') !== -1;
             if (msg.out) {
-                term.writeln(msg.out);
+                // NEED_INPUT messages are inline prompts — write without a trailing newline
+                // so the user can type on the same line.
+                if (needInput) {
+                    term.write(msg.out);
+                } else {
+                    term.writeln(msg.out);
+                }
                 logOutput('out', msg.out);
             }
             if (msg.err) {
@@ -341,7 +348,7 @@
             }
             if (msg.status && msg.status.indexOf('DONE') !== -1) {
                 showPrompt();
-            } else if (msg.status && msg.status.indexOf('NEED_INPUT') !== -1) {
+            } else if (needInput) {
                 waitingForResponse = false;
             }
         };

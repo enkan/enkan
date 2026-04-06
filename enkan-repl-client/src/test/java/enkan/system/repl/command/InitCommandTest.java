@@ -388,6 +388,51 @@ class InitCommandTest {
     }
 
     @Test
+    void resolveChatCompletionUriAppendsPathWhenMissing() {
+        InitCommand withBase = new InitCommand();
+        withBase.apiUrl = "https://api.example.com/v1";
+        assertThat(withBase.resolveChatCompletionUri().toString())
+                .isEqualTo("https://api.example.com/v1/chat/completions");
+
+        InitCommand withTrailingSlash = new InitCommand();
+        withTrailingSlash.apiUrl = "https://api.example.com/v1/";
+        assertThat(withTrailingSlash.resolveChatCompletionUri().toString())
+                .isEqualTo("https://api.example.com/v1/chat/completions");
+
+        InitCommand withFullPath = new InitCommand();
+        withFullPath.apiUrl = "https://api.example.com/v1/chat/completions";
+        assertThat(withFullPath.resolveChatCompletionUri().toString())
+                .isEqualTo("https://api.example.com/v1/chat/completions");
+    }
+
+    @Test
+    void writeGeneratedFilesConsumesFencedBlockWhenSkippingFixedTemplate(@org.junit.jupiter.api.io.TempDir Path tmp) throws IOException {
+        // Regression: when a fixed-template file is skipped, the parser must still
+        // consume its fenced code block so that inner lines beginning with "### " or
+        // "**" are not misinterpreted as new file headers.
+        InitCommand cmd = new InitCommand();
+        String response = """
+                ### pom.xml
+                ```xml
+                <!-- ### src/evil/Injected.java -->
+                <!-- **`src/evil/Bold.java`** -->
+                <project/>
+                ```
+                ### src/main/java/com/example/Real.java
+                ```java
+                public class Real {}
+                ```
+                """;
+        CapturingTransport transport = new CapturingTransport();
+        int written = cmd.writeGeneratedFiles(tmp, response, transport);
+
+        assertThat(written).isEqualTo(1);
+        assertThat(java.nio.file.Files.exists(tmp.resolve("src/evil/Injected.java"))).isFalse();
+        assertThat(java.nio.file.Files.exists(tmp.resolve("src/evil/Bold.java"))).isFalse();
+        assertThat(java.nio.file.Files.exists(tmp.resolve("src/main/java/com/example/Real.java"))).isTrue();
+    }
+
+    @Test
     void writeGeneratedFilesSkipsFixedTemplateFiles(@org.junit.jupiter.api.io.TempDir Path tmp) throws IOException {
         InitCommand cmd = new InitCommand();
         String response = """

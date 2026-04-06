@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static enkan.system.ReplResponse.ResponseStatus.DONE;
+import static enkan.system.ReplResponse.ResponseStatus.NEED_INPUT;
 import static enkan.system.ReplResponse.ResponseStatus.SHUTDOWN;
 
 /**
@@ -158,8 +159,14 @@ public class ReplClient {
                     try {
                         ZMsg msg = ZMsg.recvMsg(this.socket);
                         ReplResponse res = fressian.read(msg.pop().getData(), ReplResponse.class);
+                        boolean needsInput = res.getStatus().contains(NEED_INPUT);
                         if (res.getOut() != null) {
-                            reader.getTerminal().writer().print(res.getOut());
+                            // NEED_INPUT messages are prompts — keep the cursor on the same line.
+                            if (needsInput) {
+                                reader.getTerminal().writer().print(res.getOut());
+                            } else {
+                                reader.getTerminal().writer().println(res.getOut());
+                            }
                         } else if (res.getErr() != null) {
                             printErr(reader, res.getErr());
                         }
@@ -167,6 +174,9 @@ public class ReplClient {
                             reader.getTerminal().writer().flush();
                             pipe.send("shutdown");
                             break;
+                        } else if (needsInput) {
+                            // Unblock the main loop so the user can type a response.
+                            pipe.send("need-input");
                         } else if (res.getStatus().contains(DONE)) {
                             pipe.send("done");
                         }
