@@ -229,22 +229,42 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
-     * Builds the system prompt for the planning phase, including Enkan reference
-     * examples so the planner understands the framework before proposing a plan.
+     * Builds the system prompt for the planning phase. The planner sees the same
+     * default-stack constraints as the generator (jOOQ + Raoh + HikariCP + Flyway + H2)
+     * so that the plan it produces matches what the generator will actually emit —
+     * otherwise the plan promises one stack and the code uses another.
      */
-    private String buildPlannerSystemPrompt() {
+    String buildPlannerSystemPrompt() {
         var sys = new StringBuilder();
         sys.append("""
                 You are an Enkan project planner.
                 Enkan is a middleware-chain web framework for Java 25 — NOT Spring Boot.
-                NEVER plan to use Spring Boot, Spring Framework, @SpringBootApplication, or org.springframework.*.
+                NEVER plan to use Spring Boot, Spring Framework, Doma2, JPA/Hibernate, or Lombok
+                unless the user *explicitly* asks for them in the requirements.
 
-                Study the following Enkan reference files before creating a plan:
+                DEFAULT STACK (use this unless the user asks for something else):
+                  - Web: Jetty (virtual threads) + Kotowari MVC + Jackson JSON
+                  - Persistence: HikariCP + jOOQ DSLContext + Flyway migrations + H2 in-memory
+                  - Row → domain decoding: Raoh (net.unit8.raoh.jooq.JooqRecordDecoders)
+
+                FIXED (already generated — do NOT mention them in the file plan):
+                  - pom.xml
+                  - src/dev/java/.../DevMain.java
+                  - src/main/java/.../*SystemFactory.java
+                  - src/main/java/.../*ApplicationFactory.java
+                  - src/main/java/.../jaxrs/JsonBodyReader.java and JsonBodyWriter.java
+
+                TO GENERATE (plan these):
+                  - src/main/java/.../RoutesDef.java — exposes `public static Routes routes()`
+                    (called by the fixed ApplicationFactory, must live in the base package)
+                  - Controllers (one per resource, injected with DSLContext via request extension)
+                  - Domain records / Raoh decoders
+                  - src/main/resources/db/migration/V1__<name>.sql — H2-compatible DDL
 
                 """);
 
         getOrFetchReferenceCache().forEach((filename, content) -> {
-            sys.append("## ").append(filename).append("\n");
+            sys.append("## ").append(filename).append(" (architectural example, uses Doma2 — substitute jOOQ)\n");
             sys.append("```\n").append(content).append("\n```\n\n");
         });
 
@@ -252,9 +272,11 @@ public class InitCommand implements SystemCommand {
                 Create an implementation plan (no code), concise and concrete.
                 Include:
                 1) Goal summary
-                2) Key architecture choices (which Enkan components to use)
-                3) File plan (relative paths)
-                4) Risks/assumptions
+                2) Chosen stack (confirm default or note the requested deviation and why)
+                3) Schema (tables and columns, H2 DDL style)
+                4) File plan — only files that still need to be written by the generator
+                   (omit the FIXED files listed above)
+                5) Risks / assumptions
                 """);
         return sys.toString();
     }
@@ -268,8 +290,12 @@ public class InitCommand implements SystemCommand {
             throws IOException, InterruptedException {
         String basePackage = groupId + "." + projectName.replace("-", "").replace("_", "");
         String systemFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "SystemFactory";
+        String enkanVersion = resolveEnkanVersionOrAbort(transport);
+        if (enkanVersion == null) {
+            return;
+        }
 
-        writeFixedTemplates(outPath, basePackage, systemFactoryClass, projectName, groupId);
+        writeFixedTemplates(outPath, basePackage, systemFactoryClass, projectName, groupId, enkanVersion);
 
         String[] prompts = buildPrompt(description, projectName, groupId, outPath);
         String currentUserPrompt = prompts[1];
@@ -290,15 +316,224 @@ public class InitCommand implements SystemCommand {
         }
         int written = writeGeneratedFiles(outPath, fullResponse.toString(), transport);
         transport.sendOut(GREEN + BOLD + "\n✓ Done!" + RESET + " Created " + written + " file(s) at " + DIM + outPath + RESET + "\n");
+
+        List<String> issues = validateGeneration(outPath, fullResponse, basePackage, description);
+        if (!issues.isEmpty()) {
+            transport.sendOut(YELLOW + "⚠ Validation issues:" + RESET + "\n");
+            issues.forEach(i -> transport.sendOut(DIM + "  - " + i + RESET + "\n"));
+            // The fix loop will pick these up via the first compile attempt; a broken
+            // import or a missing controller surfaces quickly via javac and gets
+            // forwarded to the LLM with the same machinery. No separate fix path needed.
+        }
+
         if (!compileAndFix(transport, outPath)) {
             return;
         }
         launchAndConnect(transport, outPath);
     }
 
-    private void writeFixedTemplates(Path outPath, String basePackage, String systemFactoryClass,
-            String projectName, String groupId) throws IOException {
+    /**
+     * Packages that the generator is never allowed to produce code importing from,
+     * regardless of what the user asks for. Spring is always forbidden; the others are
+     * conditionally allowed via {@link #hasUserRequestedAlternative} (see
+     * {@link #importAllowlistViolations}).
+     */
+    private static final String[] ALWAYS_FORBIDDEN_IMPORT_PREFIXES = {
+            "org.springframework.",
+            "lombok.",
+    };
+    private static final String[] CONDITIONALLY_FORBIDDEN_IMPORT_PREFIXES = {
+            "org.seasar.doma.",
+            "jakarta.persistence.",
+            "javax.persistence.",
+    };
+
+    /**
+     * Fast post-generation checks that would otherwise only surface as cryptic
+     * {@code mvn compile} errors. Returns a list of human-readable issues; an empty
+     * list means the generation looks structurally sound.
+     *
+     * <p>Checks performed:
+     * <ol>
+     *   <li>{@code RoutesDef.java} exists in the base package.</li>
+     *   <li>Every {@code FooController.class} reference inside {@code RoutesDef}
+     *       has a matching {@code FooController.java} file somewhere under
+     *       {@code outPath}.</li>
+     *   <li>No generated source imports a forbidden package (Spring, Lombok; also
+     *       Doma/JPA unless the user requested them).</li>
+     *   <li>At least one Flyway migration exists in
+     *       {@code src/main/resources/db/migration/}.</li>
+     *   <li>The {@code ### MANIFEST} block declared by the LLM (if any) matches the
+     *       files actually written.</li>
+     * </ol>
+     */
+    List<String> validateGeneration(Path outPath, String llmResponse, String basePackage, String description) {
+        List<String> issues = new ArrayList<>();
         String basePath = basePackage.replace('.', '/');
+        Path routesDef = outPath.resolve("src/main/java/" + basePath + "/RoutesDef.java");
+
+        // 1. RoutesDef present
+        if (!Files.exists(routesDef)) {
+            issues.add("Missing " + outPath.relativize(routesDef)
+                    + " — the fixed ApplicationFactory calls RoutesDef.routes() and will not compile without it.");
+        } else {
+            // 2. Controller references
+            String routesContent;
+            try {
+                routesContent = Files.readString(routesDef, StandardCharsets.UTF_8);
+                var m = Pattern.compile("\\b(\\w+Controller)\\.class").matcher(routesContent);
+                java.util.Set<String> mentioned = new java.util.LinkedHashSet<>();
+                while (m.find()) mentioned.add(m.group(1));
+                for (String simpleName : mentioned) {
+                    boolean found;
+                    try (var stream = Files.walk(outPath.resolve("src/main/java"))) {
+                        found = stream
+                                .filter(p -> p.getFileName().toString().equals(simpleName + ".java"))
+                                .findFirst()
+                                .isPresent();
+                    } catch (IOException e) {
+                        found = false;
+                    }
+                    if (!found) {
+                        issues.add("RoutesDef references " + simpleName + ".class but no "
+                                + simpleName + ".java was generated.");
+                    }
+                }
+            } catch (IOException e) {
+                issues.add("Could not read RoutesDef.java: " + safeMessage(e));
+            }
+        }
+
+        // 3. Import allowlist
+        issues.addAll(importAllowlistViolations(outPath, description));
+
+        // 4. Flyway migration present
+        Path migrations = outPath.resolve("src/main/resources/db/migration");
+        if (Files.isDirectory(migrations)) {
+            try (var stream = Files.list(migrations)) {
+                boolean anySql = stream.anyMatch(p -> p.getFileName().toString().endsWith(".sql"));
+                if (!anySql) {
+                    issues.add("No Flyway migration at " + outPath.relativize(migrations)
+                            + "/V1__*.sql — schema will be empty and controllers will fail at first query.");
+                }
+            } catch (IOException ignored) { }
+        }
+
+        // 5. Manifest comparison (advisory — manifest is optional)
+        var manifest = parseManifest(llmResponse);
+        if (!manifest.isEmpty()) {
+            for (String declared : manifest) {
+                if (isFixedTemplateFile(declared)) continue;
+                Path p = outPath.resolve(declared).normalize();
+                if (!Files.exists(p)) {
+                    issues.add("Manifest promises " + declared + " but it was not written.");
+                }
+            }
+        }
+
+        return issues;
+    }
+
+    /**
+     * Scans all generated {@code .java} files under {@code src/main/java} for forbidden
+     * imports. Spring and Lombok are always forbidden. Doma/JPA are forbidden unless
+     * the user's description explicitly requested them (allowing an escape hatch).
+     */
+    List<String> importAllowlistViolations(Path outPath, String description) {
+        List<String> issues = new ArrayList<>();
+        boolean allowJpa = hasUserRequestedAlternative(description, "jpa", "hibernate", "jakarta.persistence");
+        boolean allowDoma = hasUserRequestedAlternative(description, "doma2", "doma ");
+
+        Path srcRoot = outPath.resolve("src/main/java");
+        if (!Files.isDirectory(srcRoot)) return issues;
+        try (var stream = Files.walk(srcRoot)) {
+            stream.filter(p -> p.toString().endsWith(".java"))
+                  .forEach(p -> {
+                      try {
+                          String content = Files.readString(p, StandardCharsets.UTF_8);
+                          String rel = outPath.relativize(p).toString().replace('\\', '/');
+                          content.lines()
+                                  .filter(line -> line.startsWith("import "))
+                                  .forEach(line -> {
+                                      String imp = line.substring("import ".length())
+                                              .replace("static ", "")
+                                              .trim();
+                                      if (imp.endsWith(";")) imp = imp.substring(0, imp.length() - 1);
+                                      for (String forbidden : ALWAYS_FORBIDDEN_IMPORT_PREFIXES) {
+                                          if (imp.startsWith(forbidden)) {
+                                              issues.add(rel + " imports forbidden package: " + imp);
+                                          }
+                                      }
+                                      for (String forbidden : CONDITIONALLY_FORBIDDEN_IMPORT_PREFIXES) {
+                                          if (imp.startsWith(forbidden)) {
+                                              boolean allowed = (forbidden.contains("doma") && allowDoma)
+                                                      || (forbidden.contains("persistence") && allowJpa);
+                                              if (!allowed) {
+                                                  issues.add(rel + " imports " + imp
+                                                          + " — use the default jOOQ+Raoh stack instead.");
+                                              }
+                                          }
+                                      }
+                                  });
+                      } catch (IOException ignored) { }
+                  });
+        } catch (IOException ignored) { }
+        return issues;
+    }
+
+    /**
+     * Parses the optional {@code ### MANIFEST} block the generation prompt asks the
+     * LLM to emit. Returns an empty list if no manifest is present — the check is
+     * advisory, not required, so older prompt versions and LLMs that ignore the
+     * instruction still work.
+     */
+    static List<String> parseManifest(String response) {
+        List<String> result = new ArrayList<>();
+        if (response == null) return result;
+        String[] lines = response.split("\n");
+        boolean inManifest = false;
+        boolean inBlock = false;
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (!inManifest) {
+                if (trimmed.equalsIgnoreCase("### MANIFEST")) inManifest = true;
+                continue;
+            }
+            if (!inBlock) {
+                if (trimmed.startsWith("```")) {
+                    inBlock = true;
+                }
+                continue;
+            }
+            if (trimmed.startsWith("```")) break;
+            if (!trimmed.isEmpty()) result.add(trimmed);
+        }
+        return result;
+    }
+
+    /**
+     * Writes all fixed (deterministic) template files. These files are never generated
+     * or modified by the LLM — they encode the parts of the project that must be
+     * correct regardless of the user's requirements:
+     *
+     * <ul>
+     *   <li>{@code pom.xml} — standalone POM with the default dependency set.</li>
+     *   <li>{@code DevMain.java} — REPL boot entry point.</li>
+     *   <li>{@code *SystemFactory.java} — HikariCP/Flyway/jOOQ/Jetty wiring.</li>
+     *   <li>{@code *ApplicationFactory.java} — middleware stack with jOOQ transaction
+     *       support and JSON SerDes. Routes are delegated to {@code Routes.define(...)}
+     *       inside this class; the LLM generates controllers only.</li>
+     *   <li>{@code JsonBodyReader.java} / {@code JsonBodyWriter.java} — required by the
+     *       SerDes middleware because {@code kotowari} ships only the
+     *       {@code ToStringBodyWriter}. Copied verbatim from {@code kotowari-example}.</li>
+     * </ul>
+     *
+     * @param enkanVersion resolved Enkan version to bake into the POM (must not be blank).
+     */
+    private void writeFixedTemplates(Path outPath, String basePackage, String systemFactoryClass,
+            String projectName, String groupId, String enkanVersion) throws IOException {
+        String basePath = basePackage.replace('.', '/');
+        String appFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "ApplicationFactory";
 
         Path devMain = outPath.resolve("src/dev/java/" + basePath + "/DevMain.java");
         Files.createDirectories(devMain.getParent());
@@ -306,11 +541,26 @@ public class InitCommand implements SystemCommand {
 
         Path pom = outPath.resolve("pom.xml");
         Files.createDirectories(pom.getParent());
-        Files.writeString(pom, pomTemplate(groupId, projectName, basePackage), StandardCharsets.UTF_8);
+        Files.writeString(pom, pomTemplate(groupId, projectName, basePackage, enkanVersion), StandardCharsets.UTF_8);
 
         Path sf = outPath.resolve("src/main/java/" + basePath + "/" + systemFactoryClass + ".java");
         Files.createDirectories(sf.getParent());
         Files.writeString(sf, systemFactoryTemplate(basePackage, systemFactoryClass, projectName), StandardCharsets.UTF_8);
+
+        Path af = outPath.resolve("src/main/java/" + basePath + "/" + appFactoryClass + ".java");
+        Files.createDirectories(af.getParent());
+        Files.writeString(af, applicationFactoryTemplate(basePackage, appFactoryClass), StandardCharsets.UTF_8);
+
+        Path jsonReader = outPath.resolve("src/main/java/" + basePath + "/jaxrs/JsonBodyReader.java");
+        Files.createDirectories(jsonReader.getParent());
+        Files.writeString(jsonReader, jsonBodyReaderTemplate(basePackage), StandardCharsets.UTF_8);
+
+        Path jsonWriter = outPath.resolve("src/main/java/" + basePath + "/jaxrs/JsonBodyWriter.java");
+        Files.writeString(jsonWriter, jsonBodyWriterTemplate(basePackage), StandardCharsets.UTF_8);
+
+        // Empty Flyway migration directory so Flyway's classpath scan finds something.
+        // The LLM is required to write V1__<name>.sql into this directory.
+        Files.createDirectories(outPath.resolve("src/main/resources/db/migration"));
     }
 
     private static String capitalize(String s) {
@@ -346,21 +596,36 @@ public class InitCommand implements SystemCommand {
                 + "}\n";
     }
 
-    private static String pomTemplate(String groupId, String projectName, String basePackage) {
+    /**
+     * Builds a standalone {@code pom.xml} for the generated project. The POM has no
+     * {@code <parent>} — {@code enkan-parent} is an internal aggregator that external
+     * projects cannot inherit from — and instead declares all plugin and dependency
+     * versions explicitly. The default persistence stack is jOOQ + Raoh + HikariCP +
+     * Flyway + H2 in-memory; the LLM generates controllers and migrations on top.
+     *
+     * @param enkanVersion must be a concrete, non-blank version. Callers are expected
+     *     to have validated it via {@link #resolveEnkanVersionOrAbort(Transport)}.
+     */
+    static String pomTemplate(String groupId, String projectName, String basePackage, String enkanVersion) {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"\n"
                 + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
                 + "         xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n"
                 + "    <modelVersion>4.0.0</modelVersion>\n"
-                + "    <parent>\n"
-                + "        <groupId>net.unit8.enkan</groupId>\n"
-                + "        <artifactId>enkan-parent</artifactId>\n"
-                + "        <version>" + enkanVersion() + "</version>\n"
-                + "    </parent>\n"
                 + "    <groupId>" + groupId + "</groupId>\n"
                 + "    <artifactId>" + projectName + "</artifactId>\n"
                 + "    <version>0.1.0-SNAPSHOT</version>\n"
                 + "    <packaging>jar</packaging>\n\n"
+                + "    <properties>\n"
+                + "        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>\n"
+                + "        <maven.compiler.release>25</maven.compiler.release>\n"
+                + "        <enkan.version>" + enkanVersion + "</enkan.version>\n"
+                + "        <jooq.version>3.21.1</jooq.version>\n"
+                + "        <h2.version>2.4.240</h2.version>\n"
+                + "        <raoh.version>0.5.0</raoh.version>\n"
+                + "        <junit.version>5.11.3</junit.version>\n"
+                + "        <assertj.version>3.27.7</assertj.version>\n"
+                + "    </properties>\n\n"
                 + "    <dependencies>\n"
                 + "        <dependency>\n"
                 + "            <groupId>net.unit8.enkan</groupId>\n"
@@ -387,7 +652,66 @@ public class InitCommand implements SystemCommand {
                 + "            <artifactId>enkan-component-jackson</artifactId>\n"
                 + "            <version>${enkan.version}</version>\n"
                 + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>net.unit8.enkan</groupId>\n"
+                + "            <artifactId>enkan-component-HikariCP</artifactId>\n"
+                + "            <version>${enkan.version}</version>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>net.unit8.enkan</groupId>\n"
+                + "            <artifactId>enkan-component-jooq</artifactId>\n"
+                + "            <version>${enkan.version}</version>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>net.unit8.enkan</groupId>\n"
+                + "            <artifactId>enkan-component-flyway</artifactId>\n"
+                + "            <version>${enkan.version}</version>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>net.unit8.raoh</groupId>\n"
+                + "            <artifactId>raoh</artifactId>\n"
+                + "            <version>${raoh.version}</version>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>net.unit8.raoh</groupId>\n"
+                + "            <artifactId>raoh-jooq</artifactId>\n"
+                + "            <version>${raoh.version}</version>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>com.h2database</groupId>\n"
+                + "            <artifactId>h2</artifactId>\n"
+                + "            <version>${h2.version}</version>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>org.junit.jupiter</groupId>\n"
+                + "            <artifactId>junit-jupiter</artifactId>\n"
+                + "            <version>${junit.version}</version>\n"
+                + "            <scope>test</scope>\n"
+                + "        </dependency>\n"
+                + "        <dependency>\n"
+                + "            <groupId>org.assertj</groupId>\n"
+                + "            <artifactId>assertj-core</artifactId>\n"
+                + "            <version>${assertj.version}</version>\n"
+                + "            <scope>test</scope>\n"
+                + "        </dependency>\n"
                 + "    </dependencies>\n\n"
+                + "    <build>\n"
+                + "        <plugins>\n"
+                + "            <plugin>\n"
+                + "                <groupId>org.apache.maven.plugins</groupId>\n"
+                + "                <artifactId>maven-compiler-plugin</artifactId>\n"
+                + "                <version>3.13.0</version>\n"
+                + "                <configuration>\n"
+                + "                    <release>${maven.compiler.release}</release>\n"
+                + "                </configuration>\n"
+                + "            </plugin>\n"
+                + "            <plugin>\n"
+                + "                <groupId>org.apache.maven.plugins</groupId>\n"
+                + "                <artifactId>maven-surefire-plugin</artifactId>\n"
+                + "                <version>3.5.2</version>\n"
+                + "            </plugin>\n"
+                + "        </plugins>\n"
+                + "    </build>\n\n"
                 + "    <profiles>\n"
                 + "        <profile>\n"
                 + "            <id>dev</id>\n"
@@ -397,6 +721,7 @@ public class InitCommand implements SystemCommand {
                 + "                    <plugin>\n"
                 + "                        <groupId>org.codehaus.mojo</groupId>\n"
                 + "                        <artifactId>exec-maven-plugin</artifactId>\n"
+                + "                        <version>3.5.0</version>\n"
                 + "                        <configuration>\n"
                 + "                            <executable>${java.home}/bin/java</executable>\n"
                 + "                            <workingDirectory>${project.basedir}</workingDirectory>\n"
@@ -436,17 +761,29 @@ public class InitCommand implements SystemCommand {
                 + "</project>\n";
     }
 
-    private static String systemFactoryTemplate(String basePackage, String systemFactoryClass, String projectName) {
+    /**
+     * Builds the {@code SystemFactory} that wires the default persistence stack
+     * (HikariCP + H2 in-memory, Flyway migrations, jOOQ DSLContext) alongside
+     * Jackson, Jetty, and the generated ApplicationFactory. Matches the component
+     * relationship pattern used by {@code kotowari-example/ExampleSystemFactory}.
+     */
+    static String systemFactoryTemplate(String basePackage, String systemFactoryClass, String projectName) {
         String appFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "ApplicationFactory";
+        String jdbcUrl = "jdbc:h2:mem:" + projectName.replace("-", "").replace("_", "") + ";DB_CLOSE_DELAY=-1";
         return "package " + basePackage + ";\n\n"
-                + "import enkan.config.EnkanSystemFactory;\n"
-                + "import enkan.system.EnkanSystem;\n"
+                + "import enkan.Env;\n"
                 + "import enkan.component.ApplicationComponent;\n"
                 + "import enkan.component.WebServerComponent;\n"
                 + "import enkan.component.builtin.HmacEncoder;\n"
+                + "import enkan.component.flyway.FlywayMigration;\n"
+                + "import enkan.component.hikaricp.HikariCPComponent;\n"
                 + "import enkan.component.jackson.JacksonBeansConverter;\n"
                 + "import enkan.component.jetty.JettyComponent;\n"
-                + "import enkan.Env;\n\n"
+                + "import enkan.component.jooq.JooqProvider;\n"
+                + "import enkan.config.EnkanSystemFactory;\n"
+                + "import enkan.collection.OptionMap;\n"
+                + "import enkan.system.EnkanSystem;\n"
+                + "import org.jooq.SQLDialect;\n\n"
                 + "import static enkan.component.ComponentRelationship.component;\n"
                 + "import static enkan.util.BeanBuilder.builder;\n\n"
                 + "public class " + systemFactoryClass + " implements EnkanSystemFactory {\n"
@@ -455,46 +792,73 @@ public class InitCommand implements SystemCommand {
                 + "        return EnkanSystem.of(\n"
                 + "                \"hmac\", new HmacEncoder(),\n"
                 + "                \"jackson\", new JacksonBeansConverter(),\n"
+                + "                \"datasource\", new HikariCPComponent(OptionMap.of(\n"
+                + "                        \"uri\", Env.getString(\"JDBC_URL\", \"" + jdbcUrl + "\"))),\n"
+                + "                \"flyway\", new FlywayMigration(),\n"
+                + "                \"jooq\", builder(new JooqProvider())\n"
+                + "                        .set(JooqProvider::setDialect, SQLDialect.H2)\n"
+                + "                        .build(),\n"
                 + "                \"app\", new ApplicationComponent<>(\"" + basePackage + "." + appFactoryClass + "\"),\n"
                 + "                \"http\", builder(new JettyComponent())\n"
                 + "                        .set(WebServerComponent::setPort, Env.getInt(\"PORT\", 3000))\n"
                 + "                        .build()\n"
                 + "        ).relationships(\n"
                 + "                component(\"http\").using(\"app\"),\n"
-                + "                component(\"app\").using(\"jackson\", \"hmac\")\n"
+                + "                component(\"app\").using(\"jackson\", \"hmac\", \"jooq\", \"datasource\"),\n"
+                + "                component(\"jooq\").using(\"datasource\", \"flyway\"),\n"
+                + "                component(\"flyway\").using(\"datasource\")\n"
                 + "        );\n"
                 + "    }\n"
                 + "}\n";
     }
 
-    private static final int MAX_FIX_ATTEMPTS = 3;
+    private static final int MAX_FIX_ATTEMPTS = 5;
 
     /**
-     * Runs {@code mvn compile} in the generated project directory.
-     * If it fails, sends the errors to the LLM and applies the fixes by
-     * overwriting the affected files. Repeats until compilation succeeds
-     * or the attempt limit is reached.
+     * Distinguishes Maven model-building failures (invalid POM) from Java compile
+     * failures. The fix prompt differs for each phase so the LLM knows what kind of
+     * file is broken.
+     */
+    enum BuildPhase { VALIDATE, COMPILE }
+
+    /**
+     * Structured result of a Maven build step. {@link #errors} is {@code null} on success.
+     */
+    record BuildResult(BuildPhase phase, String errors) {
+        boolean succeeded() { return errors == null; }
+    }
+
+    /**
+     * Runs {@code mvn validate} then {@code mvn compile -Pdev} on the generated
+     * project. When a step fails, sends the errors + relevant file content to the LLM
+     * and applies the returned fixes. Repeats until compilation succeeds or the attempt
+     * limit ({@link #MAX_FIX_ATTEMPTS}) is reached.
      *
-     * @return true if compilation eventually succeeded, false if the user
-     *         should abort
+     * <p>The two-phase approach lets the fix prompt distinguish POM problems from
+     * Java problems — previously, a broken POM returned Java-shaped errors that the
+     * fix loop could not parse file paths from, and the LLM would get no file context.
+     *
+     * @return true if compilation eventually succeeded, false if the user should abort
      */
     private boolean compileAndFix(Transport transport, Path outPath) {
         for (int attempt = 1; attempt <= MAX_FIX_ATTEMPTS; attempt++) {
-            transport.sendOut(section("Compiling") + DIM + "  mvn compile" + RESET + "\n");
-            String errors = runMvnCompile(outPath);
-            if (errors == null) {
+            transport.sendOut(section("Building") + DIM + "  mvn validate → compile" + RESET + "\n");
+            BuildResult result = runMvnBuild(outPath);
+            if (result.succeeded()) {
                 transport.sendOut(GREEN + BOLD + "✓ Compilation succeeded." + RESET + "\n");
                 return true;
             }
-            transport.sendOut(YELLOW + "⚠ Compilation errors (attempt " + attempt + "/" + MAX_FIX_ATTEMPTS + "):" + RESET + "\n");
-            transport.sendOut(DIM + errors + RESET + "\n");
+            transport.sendOut(YELLOW + "⚠ " + result.phase() + " errors (attempt "
+                    + attempt + "/" + MAX_FIX_ATTEMPTS + "):" + RESET + "\n");
+            transport.sendOut(DIM + result.errors() + RESET + "\n");
             if (attempt == MAX_FIX_ATTEMPTS) break;
 
             transport.sendOut(CYAN + "  Asking AI to fix errors..." + RESET + "\n");
             String fixResponse;
             try {
                 fixResponse = requestChatCompletion(
-                        buildFixSystemPrompt(), buildFixUserPrompt(errors, outPath),
+                        buildFixSystemPrompt(),
+                        buildFixUserPrompt(result, outPath),
                         "Fixing", transport);
             } catch (Exception e) {
                 transport.sendErr("Failed to get fix from AI: " + safeMessage(e));
@@ -512,73 +876,155 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
-     * Runs {@code mvn compile -Pdev} in the given directory.
+     * Runs {@code mvn validate} (POM sanity) then {@code mvn compile -Pdev} (Java
+     * sources) in the given directory. Returns the first failing phase.
      *
-     * @return null if compilation succeeded, or the error output if it failed
+     * @return {@link BuildResult#succeeded()} true if both phases pass; otherwise the
+     *     result describes which phase failed and the trimmed error lines.
      */
-    private String runMvnCompile(Path outPath) {
+    BuildResult runMvnBuild(Path outPath) {
+        BuildResult validate = runMvnPhase(outPath, BuildPhase.VALIDATE, "validate");
+        if (!validate.succeeded()) return validate;
+        return runMvnPhase(outPath, BuildPhase.COMPILE, "compile", "-Pdev");
+    }
+
+    private BuildResult runMvnPhase(Path outPath, BuildPhase phase, String... mvnArgs) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("mvn");
+        cmd.add("--no-transfer-progress");
+        cmd.add("-B");
+        for (String a : mvnArgs) cmd.add(a);
         try {
-            Process proc = new ProcessBuilder("mvn", "compile", "-Pdev", "--no-transfer-progress")
+            Process proc = new ProcessBuilder(cmd)
                     .directory(outPath.toFile())
                     .redirectErrorStream(true)
                     .start();
             String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = proc.waitFor();
-            if (exitCode == 0) return null;
-            // Extract only the ERROR lines to keep the prompt compact
-            return output.lines()
-                    .filter(l -> l.startsWith("[ERROR]"))
+            if (exitCode == 0) return new BuildResult(phase, null);
+            String errors = output.lines()
+                    .filter(l -> l.startsWith("[ERROR]") || l.startsWith("[FATAL]"))
                     .collect(java.util.stream.Collectors.joining("\n"));
+            if (errors.isBlank()) {
+                // Fallback: no marker lines at all (rare); include the tail of raw output.
+                errors = output.lines()
+                        .skip(Math.max(0, output.lines().count() - 30))
+                        .collect(java.util.stream.Collectors.joining("\n"));
+            }
+            return new BuildResult(phase, errors);
         } catch (IOException | InterruptedException e) {
-            return "Failed to run mvn compile: " + safeMessage(e);
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new BuildResult(phase, "Failed to run mvn " + String.join(" ", mvnArgs) + ": " + safeMessage(e));
         }
     }
 
     private static String buildFixSystemPrompt() {
         return """
                 You are an expert Enkan framework developer.
-                Fix the Java compilation errors shown by the user.
-                Output ONLY the corrected files using EXACTLY this format:
+                Fix the Maven errors shown by the user by outputting corrected files.
 
-                ### relative/path/to/File.java
-                ```java
-                // corrected file content
-                ```
+                HARD CONSTRAINTS:
+                - Output ONLY the files you are changing.
+                - Use EXACTLY this format per file:
 
-                Do NOT output files that do not need changes.
-                Do NOT include any explanation outside the file blocks.
+                  ### relative/path/to/File.java
+                  ```java
+                  // corrected file content
+                  ```
+
+                - The following files are FIXED TEMPLATES and will be overwritten if you
+                  emit them. NEVER output them, even if the error message mentions them:
+                    pom.xml
+                    *SystemFactory.java
+                    *ApplicationFactory.java
+                    DevMain.java
+                    jaxrs/JsonBodyReader.java
+                    jaxrs/JsonBodyWriter.java
+                  If an error really is inside one of those files, fix it indirectly by
+                  changing the user-generated class that collides with it (rename it,
+                  move it, drop the unused import, etc.).
+                - Do NOT include explanations outside file blocks.
                 """;
     }
 
-    private static String buildFixUserPrompt(String errors, Path outPath) {
+    static String buildFixUserPrompt(BuildResult result, Path outPath) {
         var sb = new StringBuilder();
-        sb.append("Fix these Maven compilation errors in the project at ").append(outPath).append(":\n\n");
-        sb.append(errors).append("\n\n");
-        // Include the content of each affected file so the LLM has context
-        errors.lines()
-                .map(line -> extractFileFromError(line, outPath))
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .forEach(file -> {
-                    try {
-                        String content = Files.readString(file, StandardCharsets.UTF_8);
-                        String rel = outPath.relativize(file).toString().replace('\\', '/');
-                        sb.append("### ").append(rel).append("\n```java\n").append(content).append("\n```\n\n");
-                    } catch (IOException ignored) {}
-                });
+        sb.append("Maven ").append(result.phase()).append(" failed in ")
+          .append(outPath).append(":\n\n");
+        sb.append(result.errors()).append("\n\n");
+
+        java.util.LinkedHashSet<Path> filesToInclude = new java.util.LinkedHashSet<>();
+        result.errors().lines().forEach(line -> {
+            Path p = extractFileFromError(line, outPath);
+            if (p != null) filesToInclude.add(p);
+        });
+        // If the error hints at the POM (model-building errors rarely expose a line
+        // reference the regex can parse) or no files were matched, always include
+        // pom.xml so the LLM has *some* context to work from.
+        if (result.phase() == BuildPhase.VALIDATE || filesToInclude.isEmpty()) {
+            Path pom = outPath.resolve("pom.xml");
+            if (Files.exists(pom)) filesToInclude.add(pom);
+        }
+
+        for (Path file : filesToInclude) {
+            try {
+                String content = Files.readString(file, StandardCharsets.UTF_8);
+                String rel = outPath.relativize(file).toString().replace('\\', '/');
+                String lang = rel.endsWith(".xml") ? "xml"
+                        : rel.endsWith(".sql") ? "sql"
+                        : "java";
+                sb.append("### ").append(rel).append("\n```").append(lang).append("\n")
+                  .append(content).append("\n```\n\n");
+            } catch (IOException ignored) { }
+        }
         return sb.toString();
     }
 
-    private static Path extractFileFromError(String errorLine, Path outPath) {
-        // [ERROR] /absolute/path/to/File.java:[line,col] message
-        if (!errorLine.startsWith("[ERROR]")) return null;
-        int bracket = errorLine.indexOf(":[");
-        if (bracket < 0) return null;
-        String pathPart = errorLine.substring("[ERROR]".length(), bracket).trim();
+    /**
+     * Extracts a file path from a Maven error line, supporting both Java compiler
+     * format and Maven model-building format.
+     *
+     * <ul>
+     *   <li>{@code [ERROR] /abs/File.java:[row,col] message} — javac error.</li>
+     *   <li>{@code [ERROR] ... @ /abs/pom.xml, line 6, column 13} — Maven model error.</li>
+     *   <li>{@code [FATAL] Non-resolvable parent POM ... @ line 6, column 13} — may
+     *       not contain an absolute path; caller falls back to {@code pom.xml}.</li>
+     * </ul>
+     *
+     * Returns a {@link Path} contained within {@code outPath}, or {@code null} if no
+     * path could be extracted or the path is outside the project root.
+     */
+    static Path extractFileFromError(String errorLine, Path outPath) {
+        if (!errorLine.startsWith("[ERROR]") && !errorLine.startsWith("[FATAL]")) return null;
+        String body = errorLine.substring(errorLine.indexOf(']') + 1).trim();
+
+        // Try javac pattern: "/abs/path/File.java:[row,col] ..."
+        int bracket = body.indexOf(":[");
+        if (bracket >= 0) {
+            Path p = safeInProjectPath(body.substring(0, bracket).trim(), outPath);
+            if (p != null) return p;
+        }
+
+        // Try Maven model pattern: "... @ /abs/path/pom.xml, line N, column N"
+        int at = body.lastIndexOf(" @ ");
+        if (at >= 0) {
+            String rest = body.substring(at + 3).trim();
+            // Strip trailing ", line ..., column ..."
+            int comma = rest.indexOf(',');
+            String cand = (comma >= 0 ? rest.substring(0, comma) : rest).trim();
+            Path p = safeInProjectPath(cand, outPath);
+            if (p != null) return p;
+        }
+        return null;
+    }
+
+    private static Path safeInProjectPath(String candidate, Path outPath) {
+        if (candidate == null || candidate.isBlank()) return null;
         try {
-            Path p = Path.of(pathPart);
-            if (Files.exists(p) && p.startsWith(outPath)) return p;
-        } catch (Exception ignored) {}
+            Path p = Path.of(candidate).toAbsolutePath().normalize();
+            Path normalizedOut = outPath.toAbsolutePath().normalize();
+            if (Files.exists(p) && p.startsWith(normalizedOut)) return p;
+        } catch (Exception ignored) { }
         return null;
     }
 
@@ -841,7 +1287,10 @@ public class InitCommand implements SystemCommand {
         return filename.equals("pom.xml")
                 || filename.equals("DevMain.java")
                 || filename.equals("Main.java")
-                || filename.endsWith("SystemFactory.java");
+                || filename.equals("JsonBodyReader.java")
+                || filename.equals("JsonBodyWriter.java")
+                || filename.endsWith("SystemFactory.java")
+                || filename.endsWith("ApplicationFactory.java");
     }
 
     private static boolean looksLikePath(String s) {
@@ -906,81 +1355,175 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
-     * Builds the prompt split into [systemPrompt, userMessage].
-     * Keeping reference code in the system prompt reduces the thinking budget
-     * consumed on the user turn.
+     * Builds the generation prompt split into {@code [systemPrompt, userMessage]}.
+     *
+     * <p>Keeping reference code and hard constraints in the system prompt (rather than
+     * the user message) reduces the thinking budget the LLM spends on the user turn
+     * and keeps the constraints in-context even when the user message grows during
+     * fix-loop iterations.
      */
-    private String[] buildPrompt(String description, String projectName,
+    String[] buildPrompt(String description, String projectName,
             String groupId, Path outPath) {
         String basePackage = groupId + "." + projectName.replace("-", "").replace("_", "");
+        boolean userWantsJpa = hasUserRequestedAlternative(description, "jpa", "hibernate", "jakarta.persistence");
+        boolean userWantsDoma = hasUserRequestedAlternative(description, "doma2", "doma ");
+        boolean defaultStack = !userWantsJpa && !userWantsDoma;
 
-        // --- System prompt: framework knowledge + output format ---
+        // --- System prompt: framework knowledge + hard constraints + output format ---
         var sys = new StringBuilder();
         sys.append("""
                 You are an expert Enkan framework developer.
                 Enkan is a middleware-chain web framework for Java 25.
 
-                Available components:
-                - Web servers: enkan-component-jetty (recommended, virtual threads), enkan-component-undertow
-                - Database: enkan-component-doma2, enkan-component-jpa, enkan-component-jooq
-                - Connection pool: enkan-component-HikariCP
-                - Migration: enkan-component-flyway
-                - Template: enkan-component-freemarker, enkan-component-thymeleaf
-                - Serialization: enkan-component-jackson
-                - Metrics: enkan-component-micrometer, enkan-component-opentelemetry
+                == HARD CONSTRAINTS ==
+                1. You may only import classes from dependencies declared in the fixed pom.xml
+                   shown below. No Spring, no JPA/Hibernate, no Doma2, no Lombok, no Guava,
+                   no libraries that are not in the POM.
+                2. The reference files at the bottom of this prompt are for ARCHITECTURAL
+                   UNDERSTANDING ONLY. NEVER import from the `kotowari.example.*` package —
+                   copy the pattern, not the identifiers.
+                3. The following files are ALREADY GENERATED by the template engine and will
+                   be overwritten if you emit them. Do NOT include them in your output:
+                     - pom.xml
+                     - src/dev/java/{basePath}/DevMain.java
+                     - src/main/java/{basePath}/{Name}SystemFactory.java
+                     - src/main/java/{basePath}/{Name}ApplicationFactory.java
+                     - src/main/java/{basePath}/jaxrs/JsonBodyReader.java
+                     - src/main/java/{basePath}/jaxrs/JsonBodyWriter.java
+                4. Every class name referenced from the fixed files must exist in your output.
+                   In particular, the fixed ApplicationFactory calls `RoutesDef.routes()` so
+                   you MUST generate `src/main/java/{basePath}/RoutesDef.java` with
+                   `public static kotowari.routing.Routes routes()`.
+                5. Flyway expects at least one migration file at
+                   `src/main/resources/db/migration/V1__<snake_name>.sql`. Use H2-compatible
+                   DDL (INT/VARCHAR/BOOLEAN, `IDENTITY` or `GENERATED BY DEFAULT AS IDENTITY`).
 
-                The middleware ordering in ApplicationFactory is critical — follow the reference exactly.
+                == DEFAULT STACK ==
+                Persistence: HikariCP + jOOQ + Flyway + H2 in-memory + Raoh for row decoding.
+                Controllers obtain a `DSLContext` via
+                  `DSLContext dsl = request.getExtension("jooqDslContext");`
+                NEVER instantiate your own `DSLContext`, `DataSource`, or `Flyway` — the
+                SystemFactory wires them.
 
                 """);
 
+        if (defaultStack) {
+            sys.append("""
+                    == Raoh + jOOQ DECODER PATTERN (CANONICAL EXAMPLE) ==
+                    ```java
+                    import net.unit8.raoh.Result;
+                    import net.unit8.raoh.decode.Decoder;
+                    import org.jooq.Record;
+
+                    import static net.unit8.raoh.decode.ObjectDecoders.*;
+                    import static net.unit8.raoh.jooq.JooqRecordDecoders.combine;
+                    import static net.unit8.raoh.jooq.JooqRecordDecoders.field;
+
+                    public record Todo(Long id, String title, boolean completed) {
+                        public static final Decoder<Record, Todo> DECODER = combine(
+                                field("id",        long_()),
+                                field("title",     string()),
+                                field("completed", bool())
+                        ).map(Todo::new);
+                    }
+                    ```
+                    In the controller:
+                    ```java
+                    DSLContext dsl = request.getExtension("jooqDslContext");
+                    var records = dsl.select().from(table("todos")).fetch();
+                    var todos = records.stream()
+                            .map(Todo.DECODER::decode)
+                            .flatMap(r -> switch (r) {
+                                case Result.Ok<Todo>(var t) -> java.util.stream.Stream.of(t);
+                                case Result.Err<Todo> err -> java.util.stream.Stream.empty();
+                            })
+                            .toList();
+                    ```
+
+                    """);
+        }
+
+        sys.append("""
+                == REFERENCE FILES (architectural examples — do NOT import from them) ==
+                """);
         getOrFetchReferenceCache().forEach((filename, content) -> {
-            sys.append("## ").append(filename).append("\n");
-            sys.append("```java\n").append(content).append("\n```\n\n");
+            sys.append("### ").append(filename).append(" (uses Doma2 — substitute jOOQ)\n");
+            sys.append("```\n").append(content).append("\n```\n\n");
         });
 
         sys.append("""
-                Output EVERY file using EXACTLY this format — no exceptions:
+                == OUTPUT FORMAT ==
+                Emit EVERY file using EXACTLY this format — no exceptions:
 
                 ### relative/path/to/File.java
                 ```java
                 // file content here
                 ```
 
-                For pom.xml:
-                ### pom.xml
-                ```xml
-                <!-- content -->
+                After all file blocks, emit a manifest:
+
+                ### MANIFEST
+                ```
+                src/main/java/.../RoutesDef.java
+                src/main/java/.../controller/FooController.java
+                src/main/resources/db/migration/V1__create_foo.sql
                 ```
 
-                Do NOT include any explanation outside the file blocks.
-                This generator is strictly for Enkan.
-                NEVER use Spring Boot, Spring Framework, @SpringBootApplication, SpringApplication, or org.springframework.*.
+                Do NOT include any prose outside the file blocks.
                 """);
 
         // --- User message: project-specific requirements ---
         var user = new StringBuilder();
-        user.append("Generate a complete, compilable Enkan project with these settings:\n\n");
+        user.append("Generate an Enkan project with these settings:\n\n");
         user.append("- Project name: ").append(projectName).append("\n");
         user.append("- Group ID: ").append(groupId).append("\n");
         user.append("- Artifact ID: ").append(projectName).append("\n");
-        user.append("- Base package: ").append(basePackage).append("\n\n");
+        user.append("- Base package: ").append(basePackage).append("\n");
+        user.append("- Base path (for file layout): src/main/java/").append(basePackage.replace('.', '/')).append("\n\n");
         user.append("Requirements: ").append(description).append("\n\n");
+
         user.append("""
-                The following files are already written — do NOT generate them:
-                - pom.xml (including the 'dev' profile)
-                - src/dev/java/.../DevMain.java
-                - src/main/java/.../*SystemFactory.java (skeleton already written)
-                - src/main/java/.../Main.java (no Main class needed — DevMain handles startup)
+                Generate ONLY these files (the rest are fixed templates):
 
-                Required files to generate:
-                1. ApplicationFactory — middleware stack matching the reference ordering
-                2. Controller(s) — matching the requirements
-                3. Any domain/model/DAO classes needed
+                1. RoutesDef.java in the base package
+                   - `public final class RoutesDef { private RoutesDef() {} public static kotowari.routing.Routes routes() { ... } }`
+                   - Use `Routes.define(r -> { r.get("/path").to(FooController.class, "method"); ... }).compile();`
+                2. One Flyway SQL file at `src/main/resources/db/migration/V1__<snake>.sql`
+                   (H2-compatible DDL).
+                3. Domain records (plain Java records) with optional Raoh decoders.
+                4. Controller(s) with methods that accept an `enkan.web.data.HttpRequest`
+                   and return `enkan.web.data.HttpResponse` or a POJO (the SerDes middleware
+                   serializes POJOs as JSON when the client accepts `application/json`).
+                   Obtain `DSLContext` via `request.getExtension("jooqDslContext")`.
 
-                IMPORTANT: EnkanSystemFactory is an interface — NEVER instantiate it directly with `new EnkanSystemFactory()`.
+                Database: H2 in-memory (jdbc:h2:mem:<projectName>), already configured.
                 """);
 
+        if (userWantsJpa) {
+            user.append("\nNOTE: You asked for JPA/Hibernate. The default POM does not include ")
+                .append("enkan-component-jpa -- add it manually after generation. The generator ")
+                .append("still treats jakarta.persistence.* as allowed for this run.\n");
+        }
+        if (userWantsDoma) {
+            user.append("\nNOTE: You asked for Doma2. The default POM does not include ")
+                .append("enkan-component-doma2 -- add it manually after generation.\n");
+        }
+
         return new String[]{sys.toString(), user.toString()};
+    }
+
+    /**
+     * Returns true if the user's free-text description mentions any of the given
+     * alternative-stack markers (case-insensitive). Used to open the allowlist just
+     * enough to let, e.g., JPA-requested projects import {@code jakarta.persistence.*}.
+     */
+    private static boolean hasUserRequestedAlternative(String description, String... markers) {
+        if (description == null) return false;
+        String lower = description.toLowerCase(Locale.ROOT);
+        for (String m : markers) {
+            if (lower.contains(m)) return true;
+        }
+        return false;
     }
 
     private Map<String, String> getOrFetchReferenceCache() {
@@ -991,14 +1534,204 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
-     * Reads the Enkan version from this jar's manifest ({@code Implementation-Version}).
-     * Returns {@code "UNKNOWN"} when running outside a packaged jar (e.g. tests, IDE).
-     * An "UNKNOWN" marker in the generated {@code pom.xml} makes manifest-read failures
-     * obvious, rather than silently pinning a value that will be stale after the next release.
+     * Resolves the Enkan version to stamp into the generated {@code pom.xml}.
+     *
+     * <p>Resolution order:
+     * <ol>
+     *   <li>{@code -Denkan.version=x.y.z} system property (allows dev/IDE overrides).</li>
+     *   <li>{@code ENKAN_VERSION} environment variable.</li>
+     *   <li>The Maven {@code pom.properties} resource at
+     *       {@code META-INF/maven/net.unit8.enkan/enkan-repl-client/pom.properties}
+     *       — present in any packaged jar.</li>
+     *   <li>{@code "UNKNOWN"} as a last-resort sentinel when running from raw class files
+     *       (e.g. unit tests). Callers must treat this as an error and abort.</li>
+     * </ol>
+     *
+     * <p>The {@code Implementation-Version} manifest attribute is intentionally not
+     * consulted because the enkan build does not set it; relying on {@code pom.properties}
+     * is both more reliable and more portable across build plugins.
      */
     static String enkanVersion() {
-        String v = InitCommand.class.getPackage().getImplementationVersion();
-        return (v != null && !v.isBlank()) ? v : "UNKNOWN";
+        String override = System.getProperty("enkan.version");
+        if (override != null && !override.isBlank()) return override.trim();
+        String env = System.getenv("ENKAN_VERSION");
+        if (env != null && !env.isBlank()) return env.trim();
+        try (var in = InitCommand.class.getResourceAsStream(
+                "/META-INF/maven/net.unit8.enkan/enkan-repl-client/pom.properties")) {
+            if (in != null) {
+                var props = new java.util.Properties();
+                props.load(in);
+                String v = props.getProperty("version");
+                if (v != null && !v.isBlank()) return v.trim();
+            }
+        } catch (IOException e) {
+            LOG.warn("Failed to read pom.properties for enkan-repl-client", e);
+        }
+        return "UNKNOWN";
+    }
+
+    /**
+     * Resolves the Enkan version and, when unavailable, prints a user-actionable error
+     * to the transport and returns {@code null}. Callers should abort on null.
+     */
+    String resolveEnkanVersionOrAbort(Transport transport) {
+        String v = enkanVersion();
+        if ("UNKNOWN".equals(v)) {
+            transport.sendErr("Cannot determine Enkan version for the generated pom.xml.");
+            transport.sendErr("  Run from a packaged enkan-repl-client jar, or pass -Denkan.version=<x.y.z>");
+            transport.sendErr("  (or set the ENKAN_VERSION environment variable).");
+            return null;
+        }
+        return v;
+    }
+
+    /**
+     * Fixed ApplicationFactory template: minimal middleware stack suitable for a JSON
+     * REST API using jOOQ + Jackson. The LLM is responsible only for
+     * {@code Routes.define(...)} contents and the controller implementations — the
+     * middleware ordering itself is part of the template because the ordering is
+     * load-bearing for Enkan and LLMs frequently get it subtly wrong.
+     *
+     * <p>The template leaves a marker comment ({@code /* ROUTES *\/}) that the LLM must
+     * replace with real route definitions in a follow-up fix pass; see the generation
+     * prompt and {@code rewriteRoutesMarker}.
+     */
+    static String applicationFactoryTemplate(String basePackage, String appFactoryClass) {
+        return "package " + basePackage + ";\n\n"
+                + "import " + basePackage + ".jaxrs.JsonBodyReader;\n"
+                + "import " + basePackage + ".jaxrs.JsonBodyWriter;\n"
+                + "import enkan.Application;\n"
+                + "import enkan.config.ApplicationFactory;\n"
+                + "import enkan.middleware.DefaultCharsetMiddleware;\n"
+                + "import enkan.middleware.ServiceUnavailableMiddleware;\n"
+                + "import enkan.middleware.jooq.JooqDslContextMiddleware;\n"
+                + "import enkan.middleware.jooq.JooqTransactionMiddleware;\n"
+                + "import enkan.system.inject.ComponentInjector;\n"
+                + "import enkan.web.application.WebApplication;\n"
+                + "import enkan.web.data.HttpRequest;\n"
+                + "import enkan.web.data.HttpResponse;\n"
+                + "import enkan.web.middleware.ContentTypeMiddleware;\n"
+                + "import enkan.web.middleware.CookiesMiddleware;\n"
+                + "import enkan.web.middleware.NestedParamsMiddleware;\n"
+                + "import enkan.web.middleware.ParamsMiddleware;\n"
+                + "import enkan.web.middleware.TraceMiddleware;\n"
+                + "import enkan.web.middleware.negotiation.ContentNegotiationMiddleware;\n"
+                + "import jakarta.ws.rs.ext.MessageBodyWriter;\n"
+                + "import kotowari.middleware.ControllerInvokerMiddleware;\n"
+                + "import kotowari.middleware.FormMiddleware;\n"
+                + "import kotowari.middleware.RoutingMiddleware;\n"
+                + "import kotowari.middleware.SerDesMiddleware;\n"
+                + "import kotowari.middleware.ValidateBodyMiddleware;\n"
+                + "import kotowari.middleware.serdes.ToStringBodyWriter;\n"
+                + "import kotowari.routing.Routes;\n"
+                + "import tools.jackson.databind.ObjectMapper;\n"
+                + "import tools.jackson.databind.json.JsonMapper;\n\n"
+                + "import static enkan.util.BeanBuilder.builder;\n\n"
+                + "public class " + appFactoryClass + " implements ApplicationFactory<HttpRequest, HttpResponse> {\n"
+                + "    @Override\n"
+                + "    public Application<HttpRequest, HttpResponse> create(ComponentInjector injector) {\n"
+                + "        WebApplication app = new WebApplication();\n"
+                + "        ObjectMapper mapper = JsonMapper.builder().build();\n\n"
+                + "        // Routes are defined in the generated RoutesDef class, which the LLM\n"
+                + "        // writes alongside the controllers. The static routes() method returns\n"
+                + "        // a compiled Routes instance.\n"
+                + "        Routes routes = RoutesDef.routes();\n\n"
+                + "        app.use(new DefaultCharsetMiddleware());\n"
+                + "        app.use(new TraceMiddleware<>());\n"
+                + "        app.use(new ContentTypeMiddleware());\n"
+                + "        app.use(new ParamsMiddleware());\n"
+                + "        app.use(new NestedParamsMiddleware());\n"
+                + "        app.use(new CookiesMiddleware());\n"
+                + "        app.use(new ContentNegotiationMiddleware());\n"
+                + "        app.use(new RoutingMiddleware(routes));\n"
+                + "        app.use(new JooqDslContextMiddleware<>());\n"
+                + "        app.use(new JooqTransactionMiddleware<>());\n"
+                + "        app.use(new FormMiddleware());\n"
+                + "        app.use(builder(new SerDesMiddleware<>())\n"
+                + "                .set(SerDesMiddleware::setBodyWriters,\n"
+                + "                        new MessageBodyWriter[]{\n"
+                + "                                new ToStringBodyWriter(),\n"
+                + "                                new JsonBodyWriter<>(mapper)})\n"
+                + "                .set(SerDesMiddleware::setBodyReaders,\n"
+                + "                        new JsonBodyReader<>(mapper))\n"
+                + "                .build());\n"
+                + "        app.use(new ValidateBodyMiddleware<>());\n"
+                + "        app.use(new ControllerInvokerMiddleware<>(injector));\n\n"
+                + "        return app;\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    /**
+     * Fixed {@code JsonBodyReader} template. Copied verbatim from
+     * {@code kotowari-example/jaxrs/JsonBodyReader.java} because {@code kotowari} itself
+     * does not ship a JSON body reader — only {@code ToStringBodyWriter} and
+     * {@code UrlFormEncodedBodyWriter}.
+     */
+    static String jsonBodyReaderTemplate(String basePackage) {
+        return "package " + basePackage + ".jaxrs;\n\n"
+                + "import jakarta.ws.rs.WebApplicationException;\n"
+                + "import jakarta.ws.rs.core.MediaType;\n"
+                + "import jakarta.ws.rs.core.MultivaluedMap;\n"
+                + "import jakarta.ws.rs.ext.MessageBodyReader;\n"
+                + "import tools.jackson.databind.ObjectMapper;\n\n"
+                + "import java.io.IOException;\n"
+                + "import java.io.InputStream;\n"
+                + "import java.lang.annotation.Annotation;\n"
+                + "import java.lang.reflect.Type;\n"
+                + "import java.util.Objects;\n\n"
+                + "public class JsonBodyReader<T> implements MessageBodyReader<T> {\n"
+                + "    private final ObjectMapper mapper;\n\n"
+                + "    public JsonBodyReader(ObjectMapper mapper) {\n"
+                + "        this.mapper = mapper;\n"
+                + "    }\n\n"
+                + "    @Override\n"
+                + "    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {\n"
+                + "        return Objects.equals(mediaType.getSubtype(), \"json\");\n"
+                + "    }\n\n"
+                + "    @Override\n"
+                + "    public T readFrom(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType,\n"
+                + "            MultivaluedMap<String, String> httpHeaders, InputStream entityStream)\n"
+                + "            throws IOException, WebApplicationException {\n"
+                + "        return mapper.readerFor(mapper.getTypeFactory().constructType(genericType))\n"
+                + "                .readValue(entityStream);\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    /**
+     * Fixed {@code JsonBodyWriter} template — see {@link #jsonBodyReaderTemplate} for the
+     * rationale. The pair is needed for the SerDes middleware to negotiate {@code application/json}.
+     */
+    static String jsonBodyWriterTemplate(String basePackage) {
+        return "package " + basePackage + ".jaxrs;\n\n"
+                + "import jakarta.ws.rs.WebApplicationException;\n"
+                + "import jakarta.ws.rs.core.MediaType;\n"
+                + "import jakarta.ws.rs.core.MultivaluedMap;\n"
+                + "import jakarta.ws.rs.ext.MessageBodyWriter;\n"
+                + "import tools.jackson.databind.ObjectMapper;\n\n"
+                + "import java.io.IOException;\n"
+                + "import java.io.OutputStream;\n"
+                + "import java.lang.annotation.Annotation;\n"
+                + "import java.lang.reflect.Type;\n"
+                + "import java.util.Objects;\n\n"
+                + "public class JsonBodyWriter<T> implements MessageBodyWriter<T> {\n"
+                + "    private final ObjectMapper mapper;\n\n"
+                + "    public JsonBodyWriter(ObjectMapper mapper) {\n"
+                + "        this.mapper = mapper;\n"
+                + "    }\n\n"
+                + "    @Override\n"
+                + "    public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {\n"
+                + "        return Objects.equals(mediaType.getSubtype(), \"json\");\n"
+                + "    }\n\n"
+                + "    @Override\n"
+                + "    public void writeTo(T o, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType,\n"
+                + "            MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream)\n"
+                + "            throws IOException, WebApplicationException {\n"
+                + "        mapper.writerFor(mapper.getTypeFactory().constructType(genericType))\n"
+                + "                .writeValue(entityStream, o);\n"
+                + "    }\n"
+                + "}\n";
     }
 
     /**
@@ -1007,7 +1740,7 @@ public class InitCommand implements SystemCommand {
      * completes exceptionally is logged and skipped (so a single failure does not abort
      * the whole init run).
      */
-    private Map<String, String> fetchAllReferences() {
+    Map<String, String> fetchAllReferences() {
         List<CompletableFuture<Map.Entry<String, String>>> futures = new ArrayList<>();
         for (String url : REFERENCE_URLS) {
             futures.add(fetchReferenceAsync(url));
