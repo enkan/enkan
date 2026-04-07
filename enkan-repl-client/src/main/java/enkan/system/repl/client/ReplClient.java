@@ -49,7 +49,9 @@ public class ReplClient {
     private final ExecutorService clientThread = Executors.newSingleThreadExecutor();
     private ConsoleHandler consoleHandler;
 
-    private static class ConsoleHandler implements Runnable {
+    /** Package-private so tests in the same package can drive {@code connect()}
+     *  directly without spinning up the full {@link ReplClient} CLI loop. */
+    static class ConsoleHandler implements Runnable {
         private static final String MONITOR_ADDRESS = "inproc://monitor-";
         private ZContext ctx;
         private ZMQ.Socket socket;
@@ -74,83 +76,147 @@ public class ReplClient {
             clientLocalCommands.put("init", new InitCommand());
         }
 
+        /** Test accessor: true while the REPL run loop should keep going. */
+        boolean isAvailable() {
+            return isAvailable.get();
+        }
+
+        /** Test accessor: the currently-connected server port, or -1 when disconnected. */
+        int getConnectedPort() {
+            return connectedPort;
+        }
+
         public void connect(int port) {
             connect("localhost", port);
         }
 
+        /** Maximum time to wait for the {@code /completer} handshake reply
+         *  before declaring the connection attempt failed. */
+        private static final long CONNECT_TIMEOUT_MS = 3_000;
+
         public void connect(String host, int port) {
-            String monitorAddress = MONITOR_ADDRESS + UUID.randomUUID();
-            socket = ctx.createSocket(SocketType.DEALER);
-            final AtomicBoolean isSocketClosed = new AtomicBoolean(false);
-            if (!socket.monitor(monitorAddress, ZMQ.EVENT_ALL)) {
-                System.err.println("Monitoring failed");
+            // Build all per-attempt state on the stack so a failure leaves the
+            // existing connection (and the REPL itself) untouched. Only after
+            // the completer handshake succeeds do we publish the new sockets to
+            // instance fields.
+            final String monitorAddress = MONITOR_ADDRESS + UUID.randomUUID();
+            final ZMQ.Socket newSocket = ctx.createSocket(SocketType.DEALER);
+            final AtomicBoolean attemptFailed = new AtomicBoolean(false);
+
+            if (!newSocket.monitor(monitorAddress, ZMQ.EVENT_ALL)) {
+                printErr(reader, "Failed to install ZMQ monitor for /connect " + host + ":" + port);
+                newSocket.close();
+                return;
             }
 
             final ZMQ.Socket monitorSocket = ctx.createSocket(SocketType.PAIR);
             monitorSocket.connect(monitorAddress);
+            // The monitor has two phases:
+            //   Phase 1 (handshakeSeen=false): we're still trying to bring the
+            //     connection up. DISCONNECTED / CLOSED / repeated CONNECT_RETRIED
+            //     means the attempt failed; signal via attemptFailed and exit
+            //     so connect() can clean up the per-attempt sockets.
+            //   Phase 2 (handshakeSeen=true): we already saw CONNECTED. From
+            //     here on, DISCONNECTED means the server we were talking to
+            //     went away — switch to the legacy behaviour of closing the
+            //     whole REPL with the "Server disconnected." message.
+            final AtomicBoolean handshakeSeen = new AtomicBoolean(false);
             ZThread.fork(ctx, (args, c, pipe) -> {
                 int retryCnt = 0;
                 while (!Thread.currentThread().isInterrupted()) {
-                    // Blocking recv — waits until an event arrives or context is terminated
                     ZEvent event = ZEvent.recv(monitorSocket);
                     if (event == null) {
                         if (monitorSocket.errno() == ZError.ETERM) break;
                         continue;
                     }
                     ZMonitor.Event eventType = event.getEvent();
-                    if (eventType == ZMonitor.Event.DISCONNECTED || eventType == ZMonitor.Event.CLOSED) {
-                        serverDisconnected.set(true);
-                        isSocketClosed.compareAndSet(false, true);
-                        close();
-                        break;
-                    } else if (eventType == ZMonitor.Event.CONNECT_RETRIED) {
-                        if (retryCnt++ > 3) {
-                            System.err.println("Connection failed");
-                            isSocketClosed.compareAndSet(false, true);
-                            break;
+                    if (eventType == ZMonitor.Event.CONNECTED) {
+                        handshakeSeen.set(true);
+                        retryCnt = 0;
+                        continue;
+                    }
+                    if (eventType == ZMonitor.Event.CONNECT_RETRIED) {
+                        if (!handshakeSeen.get() && retryCnt++ > 3) {
+                            attemptFailed.set(true);
+                            return;
                         }
+                        continue;
+                    }
+                    if (eventType == ZMonitor.Event.DISCONNECTED
+                            || eventType == ZMonitor.Event.CLOSED) {
+                        if (!handshakeSeen.get()) {
+                            // Connection never came up — abort the attempt.
+                            attemptFailed.set(true);
+                            return;
+                        }
+                        // Phase 2: we were connected and the server went away.
+                        // Match the legacy behaviour and shut the REPL down.
+                        serverDisconnected.set(true);
+                        close();
+                        return;
                     }
                 }
             });
 
-            socket.connect("tcp://" + host + ":" + port);
+            newSocket.connect("tcp://" + host + ":" + port);
             final ZMQ.Poller poller = ctx.createPoller(1);
-            poller.register(socket, ZMQ.Poller.POLLIN);
-            socket.send("/completer");
+            poller.register(newSocket, ZMQ.Poller.POLLIN);
+            newSocket.send("/completer");
 
+            // Poll for the completer reply, bounded by CONNECT_TIMEOUT_MS so we
+            // never wait forever on a non-listening port.
             ZMsg completerMsg = null;
+            long deadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MS;
             while (!Thread.currentThread().isInterrupted()) {
-                if (isSocketClosed.get()) {
-                    if (socket != null) {
-                        socket.close();
-                        socket = null;
-                    }
-                    monitorSocket.close();
-                    poller.close();
-                    return;
+                if (attemptFailed.get()) break;
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) {
+                    attemptFailed.set(true);
+                    break;
                 }
-
-                poller.poll(1000);
+                poller.poll(Math.min(remaining, 250));
                 if (poller.pollin(0)) {
-                     completerMsg = ZMsg.recvMsg(socket, false);
-                     break;
+                    completerMsg = ZMsg.recvMsg(newSocket, false);
+                    if (completerMsg != null) break;
                 }
             }
-            assert completerMsg != null;
+
+            if (completerMsg == null || attemptFailed.get()) {
+                // Connection failed: tear down the per-attempt sockets and
+                // leave the REPL exactly as it was. Print a clearly visible
+                // error so the user understands why nothing happened.
+                printErr(reader, "Failed to connect to " + host + ":" + port
+                        + " (no response within " + (CONNECT_TIMEOUT_MS / 1000) + "s — is the server running?)");
+                reader.getTerminal().writer().flush();
+                try { poller.close(); } catch (Throwable ignore) { }
+                try { monitorSocket.close(); } catch (Throwable ignore) { }
+                try { newSocket.close(); } catch (Throwable ignore) { }
+                return;
+            }
+
+            // ----- Connection accepted: commit the new sockets to instance state. -----
             ReplResponse completerRes = fressian.read(completerMsg.pop().getData(), ReplResponse.class);
             String completerPort = completerRes.getOut();
+            ZMQ.Socket newCompleterSock = null;
             if (completerPort != null && completerPort.matches("\\d+")) {
-                completerSock = ctx.createSocket(SocketType.DEALER);
-                completerSock.connect("tcp://" + host + ":" + Integer.parseInt(completerPort));
+                newCompleterSock = ctx.createSocket(SocketType.DEALER);
+                newCompleterSock.connect("tcp://" + host + ":" + Integer.parseInt(completerPort));
                 if (reader instanceof org.jline.reader.impl.LineReaderImpl) {
-                    RemoteCompleter completer = new RemoteCompleter(completerSock);
+                    RemoteCompleter completer = new RemoteCompleter(newCompleterSock);
                     ((org.jline.reader.impl.LineReaderImpl) reader)
                             .setCompleter(new AggregateCompleter(new StringsCompleter(localCommandNames()), completer));
                 } else {
                     System.err.println("Reader is not an instance of LineReaderImpl: " + reader.getClass());
                 }
             }
-            connectedPort = port;
+
+            // If we were already connected to a previous server, close the old
+            // sockets cleanly before swapping in the new ones.
+            closePreviousConnection();
+
+            this.socket = newSocket;
+            this.completerSock = newCompleterSock;
+            this.connectedPort = port;
             printInfo(reader, "Connected to server (port = " + port + ")");
             reader.getTerminal().writer().flush();
 
@@ -190,6 +256,28 @@ public class ReplClient {
                     }
                 }
             });
+        }
+
+        /**
+         * Closes whatever sockets the previous successful {@code /connect} left
+         * in instance fields, without touching {@link #isAvailable} or the
+         * shared {@link #ctx}. Called from the success path of {@link #connect}
+         * just before swapping in the new sockets.
+         */
+        private void closePreviousConnection() {
+            if (this.completerSock != null) {
+                try { this.completerSock.close(); } catch (Throwable ignore) { }
+                this.completerSock = null;
+            }
+            if (this.rendererSock != null) {
+                try { this.rendererSock.close(); } catch (Throwable ignore) { }
+                this.rendererSock = null;
+            }
+            if (this.socket != null) {
+                try { this.socket.send("/disconnect", ZMQ.DONTWAIT); } catch (Throwable ignore) { }
+                try { this.socket.close(); } catch (Throwable ignore) { }
+                this.socket = null;
+            }
         }
 
         private String buildPrompt() {
