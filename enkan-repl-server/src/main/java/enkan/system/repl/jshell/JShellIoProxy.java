@@ -8,7 +8,6 @@ import org.zeromq.ZMQ;
 
 import java.io.*;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.*;
 
 /**
@@ -188,11 +187,7 @@ public class JShellIoProxy {
                 try {
                     String line = outReader.readLine();
                     if (line == null) break;
-                    if (Objects.equals(SystemIoTransport.CHUNK_DELIMITER, line)) {
-                        continue;
-                    } else {
-                        broadcast(ReplResponse.withOut(line));
-                    }
+                    broadcast(ReplResponse.withOut(line));
                 } catch (IOException e) {
                     broadcast(ReplResponse.withErr(e.getMessage()));
                     break;
@@ -220,9 +215,6 @@ public class JShellIoProxy {
                 try {
                     String line = sysOutQueue.poll(1, TimeUnit.SECONDS);
                     if (line == null) continue;
-                    if (Objects.equals(SystemIoTransport.CHUNK_DELIMITER, line)) {
-                        continue;
-                    }
                     broadcast(ReplResponse.withOut(line));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();

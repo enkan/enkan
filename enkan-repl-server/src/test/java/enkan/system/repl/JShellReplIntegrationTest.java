@@ -181,4 +181,47 @@ class JShellReplIntegrationTest {
                 .as("JShell completion for 'Sys' should include 'System'")
                 .anyMatch(c -> c.contains("System"));
     }
+
+    // -----------------------------------------------------------------------
+    // Regression: transport.send from inside a JShell snippet must not leak
+    // the CHUNK_DELIMITER sentinel that SystemIoTransport used to write after
+    // every DONE response. The delimiter was historically filtered out at the
+    // ioProxy broadcast paths, but the filter was a single point of failure
+    // and the delimiter leaked through to REPL clients in practice. The fix
+    // removed the write entirely — this test asserts the leak cannot return.
+    // -----------------------------------------------------------------------
+
+    @Test
+    void transportSendFromSnippetDoesNotLeakDelimiter() {
+        String marker = "LINE_" + System.nanoTime();
+        // Reproduce the /jsonRequest pattern: call transport.send with a plain
+        // (non-DONE) response, then transport.sendOut("") which carries DONE.
+        // This matches what JsonRequestCommand does in its success path.
+        String snippet =
+                "transport.send(enkan.system.ReplResponse.withOut(\"" + marker + "\")); "
+                        + "transport.sendOut(\"\")";
+        List<ReplResponse> responses = client.send(snippet);
+
+        long markerCount = responses.stream()
+                .map(ReplResponse::getOut)
+                .filter(java.util.Objects::nonNull)
+                .filter(marker::equals)
+                .count();
+        assertThat(markerCount)
+                .as("Expected marker '%s' at least once, got: %s", marker, responses)
+                .isGreaterThanOrEqualTo(1);
+
+        // The old CHUNK_DELIMITER ("-----------------END------------------") must
+        // never reach the client, on either the out or err channel.
+        boolean delimiterLeaked = responses.stream()
+                .anyMatch(r ->
+                        (r.getOut() != null && r.getOut().contains("-----") && r.getOut().contains("END"))
+                                || (r.getErr() != null && r.getErr().contains("-----") && r.getErr().contains("END")));
+        assertThat(delimiterLeaked)
+                .as("CHUNK_DELIMITER must not reach the client, got: %s", responses)
+                .isFalse();
+
+        ReplResponse last = responses.get(responses.size() - 1);
+        assertThat(last.getStatus()).contains(ReplResponse.ResponseStatus.DONE);
+    }
 }
