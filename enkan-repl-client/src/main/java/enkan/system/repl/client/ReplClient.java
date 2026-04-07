@@ -54,9 +54,9 @@ public class ReplClient {
     static class ConsoleHandler implements Runnable {
         private static final String MONITOR_ADDRESS = "inproc://monitor-";
         private ZContext ctx;
-        private ZMQ.Socket socket;
-        private ZMQ.Socket rendererSock;
-        private ZMQ.Socket completerSock;
+        private volatile ZMQ.Socket socket;
+        private volatile ZMQ.Socket rendererSock;
+        private volatile ZMQ.Socket completerSock;
         private final LineReader reader;
         private final Fressian fressian;
         private final Map<String, SystemCommand> clientLocalCommands = new LinkedHashMap<>();
@@ -95,6 +95,14 @@ public class ReplClient {
         private static final long CONNECT_TIMEOUT_MS = 3_000;
 
         public void connect(String host, int port) {
+            if (!ReplClient.isValidHost(host)) {
+                printErr(reader, "Invalid host: " + host);
+                reader.getTerminal().writer().flush();
+                return;
+            }
+            // Guard against a race where closeSockets() nulls ctx between here and
+            // createSocket(). If the REPL is already shutting down, skip the attempt.
+            if (!isAvailable.get()) return;
             // Build all per-attempt state on the stack so a failure leaves the
             // existing connection (and the REPL itself) untouched. Only after
             // the completer handshake succeeds do we publish the new sockets to
@@ -120,40 +128,58 @@ public class ReplClient {
             //     here on, DISCONNECTED means the server we were talking to
             //     went away — switch to the legacy behaviour of closing the
             //     whole REPL with the "Server disconnected." message.
+            //
+            // Ownership of monitorSocket: exactly one thread must close it.
+            //   - On the failure path, connect() signals the monitor thread to
+            //     skip its close (monitorSocketOwned.set(false)) and then closes
+            //     the socket itself AFTER the signal, giving the monitor thread a
+            //     chance to see ETERM and exit its recv loop cleanly.
+            //   - On the success path, the monitor thread is the sole owner and
+            //     must close it in its finally block.
+            final AtomicBoolean monitorSocketOwned = new AtomicBoolean(true); // true = monitor thread owns it
             final AtomicBoolean handshakeSeen = new AtomicBoolean(false);
             ZThread.fork(ctx, (args, c, pipe) -> {
                 int retryCnt = 0;
-                while (!Thread.currentThread().isInterrupted()) {
-                    ZEvent event = ZEvent.recv(monitorSocket);
-                    if (event == null) {
-                        if (monitorSocket.errno() == ZError.ETERM) break;
-                        continue;
-                    }
-                    ZMonitor.Event eventType = event.getEvent();
-                    if (eventType == ZMonitor.Event.CONNECTED) {
-                        handshakeSeen.set(true);
-                        retryCnt = 0;
-                        continue;
-                    }
-                    if (eventType == ZMonitor.Event.CONNECT_RETRIED) {
-                        if (!handshakeSeen.get() && retryCnt++ > 3) {
-                            attemptFailed.set(true);
+                try {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        ZEvent event = ZEvent.recv(monitorSocket);
+                        if (event == null) {
+                            if (monitorSocket.errno() == ZError.ETERM) break;
+                            continue;
+                        }
+                        ZMonitor.Event eventType = event.getEvent();
+                        if (eventType == ZMonitor.Event.CONNECTED) {
+                            handshakeSeen.set(true);
+                            retryCnt = 0;
+                            continue;
+                        }
+                        if (eventType == ZMonitor.Event.CONNECT_RETRIED) {
+                            if (!handshakeSeen.get() && retryCnt++ > 3) {
+                                attemptFailed.set(true);
+                                return;
+                            }
+                            continue;
+                        }
+                        if (eventType == ZMonitor.Event.DISCONNECTED
+                                || eventType == ZMonitor.Event.CLOSED) {
+                            if (!handshakeSeen.get()) {
+                                // Connection never came up — abort the attempt.
+                                attemptFailed.set(true);
+                                return;
+                            }
+                            // Phase 2: we were connected and the server went away.
+                            // Match the legacy behaviour and shut the REPL down.
+                            serverDisconnected.set(true);
+                            close();
                             return;
                         }
-                        continue;
                     }
-                    if (eventType == ZMonitor.Event.DISCONNECTED
-                            || eventType == ZMonitor.Event.CLOSED) {
-                        if (!handshakeSeen.get()) {
-                            // Connection never came up — abort the attempt.
-                            attemptFailed.set(true);
-                            return;
-                        }
-                        // Phase 2: we were connected and the server went away.
-                        // Match the legacy behaviour and shut the REPL down.
-                        serverDisconnected.set(true);
-                        close();
-                        return;
+                } finally {
+                    // Only close if this thread still owns the socket. On the failure
+                    // path, connect() takes ownership (monitorSocketOwned=false) and
+                    // closes it itself to avoid a double-close race.
+                    if (monitorSocketOwned.get()) {
+                        try { monitorSocket.close(); } catch (Throwable ignore) { }
                     }
                 }
             });
@@ -189,22 +215,37 @@ public class ReplClient {
                         + " (no response within " + (CONNECT_TIMEOUT_MS / 1000) + "s — is the server running?)");
                 reader.getTerminal().writer().flush();
                 try { poller.close(); } catch (Throwable ignore) { }
+                // Transfer ownership before closing so the monitor thread's finally
+                // block does not attempt a concurrent double-close.
+                monitorSocketOwned.set(false);
                 try { monitorSocket.close(); } catch (Throwable ignore) { }
                 try { newSocket.close(); } catch (Throwable ignore) { }
                 return;
             }
 
             // ----- Connection accepted: commit the new sockets to instance state. -----
-            ReplResponse completerRes = fressian.read(completerMsg.pop().getData(), ReplResponse.class);
+            // The poller was only needed for the handshake — close it now that we have
+            // a reply. The monitor socket stays open: the forked monitor thread owns it
+            // for phase-2 disconnect detection and will close it when it exits.
+            try { poller.close(); } catch (Throwable ignore) { }
+
+            ZFrame completerFrame = completerMsg.pop();
+            byte[] completerData = completerFrame != null ? completerFrame.getData() : null;
+            if (completerData == null) {
+                printErr(reader, "Failed to connect to " + host + ":" + port + " (empty completer reply)");
+                reader.getTerminal().writer().flush();
+                try { newSocket.close(); } catch (Throwable ignore) { }
+                return;
+            }
+            ReplResponse completerRes = fressian.read(completerData, ReplResponse.class);
             String completerPort = completerRes.getOut();
             ZMQ.Socket newCompleterSock = null;
             if (completerPort != null && completerPort.matches("\\d+")) {
                 newCompleterSock = ctx.createSocket(SocketType.DEALER);
                 newCompleterSock.connect("tcp://" + host + ":" + Integer.parseInt(completerPort));
-                if (reader instanceof org.jline.reader.impl.LineReaderImpl) {
+                if (reader instanceof org.jline.reader.impl.LineReaderImpl impl) {
                     RemoteCompleter completer = new RemoteCompleter(newCompleterSock);
-                    ((org.jline.reader.impl.LineReaderImpl) reader)
-                            .setCompleter(new AggregateCompleter(new StringsCompleter(localCommandNames()), completer));
+                    impl.setCompleter(new AggregateCompleter(new StringsCompleter(localCommandNames()), completer));
                 } else {
                     System.err.println("Reader is not an instance of LineReaderImpl: " + reader.getClass());
                 }
@@ -214,6 +255,10 @@ public class ReplClient {
             // sockets cleanly before swapping in the new ones.
             closePreviousConnection();
 
+            // Reset disconnect flag before publishing the new connection so that
+            // the run loop does not immediately treat the next Ctrl+C as a server
+            // disconnect exit (serverDisconnected may be true from a prior session).
+            serverDisconnected.set(false);
             this.socket = newSocket;
             this.completerSock = newCompleterSock;
             this.connectedPort = port;
@@ -274,9 +319,13 @@ public class ReplClient {
                 this.rendererSock = null;
             }
             if (this.socket != null) {
-                try { this.socket.send("/disconnect", ZMQ.DONTWAIT); } catch (Throwable ignore) { }
-                try { this.socket.close(); } catch (Throwable ignore) { }
+                // Null out the field before closing so the renderer thread's
+                // `while (socket != null)` guard sees null on its next iteration
+                // and exits cleanly rather than calling recvMsg on a closed socket.
+                ZMQ.Socket oldSocket = this.socket;
                 this.socket = null;
+                try { oldSocket.send("/disconnect", ZMQ.DONTWAIT); } catch (Throwable ignore) { }
+                try { oldSocket.close(); } catch (Throwable ignore) { }
             }
         }
 
@@ -316,63 +365,45 @@ public class ReplClient {
                     pendingExit.set(false);
                     if (line == null) continue;
                     line = line.trim();
-                    if (line.startsWith("/connect ")) {
-                        String[] arguments = line.split("\\s+");
-                        if (arguments.length == 2 && arguments[1].matches("\\d+")) {
-                            int port = Integer.parseInt(arguments[1]);
-                            connect(port);
-                        } else if (arguments.length > 2 && arguments[2].matches("\\d+")) {
-                            String host = arguments[1];
-                            int port = Integer.parseInt(arguments[2]);
-                            connect(host, port);
-                        } else {
-                            reader.getTerminal().writer().println("/connect [host] port");
-                        }
-                    } else if (line.equals("/exit")) {
-                        if (rendererSock != null) {
-                            rendererSock.close();
-                        }
-                        closeQuietly();
-                        return;
-                    } else if (line.startsWith("/help")) {
-                        reader.getTerminal().writer().println(formatLocalHelp(line));
-                        reader.getTerminal().writer().flush();
-                    } else if (line.startsWith("/")) {
-                        String cmdName = line.substring(1).split("\\s+")[0];
-                        SystemCommand localCmd = clientLocalCommands.get(cmdName);
-                        if (localCmd != null) {
-                            try (JLineTransport t = new JLineTransport(reader)) {
-                                t.setConnectCallback(this::connect);
-                                localCmd.execute(null, t);
+                    switch (line) {
+                        case String s when s.startsWith("/connect ") -> {
+                            String[] arguments = s.split("\\s+");
+                            if (arguments.length == 2 && arguments[1].matches("\\d+")) {
+                                connect(Integer.parseInt(arguments[1]));
+                            } else if (arguments.length > 2 && arguments[2].matches("\\d+")) {
+                                String host = arguments[1];
+                                if (!ReplClient.isValidHost(host)) {
+                                    reader.getTerminal().writer().println("Invalid host: " + host);
+                                } else {
+                                    connect(host, Integer.parseInt(arguments[2]));
+                                }
+                            } else {
+                                reader.getTerminal().writer().println("/connect [host] port");
                             }
-                        } else if (this.socket == null) {
-                            reader.getTerminal().writer().println("Unconnected to enkan system.");
-                        } else {
-                            reader.getHistory().save();
-                            this.socket.send(line);
-                            String serverInstruction = null;
-                            while (isAvailable.get() && serverInstruction == null) {
-                                serverInstruction = rendererSock.recvStr(500);
-                            }
-                            if (Objects.equals(serverInstruction, "shutdown") || !isAvailable.get()) {
-                                closeQuietly();
+                        }
+                        case "/exit" -> {
+                            if (rendererSock != null) rendererSock.close();
+                            closeQuietly();
+                            return;
+                        }
+                        case String s when s.startsWith("/help") -> {
+                            reader.getTerminal().writer().println(formatLocalHelp(s));
+                            reader.getTerminal().writer().flush();
+                        }
+                        case String s when s.startsWith("/") -> {
+                            String cmdName = s.substring(1).split("\\s+")[0];
+                            SystemCommand localCmd = clientLocalCommands.get(cmdName);
+                            if (localCmd != null) {
+                                try (JLineTransport t = new JLineTransport(reader)) {
+                                    t.setConnectCallback(this::connect);
+                                    localCmd.execute(null, t);
+                                }
+                            } else if (!sendToServer(line)) {
                                 break;
                             }
                         }
-                    } else {
-                        if (this.socket == null) {
-                            reader.getTerminal().writer().println("Unconnected to enkan system.");
-                        } else {
-                            reader.getHistory().save();
-                            this.socket.send(line);
-                            String serverInstruction = null;
-                            while (isAvailable.get() && serverInstruction == null) {
-                                serverInstruction = rendererSock.recvStr(500);
-                            }
-                            if (Objects.equals(serverInstruction, "shutdown") || !isAvailable.get()) {
-                                closeQuietly();
-                                break;
-                            }
+                        default -> {
+                            if (!sendToServer(line)) break;
                         }
                     }
                 } catch (EndOfFileException e) {
@@ -401,7 +432,34 @@ public class ReplClient {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+
             }
+        }
+
+        /**
+         * Sends {@code line} to the connected server and waits for the renderer
+         * to signal completion. Returns {@code false} when the server signals
+         * shutdown (so the caller can break the run loop), {@code true} otherwise.
+         * Prints an error and returns {@code true} when not connected.
+         */
+        private boolean sendToServer(String line) throws IOException {
+            if (this.socket == null) {
+                reader.getTerminal().writer().println("Unconnected to enkan system.");
+                return true;
+            }
+            reader.getHistory().save();
+            this.socket.send(line);
+            String serverInstruction = null;
+            while (isAvailable.get() && serverInstruction == null) {
+                ZMQ.Socket rs = rendererSock;
+                if (rs == null) break;
+                serverInstruction = rs.recvStr(500);
+            }
+            if (Objects.equals(serverInstruction, "shutdown") || !isAvailable.get()) {
+                closeQuietly();
+                return false;
+            }
+            return true;
         }
 
         /**
@@ -443,25 +501,18 @@ public class ReplClient {
                 }
             }
             if (socket != null) {
-                try {
-                    socket.send("/disconnect", ZMQ.DONTWAIT);
-                } catch (Throwable ignore) {
-                }
-                try {
-                    socket.close();
-                } catch (Throwable ignore) {
-                } finally {
-                    socket = null;
-                }
+                // Null out before closing so concurrent reads on the field see null
+                // and stop trying to use the socket handle.
+                ZMQ.Socket s = socket;
+                socket = null;
+                try { s.send("/disconnect", ZMQ.DONTWAIT); } catch (Throwable ignore) { }
+                try { s.close(); } catch (Throwable ignore) { }
             }
 
             if (ctx != null) {
-                try {
-                    ctx.close();
-                } catch (Throwable ignore) {
-                } finally {
-                    ctx = null;
-                }
+                ZContext c = ctx;
+                ctx = null;
+                try { c.close(); } catch (Throwable ignore) { }
             }
         }
     }
@@ -535,7 +586,7 @@ public class ReplClient {
     }
 
     public void close() {
-        consoleHandler.close();
+        if (consoleHandler != null) consoleHandler.close();
         try {
             clientThread.shutdown();
             if (!clientThread.awaitTermination(1L, TimeUnit.SECONDS)) {
@@ -568,6 +619,11 @@ public class ReplClient {
             }
         }
         return Path.of(System.getProperty("user.home"), ".enkan-repl-port");
+    }
+
+    /** Returns true if {@code host} is a syntactically valid hostname or IP address. */
+    static boolean isValidHost(String host) {
+        return host != null && host.matches("[a-zA-Z0-9][a-zA-Z0-9.\\-]*");
     }
 
     static String[] localCommandNames() {
@@ -631,8 +687,11 @@ public class ReplClient {
     private void awaitAndShutdown() {
         clientThread.shutdown();
         try {
-            clientThread.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+            if (!clientThread.awaitTermination(30, TimeUnit.SECONDS)) {
+                clientThread.shutdownNow();
+            }
         } catch (InterruptedException e) {
+            clientThread.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }

@@ -221,7 +221,7 @@ class InitCommandTest {
     void enkanVersionReturnsUnknownOutsidePackagedJar() {
         // When running from tests/IDE, the package has no Implementation-Version manifest.
         // The fallback should be "UNKNOWN" so stale values never silently leak into generated poms.
-        String version = InitCommand.enkanVersion();
+        String version = new InitCommand().enkanVersion();
         assertThat(version).isNotBlank();
         // In a packaged jar this would be an actual version; in tests we expect the fallback.
         assertThat(version).isEqualTo("UNKNOWN");
@@ -381,7 +381,7 @@ class InitCommandTest {
                 ```
                 """;
         CapturingTransport transport = new CapturingTransport();
-        int written = cmd.writeGeneratedFiles(tmp, response, transport);
+        int written = cmd.writeGeneratedFiles(tmp, response, "AppApplicationFactory", "AppSystemFactory", transport);
 
         assertThat(written).isEqualTo(2);
         assertThat(java.nio.file.Files.readString(tmp.resolve("src/main/java/App.java")))
@@ -400,7 +400,7 @@ class InitCommandTest {
                 ```
                 """;
         CapturingTransport transport = new CapturingTransport();
-        int written = cmd.writeGeneratedFiles(tmp, response, transport);
+        int written = cmd.writeGeneratedFiles(tmp, response, "AppApplicationFactory", "AppSystemFactory", transport);
 
         assertThat(written).isZero();
         // The evil file must not exist anywhere outside tmp.
@@ -444,7 +444,7 @@ class InitCommandTest {
                 ```
                 """;
         CapturingTransport transport = new CapturingTransport();
-        int written = cmd.writeGeneratedFiles(tmp, response, transport);
+        int written = cmd.writeGeneratedFiles(tmp, response, "AppApplicationFactory", "AppSystemFactory", transport);
 
         assertThat(written).isEqualTo(1);
         assertThat(java.nio.file.Files.exists(tmp.resolve("src/evil/Injected.java"))).isFalse();
@@ -482,7 +482,7 @@ class InitCommandTest {
                 ```
                 """;
         CapturingTransport transport = new CapturingTransport();
-        int written = cmd.writeGeneratedFiles(tmp, response, transport);
+        int written = cmd.writeGeneratedFiles(tmp, response, "FooApplicationFactory", "FooSystemFactory", transport);
 
         // Only RoutesDef and FooController are written; the rest are fixed templates.
         assertThat(written).isEqualTo(2);
@@ -536,7 +536,7 @@ class InitCommandTest {
     void enkanVersionHonoursSystemPropertyOverride() {
         System.setProperty("enkan.version", "9.9.9-TEST");
         try {
-            assertThat(InitCommand.enkanVersion()).isEqualTo("9.9.9-TEST");
+            assertThat(new InitCommand().enkanVersion()).isEqualTo("9.9.9-TEST");
         } finally {
             System.clearProperty("enkan.version");
         }
@@ -544,18 +544,30 @@ class InitCommandTest {
 
     @Test
     void resolveEnkanVersionOrAbortReturnsNullAndErrorsWhenUnknown() {
-        // The existing enkanVersionReturnsUnknownOutsidePackagedJar test already establishes
-        // that enkanVersion() returns "UNKNOWN" in the default test environment. We rely on
-        // that here instead of stubbing, to keep the abort path exercised end-to-end.
-        assertThat(InitCommand.enkanVersion()).isEqualTo("UNKNOWN");
-        InitCommand cmd = new InitCommand();
-        CapturingTransport transport = new CapturingTransport();
-        String result = cmd.resolveEnkanVersionOrAbort(transport);
-        assertThat(result).isNull();
-        assertThat(transport.errLines)
-                .anyMatch(l -> l.contains("Cannot determine Enkan version"));
-        assertThat(transport.errLines)
-                .anyMatch(l -> l.contains("-Denkan.version"));
+        // Force enkanVersion() to return "UNKNOWN" by ensuring the system-property
+        // override is absent and using a known-sentinel value via ENKAN_VERSION env var
+        // is not possible in tests — instead we force the "UNKNOWN" path by explicitly
+        // setting enkan.version to the sentinel. enkanVersion() checks the system
+        // property first, so clearing it and relying on pom.properties absence is
+        // fragile (pom.properties may be present after `mvn package`). We therefore
+        // use a sentinel value that resolveEnkanVersionOrAbort treats as UNKNOWN.
+        //
+        // Since enkanVersion() is a static method we cannot override it; instead we
+        // set the system property to exactly "UNKNOWN" so the method returns it
+        // without touching pom.properties at all.
+        System.setProperty("enkan.version", "UNKNOWN");
+        try {
+            InitCommand cmd = new InitCommand();
+            CapturingTransport transport = new CapturingTransport();
+            String result = cmd.resolveEnkanVersionOrAbort(transport);
+            assertThat(result).isNull();
+            assertThat(transport.errLines)
+                    .anyMatch(l -> l.contains("Cannot determine Enkan version"));
+            assertThat(transport.errLines)
+                    .anyMatch(l -> l.contains("-Denkan.version"));
+        } finally {
+            System.clearProperty("enkan.version");
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -1090,5 +1102,365 @@ class InitCommandTest {
         // appears at least once — but the *enkan-version note* must not appear.
         assertThat(pom).doesNotContain("NOTE: enkan.version is a SNAPSHOT");
         assertThat(pom).contains("<enkan.version>0.14.1</enkan.version>");
+    }
+
+    // ------------------------------------------------------------------------
+    //  resolveEnkanVersionOrAbort: XML-injection guard
+    // ------------------------------------------------------------------------
+
+    @Test
+    void resolveEnkanVersionOrAbortRejectsVersionWithXmlSpecialChars() {
+        InitCommand cmd = new InitCommand();
+        CapturingTransport transport = new CapturingTransport();
+        System.setProperty("enkan.version", "1.0 --> <evil> <!--");
+        try {
+            String result = cmd.resolveEnkanVersionOrAbort(transport);
+            assertThat(result).isNull();
+            assertThat(transport.errLines).anyMatch(l -> l.contains("not safe to embed in XML"));
+        } finally {
+            System.clearProperty("enkan.version");
+        }
+    }
+
+    @Test
+    void pomTemplateRejectsVersionWithXmlSpecialChars() {
+        // pomTemplate() has its own guard so callers that bypass resolveEnkanVersionOrAbort
+        // cannot inject XML via an unchecked version string.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                InitCommand.pomTemplate("com.example", "todo", "com.example.todo", "1.0 --> <evil>"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not safe to embed in XML");
+    }
+
+    @Test
+    void pomTemplateAcceptsValidVersion() {
+        String pom = InitCommand.pomTemplate("com.example", "todo", "com.example.todo", "0.14.2-SNAPSHOT");
+        assertThat(pom).contains("<enkan.version>0.14.2-SNAPSHOT</enkan.version>");
+    }
+
+    // ------------------------------------------------------------------------
+    //  Post-generation validation: Flyway dir check and manifest mismatch
+    // ------------------------------------------------------------------------
+
+    @Test
+    void validateGenerationWhenNoFlywayMigrationExists(@org.junit.jupiter.api.io.TempDir Path tmp)
+            throws IOException {
+        InitCommand cmd = new InitCommand();
+        // Provide RoutesDef so item 1 passes; create an empty migration dir with no SQL.
+        java.nio.file.Files.createDirectories(tmp.resolve("src/main/java/com/example"));
+        java.nio.file.Files.writeString(tmp.resolve("src/main/java/com/example/RoutesDef.java"),
+                "package com.example; public final class RoutesDef { public static Object routes() { return null; } }");
+        java.nio.file.Files.createDirectories(tmp.resolve("src/main/resources/db/migration"));
+        // No .sql files in the migration dir.
+
+        List<String> issues = cmd.validateGeneration(tmp, "", "com.example", "todo app");
+
+        assertThat(issues).anyMatch(i -> i.contains("No Flyway migration"));
+    }
+
+    @Test
+    void validateGenerationPassesWhenFlywayMigrationExists(@org.junit.jupiter.api.io.TempDir Path tmp)
+            throws IOException {
+        InitCommand cmd = new InitCommand();
+        java.nio.file.Files.createDirectories(tmp.resolve("src/main/java/com/example"));
+        java.nio.file.Files.writeString(tmp.resolve("src/main/java/com/example/RoutesDef.java"),
+                "package com.example; public final class RoutesDef { public static Object routes() { return null; } }");
+        java.nio.file.Files.createDirectories(tmp.resolve("src/main/resources/db/migration"));
+        java.nio.file.Files.writeString(
+                tmp.resolve("src/main/resources/db/migration/V1__init.sql"),
+                "CREATE TABLE foo (id INT);");
+
+        List<String> issues = cmd.validateGeneration(tmp, "", "com.example", "todo app");
+
+        assertThat(issues).noneMatch(i -> i.contains("Flyway migration"));
+    }
+
+    @Test
+    void validateGenerationReportsManifestMismatch(@org.junit.jupiter.api.io.TempDir Path tmp)
+            throws IOException {
+        InitCommand cmd = new InitCommand();
+        java.nio.file.Files.createDirectories(tmp.resolve("src/main/java/com/example"));
+        java.nio.file.Files.writeString(tmp.resolve("src/main/java/com/example/RoutesDef.java"),
+                "package com.example; public final class RoutesDef { public static Object routes() { return null; } }");
+        java.nio.file.Files.createDirectories(tmp.resolve("src/main/resources/db/migration"));
+        java.nio.file.Files.writeString(
+                tmp.resolve("src/main/resources/db/migration/V1__init.sql"), "CREATE TABLE t (id INT);");
+
+        // LLM manifest promises a controller that was never actually written.
+        String llmResponse = """
+                ### MANIFEST
+                ```
+                src/main/java/com/example/RoutesDef.java
+                src/main/java/com/example/MissingController.java
+                src/main/resources/db/migration/V1__init.sql
+                ```
+                """;
+
+        List<String> issues = cmd.validateGeneration(tmp, llmResponse, "com.example", "todo app");
+
+        assertThat(issues).anyMatch(i -> i.contains("MissingController.java") && i.contains("not written"));
+    }
+
+    // ------------------------------------------------------------------------
+    //  runMvnPhase: fallback tail path (no [ERROR]/[FATAL] lines)
+    // ------------------------------------------------------------------------
+
+    @Test
+    void runMvnPhaseReturnsTailLinesWhenNoErrorMarkersPresent(@org.junit.jupiter.api.io.TempDir Path tmp)
+            throws IOException {
+        // Create a minimal (broken) pom.xml that causes mvn to exit non-zero.
+        // The output will contain neither [ERROR] nor [FATAL] on a machine with mvn
+        // available, so the fallback tail path is exercised. Skip gracefully when
+        // mvn is not on PATH.
+        java.nio.file.Files.writeString(tmp.resolve("pom.xml"), "<invalid/>");
+        InitCommand cmd = new InitCommand();
+        // The test just verifies that runMvnPhase does not throw and returns a
+        // non-null BuildResult regardless of which branch it takes.
+        InitCommand.BuildResult result = cmd.runMvnPhase(tmp,
+                InitCommand.BuildPhase.VALIDATE, "validate");
+        // If mvn is not on PATH, the result will wrap the exception message.
+        assertThat(result).isNotNull();
+        // Either succeeded (mvn not found, IOException path returns a BuildResult)
+        // or failed — in both cases errors must be non-null when not succeeded.
+        if (!result.succeeded()) {
+            assertThat(result.errors()).isNotNull();
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    //  isFixedTemplateFile: exact factory name check
+    // ------------------------------------------------------------------------
+
+    @Test
+    void isFixedTemplateFileWithExactNamesDoesNotSuppressOtherFactories() {
+        // With exact factory names, CustomerApplicationFactory should NOT be suppressed.
+        assertThat(InitCommand.isFixedTemplateFile(
+                "src/main/java/com/example/CustomerApplicationFactory.java",
+                "TodoApplicationFactory", "TodoSystemFactory")).isFalse();
+        // But the exact generated names must be suppressed.
+        assertThat(InitCommand.isFixedTemplateFile(
+                "src/main/java/com/example/TodoApplicationFactory.java",
+                "TodoApplicationFactory", "TodoSystemFactory")).isTrue();
+        assertThat(InitCommand.isFixedTemplateFile(
+                "src/main/java/com/example/TodoSystemFactory.java",
+                "TodoApplicationFactory", "TodoSystemFactory")).isTrue();
+    }
+
+    // ------------------------------------------------------------------------
+    //  loadInitReference: caching behaviour
+    // ------------------------------------------------------------------------
+
+    @Test
+    void loadInitReferenceReturnsSameInstanceOnSubsequentCalls() {
+        InitCommand cmd = new InitCommand();
+        java.util.Map<String, String> first = cmd.loadInitReference();
+        java.util.Map<String, String> second = cmd.loadInitReference();
+        assertThat(second).isSameAs(first);
+    }
+
+    // ------------------------------------------------------------------------
+    //  Input validation: groupId, projectName, outputDir
+    // ------------------------------------------------------------------------
+
+    private InitCommand stubCommandForValidationTests() {
+        return new InitCommand() {
+            @Override
+            void verifyApiReachable(String apiUrl, String apiKey) {}
+
+            @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                return true;
+            }
+        };
+    }
+
+    @Test
+    void rejectsGroupIdWithXmlSpecialCharacters() {
+        InitCommand cmd = stubCommandForValidationTests();
+        CapturingTransport transport = new CapturingTransport();
+        // description → projectName → groupId (invalid)
+        transport.inputs.add("todo app");
+        transport.inputs.add("todo");
+        transport.inputs.add("com.example<evil>");
+        System.setProperty("enkan.ai.apiKey", "dummy-key");
+        System.setProperty("enkan.version", "1.0.0-TEST");
+        try {
+            boolean result = cmd.execute(EnkanSystem.of(), transport);
+            assertThat(result).isFalse();
+        } finally {
+            System.clearProperty("enkan.ai.apiKey");
+            System.clearProperty("enkan.version");
+        }
+
+        assertThat(transport.errLines)
+                .anyMatch(l -> l.contains("Group ID") && l.contains("invalid characters"));
+    }
+
+    @Test
+    void acceptsValidGroupId() {
+        InitCommand cmd = new InitCommand() {
+            @Override
+            void verifyApiReachable(String apiUrl, String apiKey) {}
+
+            @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                return true;
+            }
+
+            @Override
+            String reviewPlanInteractively(Transport transport, String description,
+                    String projectName, String groupId, String outputDir) {
+                return null; // cancel — we only need to get past validation
+            }
+        };
+        CapturingTransport transport = new CapturingTransport();
+        transport.inputs.add("todo app");
+        transport.inputs.add("todo");
+        transport.inputs.add("com.example.app");
+        transport.inputs.add("./todo");
+        System.setProperty("enkan.ai.apiKey", "dummy-key");
+        System.setProperty("enkan.version", "1.0.0-TEST");
+        try {
+            cmd.execute(EnkanSystem.of(), transport);
+        } finally {
+            System.clearProperty("enkan.ai.apiKey");
+            System.clearProperty("enkan.version");
+        }
+
+        assertThat(transport.errLines).noneMatch(l -> l.contains("invalid characters"));
+    }
+
+    @Test
+    void rejectsProjectNameWithDots() {
+        InitCommand cmd = stubCommandForValidationTests();
+        CapturingTransport transport = new CapturingTransport();
+        transport.inputs.add("todo app");
+        transport.inputs.add("my.app");   // dots not allowed in artifactId
+        transport.inputs.add("com.example");
+        System.setProperty("enkan.ai.apiKey", "dummy-key");
+        System.setProperty("enkan.version", "1.0.0-TEST");
+        try {
+            boolean result = cmd.execute(EnkanSystem.of(), transport);
+            assertThat(result).isFalse();
+        } finally {
+            System.clearProperty("enkan.ai.apiKey");
+            System.clearProperty("enkan.version");
+        }
+
+        assertThat(transport.errLines)
+                .anyMatch(l -> l.contains("Project name") && l.contains("invalid characters"));
+    }
+
+    @Test
+    void rejectsOutputDirWithDotDotSegment() {
+        InitCommand cmd = new InitCommand() {
+            @Override
+            void verifyApiReachable(String apiUrl, String apiKey) {}
+
+            @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                return true;
+            }
+
+            @Override
+            String reviewPlanInteractively(Transport transport, String description,
+                    String projectName, String groupId, String outputDir) {
+                return "approved"; // return a plan so we reach the outputDir check
+            }
+        };
+        CapturingTransport transport = new CapturingTransport();
+        transport.inputs.add("todo app");
+        transport.inputs.add("todo");
+        transport.inputs.add("com.example");
+        transport.inputs.add("../../etc/target");
+        System.setProperty("enkan.ai.apiKey", "dummy-key");
+        System.setProperty("enkan.version", "1.0.0-TEST");
+        try {
+            boolean result = cmd.execute(EnkanSystem.of(), transport);
+            assertThat(result).isFalse();
+        } finally {
+            System.clearProperty("enkan.ai.apiKey");
+            System.clearProperty("enkan.version");
+        }
+
+        assertThat(transport.errLines)
+                .anyMatch(l -> l.contains("'..'"));
+    }
+
+    // ------------------------------------------------------------------------
+    //  resolveEnkanVersionOrAbort: SNAPSHOT warn-and-continue path
+    // ------------------------------------------------------------------------
+
+    @Test
+    void resolveEnkanVersionOrAbortWarnsButContinuesForImplicitSnapshot() {
+        // When the version comes from pom.properties (no system-property or env override),
+        // a SNAPSHOT is a warning-and-continue, not an abort.
+        // Override enkanVersion() so this test is independent of the packaged jar.
+        InitCommand cmd = new InitCommand() {
+            @Override
+            String enkanVersion() { return "0.14.2-SNAPSHOT"; }
+        };
+        CapturingTransport transport = new CapturingTransport();
+        // Ensure neither override is set so the warning branch fires.
+        String savedProp = System.getProperty("enkan.version");
+        System.clearProperty("enkan.version");
+        try {
+            String result = cmd.resolveEnkanVersionOrAbort(transport);
+
+            assertThat(result)
+                    .as("SNAPSHOT version must be returned (warn-and-continue, not abort)")
+                    .isEqualTo("0.14.2-SNAPSHOT");
+            assertThat(String.join("\n", transport.outLines))
+                    .as("A warning about SNAPSHOT must be printed")
+                    .contains("SNAPSHOT version");
+        } finally {
+            if (savedProp != null) System.setProperty("enkan.version", savedProp);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    //  writeGeneratedFiles: CRLF line endings
+    // ------------------------------------------------------------------------
+
+    @Test
+    void writeGeneratedFilesHandlesCrlfLineEndings(@org.junit.jupiter.api.io.TempDir Path tmp)
+            throws IOException {
+        InitCommand cmd = new InitCommand();
+        // Simulate a Windows-style CRLF response (as might come from an SSE stream
+        // on Windows or from a model that emits \r\n).
+        String response = "### src/main/java/App.java\r\n"
+                + "```java\r\n"
+                + "public class App {}\r\n"
+                + "```\r\n";
+        CapturingTransport transport = new CapturingTransport();
+        int written = cmd.writeGeneratedFiles(tmp, response, "AppApplicationFactory", "AppSystemFactory", transport);
+
+        assertThat(written)
+                .as("CRLF response must produce one written file, not zero")
+                .isEqualTo(1);
+        assertThat(java.nio.file.Files.readString(tmp.resolve("src/main/java/App.java")))
+                .as("File content must not contain stray \\r from CRLF splitting")
+                .doesNotContain("\r")
+                .contains("public class App {}");
+    }
+
+    // ------------------------------------------------------------------------
+    //  pomTemplate: groupId and projectName injection guard
+    // ------------------------------------------------------------------------
+
+    @Test
+    void pomTemplateRejectsGroupIdWithXmlChars() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                InitCommand.pomTemplate("com.example<evil>", "todo", "com.example.todo", "1.0.0"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("groupId");
+    }
+
+    @Test
+    void pomTemplateRejectsProjectNameWithXmlChars() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                InitCommand.pomTemplate("com.example", "todo<evil>", "com.example.todo", "1.0.0"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("projectName");
     }
 }

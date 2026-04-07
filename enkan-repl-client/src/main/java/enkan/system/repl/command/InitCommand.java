@@ -17,12 +17,14 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -75,6 +77,13 @@ public class InitCommand implements SystemCommand {
      * (so offline runs do not re-hit the network on every prompt).
      */
     private Map<String, String> referenceCache = null;
+
+    /**
+     * Cached result of {@link #loadInitReference()}. Loaded once on first use; reused
+     * across the planning, generation, and fix-loop phases so classpath resources are
+     * not re-read on every prompt build.
+     */
+    private Map<String, String> initReferenceCache = null;
 
     private static final String[] FORBIDDEN_MARKERS = {
             "springframework",
@@ -151,7 +160,12 @@ public class InitCommand implements SystemCommand {
         try {
             verifyApiReachable(apiUrl, apiKey);
         } catch (Exception e) {
-            LOG.warn("LLM connectivity check failed: {}", apiUrl, e);
+            // Do not pass 'e' itself to the logger — some HttpClient implementations include
+            // request headers (including Authorization) in the exception cause chain.
+            // Log class name + message only; the stack trace is intentionally omitted.
+            String errSummary = e.getClass().getSimpleName()
+                    + (e.getMessage() != null ? ": " + e.getMessage() : "");
+            LOG.warn("LLM connectivity check failed: {} — {}", apiUrl, errSummary);
             transport.sendErr("Unable to connect to LLM API (" + apiUrl + "): " + safeMessage(e));
             return false;
         }
@@ -173,6 +187,14 @@ public class InitCommand implements SystemCommand {
                     CYAN + "?" + RESET + " Project name", inferProjectName(description));
             String groupId = askWithDefault(transport,
                     CYAN + "?" + RESET + " Group ID", "com.example");
+            if (!SAFE_COORD_PATTERN.matcher(groupId).matches()) {
+                transport.sendErr("Group ID '" + groupId + "' contains invalid characters. Use only alphanumerics, dots, hyphens, and underscores.");
+                return false;
+            }
+            if (!SAFE_ARTIFACT_PATTERN.matcher(projectName).matches()) {
+                transport.sendErr("Project name '" + projectName + "' contains invalid characters. Use only alphanumerics, hyphens, and underscores (no dots).");
+                return false;
+            }
             String outputDir = askWithDefault(transport,
                     CYAN + "?" + RESET + " Output directory", "./" + projectName);
             String approvedPlan = reviewPlanInteractively(transport, description, projectName, groupId, outputDir);
@@ -181,6 +203,10 @@ public class InitCommand implements SystemCommand {
                 return false;
             }
 
+            if (outputDir.contains("..")) {
+                transport.sendErr("Output directory must not contain '..' segments.");
+                return false;
+            }
             Path outPath = Path.of(outputDir).toAbsolutePath();
             transport.sendOut(section("Generating") + DIM + "  " + outPath + RESET + "\n");
             Files.createDirectories(outPath);
@@ -342,8 +368,9 @@ public class InitCommand implements SystemCommand {
     void generateWithApi(Transport transport, String description,
             String projectName, String groupId, Path outPath)
             throws IOException, InterruptedException {
-        String basePackage = groupId + "." + projectName.replace("-", "").replace("_", "");
-        String systemFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "SystemFactory";
+        String basePackage = groupId + "." + normalizeProjectName(projectName);
+        String systemFactoryClass = capitalize(normalizeProjectName(projectName)) + "SystemFactory";
+        String appFactoryClass = capitalize(normalizeProjectName(projectName)) + "ApplicationFactory";
         String enkanVersion = resolveEnkanVersionOrAbort(transport);
         if (enkanVersion == null) {
             return;
@@ -368,7 +395,7 @@ public class InitCommand implements SystemCommand {
         if (containsForbiddenFramework(fullResponse)) {
             throw new IOException("Generated output contains Spring Boot markers. Please retry with more explicit Enkan requirements.");
         }
-        int written = writeGeneratedFiles(outPath, fullResponse.toString(), transport);
+        int written = writeGeneratedFiles(outPath, fullResponse.toString(), appFactoryClass, systemFactoryClass, transport);
         transport.sendOut(GREEN + BOLD + "\n✓ Done!" + RESET + " Created " + written + " file(s) at " + DIM + outPath + RESET + "\n");
 
         List<String> issues = validateGeneration(outPath, fullResponse, basePackage, description);
@@ -380,7 +407,7 @@ public class InitCommand implements SystemCommand {
             // forwarded to the LLM with the same machinery. No separate fix path needed.
         }
 
-        if (!compileAndFix(transport, outPath)) {
+        if (!compileAndFix(transport, outPath, appFactoryClass, systemFactoryClass)) {
             return;
         }
         launchAndConnect(transport, outPath);
@@ -436,7 +463,7 @@ public class InitCommand implements SystemCommand {
             try {
                 routesContent = Files.readString(routesDef, StandardCharsets.UTF_8);
                 var m = Pattern.compile("\\b(\\w+Controller)\\.class").matcher(routesContent);
-                java.util.Set<String> mentioned = new java.util.LinkedHashSet<>();
+                Set<String> mentioned = new LinkedHashSet<>();
                 while (m.find()) mentioned.add(m.group(1));
                 for (String simpleName : mentioned) {
                     boolean found;
@@ -470,15 +497,22 @@ public class InitCommand implements SystemCommand {
                     issues.add("No Flyway migration at " + outPath.relativize(migrations)
                             + "/V1__*.sql — schema will be empty and controllers will fail at first query.");
                 }
-            } catch (IOException ignored) { }
+            } catch (IOException e) {
+                issues.add("Could not scan migration directory: " + safeMessage(e));
+            }
         }
 
         // 5. Manifest comparison (advisory — manifest is optional)
         var manifest = parseManifest(llmResponse);
         if (!manifest.isEmpty()) {
+            Path normalizedOut = outPath.normalize();
             for (String declared : manifest) {
                 if (isFixedTemplateFile(declared)) continue;
                 Path p = outPath.resolve(declared).normalize();
+                if (!p.startsWith(normalizedOut)) {
+                    issues.add("Manifest contains a path that escapes the project root: " + declared);
+                    continue;
+                }
                 if (!Files.exists(p)) {
                     issues.add("Manifest promises " + declared + " but it was not written.");
                 }
@@ -509,9 +543,11 @@ public class InitCommand implements SystemCommand {
                           content.lines()
                                   .filter(line -> line.startsWith("import "))
                                   .forEach(line -> {
-                                      String imp = line.substring("import ".length())
-                                              .replace("static ", "")
-                                              .trim();
+                                      String raw = line.substring("import ".length()).trim();
+                                      // Strip the optional "static " keyword only when it appears
+                                      // at the very start of the remainder (after "import "),
+                                      // so package names containing the word "static" are not mangled.
+                                      String imp = raw.startsWith("static ") ? raw.substring("static ".length()) : raw;
                                       if (imp.endsWith(";")) imp = imp.substring(0, imp.length() - 1);
                                       for (String forbidden : ALWAYS_FORBIDDEN_IMPORT_PREFIXES) {
                                           if (imp.startsWith(forbidden)) {
@@ -519,19 +555,22 @@ public class InitCommand implements SystemCommand {
                                           }
                                       }
                                       for (String forbidden : CONDITIONALLY_FORBIDDEN_IMPORT_PREFIXES) {
-                                          if (imp.startsWith(forbidden)) {
-                                              boolean allowed = (forbidden.contains("doma") && allowDoma)
-                                                      || (forbidden.contains("persistence") && allowJpa);
-                                              if (!allowed) {
-                                                  issues.add(rel + " imports " + imp
-                                                          + " — use the default jOOQ+Raoh stack instead.");
-                                              }
+                                          if (!imp.startsWith(forbidden)) continue;
+                                          boolean allowed = (forbidden.contains("doma") && allowDoma)
+                                                  || (forbidden.contains("persistence") && allowJpa);
+                                          if (!allowed) {
+                                              issues.add(rel + " imports " + imp
+                                                      + " — use the default jOOQ+Raoh stack instead.");
                                           }
                                       }
                                   });
-                      } catch (IOException ignored) { }
+                      } catch (IOException e) {
+                          issues.add("Could not read " + outPath.relativize(p) + " for import check: " + safeMessage(e));
+                      }
                   });
-        } catch (IOException ignored) { }
+        } catch (IOException e) {
+            issues.add("Could not walk source tree for import check: " + safeMessage(e));
+        }
         return issues;
     }
 
@@ -544,7 +583,7 @@ public class InitCommand implements SystemCommand {
     static List<String> parseManifest(String response) {
         List<String> result = new ArrayList<>();
         if (response == null) return result;
-        String[] lines = response.split("\n");
+        String[] lines = response.split("\\R", -1);
         boolean inManifest = false;
         boolean inBlock = false;
         for (String line : lines) {
@@ -587,7 +626,7 @@ public class InitCommand implements SystemCommand {
     private void writeFixedTemplates(Path outPath, String basePackage, String systemFactoryClass,
             String projectName, String groupId, String enkanVersion) throws IOException {
         String basePath = basePackage.replace('.', '/');
-        String appFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "ApplicationFactory";
+        String appFactoryClass = capitalize(normalizeProjectName(projectName)) + "ApplicationFactory";
 
         Path devMain = outPath.resolve("src/dev/java/" + basePath + "/DevMain.java");
         Files.createDirectories(devMain.getParent());
@@ -622,32 +661,41 @@ public class InitCommand implements SystemCommand {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
+    /** Strips hyphens and underscores from a project name to form a valid Java identifier segment. */
+    private static String normalizeProjectName(String projectName) {
+        return projectName.replace("-", "").replace("_", "");
+    }
+
     private static String devMainTemplate(String basePackage, String systemFactoryClass) {
-        return "package " + basePackage + ";\n\n"
-                + "import enkan.system.command.JsonRequestCommand;\n"
-                + "import enkan.system.command.SqlCommand;\n"
-                + "import enkan.system.devel.command.AutoResetCommand;\n"
-                + "import enkan.system.devel.command.CompileCommand;\n"
-                + "import enkan.system.repl.JShellRepl;\n"
-                + "import enkan.system.repl.ReplBoot;\n"
-                + "import enkan.system.repl.websocket.WebSocketTransportProvider;\n"
-                + "import kotowari.system.KotowariCommandRegister;\n\n"
-                + "public class DevMain {\n"
-                + "    public static void main(String[] args) {\n"
-                + "        JShellRepl repl = new JShellRepl(" + systemFactoryClass + ".class.getName());\n"
-                + "        new ReplBoot(repl)\n"
-                + "                .register(new KotowariCommandRegister())\n"
-                + "                .register(r -> {\n"
-                + "                    r.registerCommand(\"sql\", new SqlCommand());\n"
-                + "                    r.registerCommand(\"jsonRequest\", new JsonRequestCommand());\n"
-                + "                    r.registerLocalCommand(\"autoreset\", new AutoResetCommand(repl));\n"
-                + "                    r.registerLocalCommand(\"compile\", new CompileCommand());\n"
-                + "                })\n"
-                + "                .transport(new WebSocketTransportProvider(3001))\n"
-                + "                .onReady(\"/start\")\n"
-                + "                .start();\n"
-                + "    }\n"
-                + "}\n";
+        return """
+                package %s;
+
+                import enkan.system.command.JsonRequestCommand;
+                import enkan.system.command.SqlCommand;
+                import enkan.system.devel.command.AutoResetCommand;
+                import enkan.system.devel.command.CompileCommand;
+                import enkan.system.repl.JShellRepl;
+                import enkan.system.repl.ReplBoot;
+                import enkan.system.repl.websocket.WebSocketTransportProvider;
+                import kotowari.system.KotowariCommandRegister;
+
+                public class DevMain {
+                    public static void main(String[] args) {
+                        JShellRepl repl = new JShellRepl(%s.class.getName());
+                        new ReplBoot(repl)
+                                .register(new KotowariCommandRegister())
+                                .register(r -> {
+                                    r.registerCommand("sql", new SqlCommand());
+                                    r.registerCommand("jsonRequest", new JsonRequestCommand());
+                                    r.registerLocalCommand("autoreset", new AutoResetCommand(repl));
+                                    r.registerLocalCommand("compile", new CompileCommand());
+                                })
+                                .transport(new WebSocketTransportProvider(3001))
+                                .onReady("/start")
+                                .start();
+                    }
+                }
+                """.formatted(basePackage, systemFactoryClass);
     }
 
     /**
@@ -661,6 +709,18 @@ public class InitCommand implements SystemCommand {
      *     to have validated it via {@link #resolveEnkanVersionOrAbort(Transport)}.
      */
     static String pomTemplate(String groupId, String projectName, String basePackage, String enkanVersion) {
+        if (!SAFE_COORD_PATTERN.matcher(groupId).matches()) {
+            throw new IllegalArgumentException(
+                    "groupId '" + groupId + "' contains characters that are not safe to embed in XML.");
+        }
+        if (!SAFE_ARTIFACT_PATTERN.matcher(projectName).matches()) {
+            throw new IllegalArgumentException(
+                    "projectName '" + projectName + "' contains characters that are not safe to embed in XML.");
+        }
+        if (!SAFE_VERSION_PATTERN.matcher(enkanVersion).matches()) {
+            throw new IllegalArgumentException(
+                    "enkanVersion '" + enkanVersion + "' contains characters that are not safe to embed in XML.");
+        }
         String snapshotNote = enkanVersion.endsWith("-SNAPSHOT")
                 ? "\n    <!-- NOTE: enkan.version is a SNAPSHOT. Maven Central does not host SNAPSHOTs.\n"
                 + "         Run `mvn install` on the enkan source tree first, or override with\n"
@@ -828,48 +888,53 @@ public class InitCommand implements SystemCommand {
      * relationship pattern used by {@code kotowari-example/ExampleSystemFactory}.
      */
     static String systemFactoryTemplate(String basePackage, String systemFactoryClass, String projectName) {
-        String appFactoryClass = capitalize(projectName.replace("-", "").replace("_", "")) + "ApplicationFactory";
-        String jdbcUrl = "jdbc:h2:mem:" + projectName.replace("-", "").replace("_", "") + ";DB_CLOSE_DELAY=-1";
-        return "package " + basePackage + ";\n\n"
-                + "import enkan.Env;\n"
-                + "import enkan.component.ApplicationComponent;\n"
-                + "import enkan.component.WebServerComponent;\n"
-                + "import enkan.component.builtin.HmacEncoder;\n"
-                + "import enkan.component.flyway.FlywayMigration;\n"
-                + "import enkan.component.hikaricp.HikariCPComponent;\n"
-                + "import enkan.component.jackson.JacksonBeansConverter;\n"
-                + "import enkan.component.jetty.JettyComponent;\n"
-                + "import enkan.component.jooq.JooqProvider;\n"
-                + "import enkan.config.EnkanSystemFactory;\n"
-                + "import enkan.collection.OptionMap;\n"
-                + "import enkan.system.EnkanSystem;\n"
-                + "import org.jooq.SQLDialect;\n\n"
-                + "import static enkan.component.ComponentRelationship.component;\n"
-                + "import static enkan.util.BeanBuilder.builder;\n\n"
-                + "public class " + systemFactoryClass + " implements EnkanSystemFactory {\n"
-                + "    @Override\n"
-                + "    public EnkanSystem create() {\n"
-                + "        return EnkanSystem.of(\n"
-                + "                \"hmac\", new HmacEncoder(),\n"
-                + "                \"jackson\", new JacksonBeansConverter(),\n"
-                + "                \"datasource\", new HikariCPComponent(OptionMap.of(\n"
-                + "                        \"uri\", Env.getString(\"JDBC_URL\", \"" + jdbcUrl + "\"))),\n"
-                + "                \"flyway\", new FlywayMigration(),\n"
-                + "                \"jooq\", builder(new JooqProvider())\n"
-                + "                        .set(JooqProvider::setDialect, SQLDialect.H2)\n"
-                + "                        .build(),\n"
-                + "                \"app\", new ApplicationComponent<>(\"" + basePackage + "." + appFactoryClass + "\"),\n"
-                + "                \"http\", builder(new JettyComponent())\n"
-                + "                        .set(WebServerComponent::setPort, Env.getInt(\"PORT\", 3000))\n"
-                + "                        .build()\n"
-                + "        ).relationships(\n"
-                + "                component(\"http\").using(\"app\"),\n"
-                + "                component(\"app\").using(\"jackson\", \"hmac\", \"jooq\", \"datasource\"),\n"
-                + "                component(\"jooq\").using(\"datasource\", \"flyway\"),\n"
-                + "                component(\"flyway\").using(\"datasource\")\n"
-                + "        );\n"
-                + "    }\n"
-                + "}\n";
+        String appFactoryClass = capitalize(normalizeProjectName(projectName)) + "ApplicationFactory";
+        String jdbcUrl = "jdbc:h2:mem:" + normalizeProjectName(projectName) + ";DB_CLOSE_DELAY=-1";
+        return """
+                package %s;
+
+                import enkan.Env;
+                import enkan.component.ApplicationComponent;
+                import enkan.component.WebServerComponent;
+                import enkan.component.builtin.HmacEncoder;
+                import enkan.component.flyway.FlywayMigration;
+                import enkan.component.hikaricp.HikariCPComponent;
+                import enkan.component.jackson.JacksonBeansConverter;
+                import enkan.component.jetty.JettyComponent;
+                import enkan.component.jooq.JooqProvider;
+                import enkan.config.EnkanSystemFactory;
+                import enkan.collection.OptionMap;
+                import enkan.system.EnkanSystem;
+                import org.jooq.SQLDialect;
+
+                import static enkan.component.ComponentRelationship.component;
+                import static enkan.util.BeanBuilder.builder;
+
+                public class %s implements EnkanSystemFactory {
+                    @Override
+                    public EnkanSystem create() {
+                        return EnkanSystem.of(
+                                "hmac", new HmacEncoder(),
+                                "jackson", new JacksonBeansConverter(),
+                                "datasource", new HikariCPComponent(OptionMap.of(
+                                        "uri", Env.getString("JDBC_URL", "%s"))),
+                                "flyway", new FlywayMigration(),
+                                "jooq", builder(new JooqProvider())
+                                        .set(JooqProvider::setDialect, SQLDialect.H2)
+                                        .build(),
+                                "app", new ApplicationComponent<>("%s.%s"),
+                                "http", builder(new JettyComponent())
+                                        .set(WebServerComponent::setPort, Env.getInt("PORT", 3000))
+                                        .build()
+                        ).relationships(
+                                component("http").using("app"),
+                                component("app").using("jackson", "hmac", "jooq", "datasource"),
+                                component("jooq").using("datasource", "flyway"),
+                                component("flyway").using("datasource")
+                        );
+                    }
+                }
+                """.formatted(basePackage, systemFactoryClass, jdbcUrl, basePackage, appFactoryClass);
     }
 
     private static final int MAX_FIX_ATTEMPTS = 5;
@@ -900,7 +965,8 @@ public class InitCommand implements SystemCommand {
      *
      * @return true if compilation eventually succeeded, false if the user should abort
      */
-    private boolean compileAndFix(Transport transport, Path outPath) {
+    private boolean compileAndFix(Transport transport, Path outPath,
+            String appFactoryClass, String systemFactoryClass) {
         for (int attempt = 1; attempt <= MAX_FIX_ATTEMPTS; attempt++) {
             transport.sendOut(section("Building") + DIM + "  mvn validate → compile" + RESET + "\n");
             BuildResult result = runMvnBuild(outPath);
@@ -925,7 +991,7 @@ public class InitCommand implements SystemCommand {
                 break;
             }
             try {
-                writeGeneratedFiles(outPath, fixResponse, transport);
+                writeGeneratedFiles(outPath, fixResponse, appFactoryClass, systemFactoryClass, transport);
             } catch (IOException e) {
                 transport.sendErr("Failed to write fixes: " + safeMessage(e));
                 break;
@@ -942,39 +1008,55 @@ public class InitCommand implements SystemCommand {
      * @return {@link BuildResult#succeeded()} true if both phases pass; otherwise the
      *     result describes which phase failed and the trimmed error lines.
      */
-    BuildResult runMvnBuild(Path outPath) {
+    static BuildResult runMvnBuild(Path outPath) {
         BuildResult validate = runMvnPhase(outPath, BuildPhase.VALIDATE, "validate");
         if (!validate.succeeded()) return validate;
         return runMvnPhase(outPath, BuildPhase.COMPILE, "compile", "-Pdev");
     }
 
-    private BuildResult runMvnPhase(Path outPath, BuildPhase phase, String... mvnArgs) {
+    /** Maximum time to wait for a single Maven phase before killing the process. */
+    private static final int MVN_PHASE_TIMEOUT_MINUTES = 10;
+
+    /** Package-private for testing the fallback tail path without running a real Maven build. */
+    static BuildResult runMvnPhase(Path outPath, BuildPhase phase, String... mvnArgs) {
         List<String> cmd = new ArrayList<>();
         cmd.add("mvn");
         cmd.add("--no-transfer-progress");
         cmd.add("-B");
         for (String a : mvnArgs) cmd.add(a);
+        Process proc = null;
         try {
-            Process proc = new ProcessBuilder(cmd)
+            proc = new ProcessBuilder(cmd)
                     .directory(outPath.toFile())
                     .redirectErrorStream(true)
                     .start();
             String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exitCode = proc.waitFor();
+            boolean finished = proc.waitFor(MVN_PHASE_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            if (!finished) {
+                return new BuildResult(phase, "mvn " + String.join(" ", mvnArgs)
+                        + " timed out after " + MVN_PHASE_TIMEOUT_MINUTES + " minutes.");
+            }
+            int exitCode = proc.exitValue();
             if (exitCode == 0) return new BuildResult(phase, null);
-            String errors = output.lines()
+            // Collect once so the fallback tail path reuses the same list.
+            List<String> allLines = output.lines().toList();
+            String errors = allLines.stream()
                     .filter(l -> l.startsWith("[ERROR]") || l.startsWith("[FATAL]"))
                     .collect(java.util.stream.Collectors.joining("\n"));
             if (errors.isBlank()) {
                 // Fallback: no marker lines at all (rare); include the tail of raw output.
-                errors = output.lines()
-                        .skip(Math.max(0, output.lines().count() - 30))
+                errors = allLines.stream()
+                        .skip(Math.max(0, allLines.size() - 30))
                         .collect(java.util.stream.Collectors.joining("\n"));
             }
             return new BuildResult(phase, errors);
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return new BuildResult(phase, "Failed to run mvn " + String.join(" ", mvnArgs) + ": " + safeMessage(e));
+        } catch (IOException e) {
+            return new BuildResult(phase, "Failed to run mvn " + String.join(" ", mvnArgs) + ": " + safeMessage(e));
+        } finally {
+            if (proc != null) proc.destroyForcibly();
         }
     }
 
@@ -1008,16 +1090,10 @@ public class InitCommand implements SystemCommand {
     }
 
     static String buildFixUserPrompt(BuildResult result, Path outPath) {
-        var sb = new StringBuilder();
-        sb.append("Maven ").append(result.phase()).append(" failed in ")
-          .append(outPath).append(":\n\n");
-        sb.append(result.errors()).append("\n\n");
-
-        java.util.LinkedHashSet<Path> filesToInclude = new java.util.LinkedHashSet<>();
-        result.errors().lines().forEach(line -> {
-            Path p = extractFileFromError(line, outPath);
-            if (p != null) filesToInclude.add(p);
-        });
+        var filesToInclude = result.errors().lines()
+                .map(line -> extractFileFromError(line, outPath))
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         // If the error hints at the POM (model-building errors rarely expose a line
         // reference the regex can parse) or no files were matched, always include
         // pom.xml so the LLM has *some* context to work from.
@@ -1025,6 +1101,13 @@ public class InitCommand implements SystemCommand {
             Path pom = outPath.resolve("pom.xml");
             if (Files.exists(pom)) filesToInclude.add(pom);
         }
+
+        var sb = new StringBuilder("""
+                Maven %s failed in %s:
+
+                %s
+
+                """.formatted(result.phase(), outPath, result.errors()));
 
         for (Path file : filesToInclude) {
             try {
@@ -1155,7 +1238,6 @@ public class InitCommand implements SystemCommand {
             String requestBody = buildRequestBody(model, systemPrompt, userPrompt, true);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(resolveChatCompletionUri())
-                    .version(HttpClient.Version.HTTP_1_1)
                     .timeout(Duration.ofMinutes(10))
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
@@ -1167,7 +1249,10 @@ public class InitCommand implements SystemCommand {
                     HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() != 200) {
-                String body = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                String body;
+                try (var bodyStream = response.body()) {
+                    body = new String(bodyStream.readAllBytes(), StandardCharsets.UTF_8);
+                }
                 throw new IOException("API error " + response.statusCode() + ": " + body);
             }
 
@@ -1272,11 +1357,12 @@ public class InitCommand implements SystemCommand {
      *
      * @return number of files written
      */
-    int writeGeneratedFiles(Path outPath, String response, Transport transport)
+    int writeGeneratedFiles(Path outPath, String response,
+            String appFactoryClass, String systemFactoryClass, Transport transport)
             throws IOException {
         Path normalizedOut = outPath.normalize();
         int count = 0;
-        String[] lines = response.split("\n");
+        String[] lines = response.split("\\R", -1);
         String currentFile = null;
         var codeLines = new StringBuilder();
         boolean inBlock = false;
@@ -1288,7 +1374,7 @@ public class InitCommand implements SystemCommand {
             if (!inBlock) {
                 String path = extractFilePath(line);
                 if (path != null) {
-                    if (isFixedTemplateFile(path)) {
+                    if (isFixedTemplateFile(path, appFactoryClass, systemFactoryClass)) {
                         currentFile = null;
                         skipBlock = true;
                     } else {
@@ -1341,6 +1427,30 @@ public class InitCommand implements SystemCommand {
         return null;
     }
 
+    /**
+     * Returns true if {@code path} names one of the deterministic template files that
+     * the generator writes and the LLM must never overwrite. The exact
+     * {@code appFactoryClass} and {@code systemFactoryClass} names are used so that a
+     * legitimately generated file like {@code CustomerApplicationFactory.java} is not
+     * accidentally suppressed.
+     */
+    static boolean isFixedTemplateFile(String path, String appFactoryClass, String systemFactoryClass) {
+        String normalized = path.replace('\\', '/');
+        String filename = normalized.substring(normalized.lastIndexOf('/') + 1);
+        return filename.equals("pom.xml")
+                || filename.equals("DevMain.java")
+                || filename.equals("Main.java")
+                || filename.equals("JsonBodyReader.java")
+                || filename.equals("JsonBodyWriter.java")
+                || filename.equals(systemFactoryClass + ".java")
+                || filename.equals(appFactoryClass + ".java");
+    }
+
+    /**
+     * Overload for callers that do not have access to the project-specific factory names
+     * (e.g. {@code parseManifest} advisory checks). Falls back to the broad suffix match,
+     * which is acceptable in non-write-path contexts.
+     */
     static boolean isFixedTemplateFile(String path) {
         String normalized = path.replace('\\', '/');
         String filename = normalized.substring(normalized.lastIndexOf('/') + 1);
@@ -1408,7 +1518,16 @@ public class InitCommand implements SystemCommand {
                 case '\n' -> sb.append("\\n");
                 case '\r' -> sb.append("\\r");
                 case '\t' -> sb.append("\\t");
-                default   -> sb.append(c);
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                default -> {
+                    if (c < 0x20) {
+                        // Escape remaining C0 control characters as Unicode escape (e.g. \u0008)
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
             }
         }
         return sb.append('"').toString();
@@ -1424,7 +1543,7 @@ public class InitCommand implements SystemCommand {
      */
     String[] buildPrompt(String description, String projectName,
             String groupId, Path outPath) {
-        String basePackage = groupId + "." + projectName.replace("-", "").replace("_", "");
+        String basePackage = groupId + "." + normalizeProjectName(projectName);
         boolean userWantsJpa = hasUserRequestedAlternative(description, "jpa", "hibernate", "jakarta.persistence");
         boolean userWantsDoma = hasUserRequestedAlternative(description, "doma2", "doma ");
         boolean defaultStack = !userWantsJpa && !userWantsDoma;
@@ -1595,7 +1714,7 @@ public class InitCommand implements SystemCommand {
      * consulted because the enkan build does not set it; relying on {@code pom.properties}
      * is both more reliable and more portable across build plugins.
      */
-    static String enkanVersion() {
+    String enkanVersion() {
         String override = System.getProperty("enkan.version");
         if (override != null && !override.isBlank()) return override.trim();
         String env = System.getenv("ENKAN_VERSION");
@@ -1615,6 +1734,25 @@ public class InitCommand implements SystemCommand {
     }
 
     /**
+     * Pattern that matches safe Maven version strings. Allows digits, letters, dots,
+     * and hyphens only — rejecting any value that could break an XML comment or element
+     * (e.g. {@code -->}, angle brackets, ampersands).
+     */
+    private static final Pattern SAFE_VERSION_PATTERN = Pattern.compile("[\\w.\\-]+");
+
+    /**
+     * Pattern that matches valid Maven {@code groupId} values (multi-segment, dot-separated).
+     * Rejects characters that could break an XML element ({@code < > & " '}).
+     */
+    private static final Pattern SAFE_COORD_PATTERN = Pattern.compile("[a-zA-Z0-9_.\\-]+(\\.[a-zA-Z0-9_.\\-]+)*");
+
+    /**
+     * Pattern that matches valid Maven {@code artifactId} values. Unlike {@link #SAFE_COORD_PATTERN},
+     * dots are not allowed — Maven convention for artifactId is alphanumerics, hyphens, and underscores only.
+     */
+    private static final Pattern SAFE_ARTIFACT_PATTERN = Pattern.compile("[a-zA-Z0-9_\\-]+");
+
+    /**
      * Resolves the Enkan version and, when unavailable, prints a user-actionable error
      * to the transport and returns {@code null}. Callers should abort on null.
      *
@@ -1630,6 +1768,11 @@ public class InitCommand implements SystemCommand {
             transport.sendErr("Cannot determine Enkan version for the generated pom.xml.");
             transport.sendErr("  Run from a packaged enkan-repl-client jar, or pass -Denkan.version=<x.y.z>");
             transport.sendErr("  (or set the ENKAN_VERSION environment variable).");
+            return null;
+        }
+        if (!SAFE_VERSION_PATTERN.matcher(v).matches()) {
+            transport.sendErr("Enkan version '" + v + "' contains characters that are not safe to embed in XML.");
+            transport.sendErr("  Override with -Denkan.version=<x.y.z> using only alphanumerics, dots, and hyphens.");
             return null;
         }
         if (v.endsWith("-SNAPSHOT") && System.getProperty("enkan.version") == null
@@ -1654,17 +1797,27 @@ public class InitCommand implements SystemCommand {
      * @return {@code true} when {@code mvn -v} exits successfully, {@code false} otherwise
      */
     boolean verifyMavenAvailable(Transport transport) {
+        Process proc = null;
         try {
-            Process proc = new ProcessBuilder("mvn", "-v")
+            proc = new ProcessBuilder("mvn", "-v")
                     .redirectErrorStream(true)
                     .start();
             // Drain output to avoid the child blocking on a full pipe.
             proc.getInputStream().readAllBytes();
-            int exitCode = proc.waitFor();
-            if (exitCode == 0) return true;
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            // Cap at 10 s: a slow Maven wrapper download should not block /init forever.
+            boolean finished = proc.waitFor(10, TimeUnit.SECONDS);
+            if (!finished) {
+                LOG.warn("mvn -v timed out after 10 s");
+            } else if (proc.exitValue() == 0) {
+                return true;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.warn("Failed to locate mvn executable", e);
+        } catch (IOException e) {
+            LOG.warn("Failed to locate mvn executable", e);
+        } finally {
+            if (proc != null) proc.destroyForcibly();
         }
         transport.sendErr("Maven (mvn) is required but was not found on PATH.");
         transport.sendErr("  Install it from https://maven.apache.org/download.cgi");
@@ -1676,77 +1829,84 @@ public class InitCommand implements SystemCommand {
     /**
      * Fixed ApplicationFactory template: minimal middleware stack suitable for a JSON
      * REST API using jOOQ + Jackson. The LLM is responsible only for
-     * {@code Routes.define(...)} contents and the controller implementations — the
-     * middleware ordering itself is part of the template because the ordering is
-     * load-bearing for Enkan and LLMs frequently get it subtly wrong.
+     * {@code RoutesDef} and the controller implementations — the middleware ordering
+     * itself is part of the template because the ordering is load-bearing for Enkan
+     * and LLMs frequently get it subtly wrong.
      *
-     * <p>The template leaves a marker comment ({@code /* ROUTES *\/}) that the LLM must
-     * replace with real route definitions in a follow-up fix pass; see the generation
-     * prompt and {@code rewriteRoutesMarker}.
+     * <p>Routes are delegated to a generated {@code RoutesDef.routes()} static method,
+     * which the LLM writes alongside the controllers.
      */
     static String applicationFactoryTemplate(String basePackage, String appFactoryClass) {
-        return "package " + basePackage + ";\n\n"
-                + "import " + basePackage + ".jaxrs.JsonBodyReader;\n"
-                + "import " + basePackage + ".jaxrs.JsonBodyWriter;\n"
-                + "import enkan.Application;\n"
-                + "import enkan.config.ApplicationFactory;\n"
-                + "import enkan.middleware.jooq.JooqDslContextMiddleware;\n"
-                + "import enkan.middleware.jooq.JooqTransactionMiddleware;\n"
-                + "import enkan.system.inject.ComponentInjector;\n"
-                + "import enkan.web.application.WebApplication;\n"
-                + "import enkan.web.data.HttpRequest;\n"
-                + "import enkan.web.data.HttpResponse;\n"
-                + "import enkan.web.middleware.ContentNegotiationMiddleware;\n"
-                + "import enkan.web.middleware.ContentTypeMiddleware;\n"
-                + "import enkan.web.middleware.CookiesMiddleware;\n"
-                + "import enkan.web.middleware.DefaultCharsetMiddleware;\n"
-                + "import enkan.web.middleware.NestedParamsMiddleware;\n"
-                + "import enkan.web.middleware.ParamsMiddleware;\n"
-                + "import enkan.web.middleware.TraceMiddleware;\n"
-                + "import jakarta.ws.rs.ext.MessageBodyWriter;\n"
-                + "import kotowari.middleware.ControllerInvokerMiddleware;\n"
-                + "import kotowari.middleware.FormMiddleware;\n"
-                + "import kotowari.middleware.RoutingMiddleware;\n"
-                + "import kotowari.middleware.SerDesMiddleware;\n"
-                + "import kotowari.middleware.ValidateBodyMiddleware;\n"
-                + "import kotowari.middleware.serdes.ToStringBodyWriter;\n"
-                + "import kotowari.routing.Routes;\n"
-                + "import tools.jackson.databind.ObjectMapper;\n"
-                + "import tools.jackson.databind.json.JsonMapper;\n\n"
-                + "import static enkan.util.BeanBuilder.builder;\n\n"
-                + "public class " + appFactoryClass + " implements ApplicationFactory<HttpRequest, HttpResponse> {\n"
-                + "    @Override\n"
-                + "    public Application<HttpRequest, HttpResponse> create(ComponentInjector injector) {\n"
-                + "        WebApplication app = new WebApplication();\n"
-                + "        ObjectMapper mapper = JsonMapper.builder().build();\n\n"
-                + "        // Routes are defined in the generated RoutesDef class, which the LLM\n"
-                + "        // writes alongside the controllers. The static routes() method returns\n"
-                + "        // a compiled Routes instance.\n"
-                + "        Routes routes = RoutesDef.routes();\n\n"
-                + "        app.use(new DefaultCharsetMiddleware());\n"
-                + "        app.use(new TraceMiddleware<>());\n"
-                + "        app.use(new ContentTypeMiddleware());\n"
-                + "        app.use(new ParamsMiddleware());\n"
-                + "        app.use(new NestedParamsMiddleware());\n"
-                + "        app.use(new CookiesMiddleware());\n"
-                + "        app.use(new ContentNegotiationMiddleware());\n"
-                + "        app.use(new RoutingMiddleware(routes));\n"
-                + "        app.use(new JooqDslContextMiddleware<>());\n"
-                + "        app.use(new JooqTransactionMiddleware<>());\n"
-                + "        app.use(new FormMiddleware());\n"
-                + "        app.use(builder(new SerDesMiddleware<>())\n"
-                + "                .set(SerDesMiddleware::setBodyWriters,\n"
-                + "                        new MessageBodyWriter[]{\n"
-                + "                                new ToStringBodyWriter(),\n"
-                + "                                new JsonBodyWriter<>(mapper)})\n"
-                + "                .set(SerDesMiddleware::setBodyReaders,\n"
-                + "                        new JsonBodyReader<>(mapper))\n"
-                + "                .build());\n"
-                + "        app.use(new ValidateBodyMiddleware<>());\n"
-                + "        app.use(new ControllerInvokerMiddleware<>(injector));\n\n"
-                + "        return app;\n"
-                + "    }\n"
-                + "}\n";
+        return """
+                package %1$s;
+
+                import %1$s.jaxrs.JsonBodyReader;
+                import %1$s.jaxrs.JsonBodyWriter;
+                import enkan.Application;
+                import enkan.config.ApplicationFactory;
+                import enkan.middleware.jooq.JooqDslContextMiddleware;
+                import enkan.middleware.jooq.JooqTransactionMiddleware;
+                import enkan.system.inject.ComponentInjector;
+                import enkan.web.application.WebApplication;
+                import enkan.web.data.HttpRequest;
+                import enkan.web.data.HttpResponse;
+                import enkan.web.middleware.ContentNegotiationMiddleware;
+                import enkan.web.middleware.ContentTypeMiddleware;
+                import enkan.web.middleware.CookiesMiddleware;
+                import enkan.web.middleware.DefaultCharsetMiddleware;
+                import enkan.web.middleware.NestedParamsMiddleware;
+                import enkan.web.middleware.ParamsMiddleware;
+                import enkan.web.middleware.TraceMiddleware;
+                import jakarta.ws.rs.ext.MessageBodyWriter;
+                import kotowari.middleware.ControllerInvokerMiddleware;
+                import kotowari.middleware.FormMiddleware;
+                import kotowari.middleware.RoutingMiddleware;
+                import kotowari.middleware.SerDesMiddleware;
+                import kotowari.middleware.ValidateBodyMiddleware;
+                import kotowari.middleware.serdes.ToStringBodyWriter;
+                import kotowari.routing.Routes;
+                import tools.jackson.databind.ObjectMapper;
+                import tools.jackson.databind.json.JsonMapper;
+
+                import static enkan.util.BeanBuilder.builder;
+
+                public class %2$s implements ApplicationFactory<HttpRequest, HttpResponse> {
+                    @Override
+                    public Application<HttpRequest, HttpResponse> create(ComponentInjector injector) {
+                        WebApplication app = new WebApplication();
+                        ObjectMapper mapper = JsonMapper.builder().build();
+
+                        // Routes are defined in the generated RoutesDef class, which the LLM
+                        // writes alongside the controllers. The static routes() method returns
+                        // a compiled Routes instance.
+                        Routes routes = RoutesDef.routes();
+
+                        app.use(new DefaultCharsetMiddleware());
+                        app.use(new TraceMiddleware<>());
+                        app.use(new ContentTypeMiddleware());
+                        app.use(new ParamsMiddleware());
+                        app.use(new NestedParamsMiddleware());
+                        app.use(new CookiesMiddleware());
+                        app.use(new ContentNegotiationMiddleware());
+                        app.use(new RoutingMiddleware(routes));
+                        app.use(new JooqDslContextMiddleware<>());
+                        app.use(new JooqTransactionMiddleware<>());
+                        app.use(new FormMiddleware());
+                        app.use(builder(new SerDesMiddleware<>())
+                                .set(SerDesMiddleware::setBodyWriters,
+                                        new MessageBodyWriter[]{
+                                                new ToStringBodyWriter(),
+                                                new JsonBodyWriter<>(mapper)})
+                                .set(SerDesMiddleware::setBodyReaders,
+                                        new JsonBodyReader<>(mapper))
+                                .build());
+                        app.use(new ValidateBodyMiddleware<>());
+                        app.use(new ControllerInvokerMiddleware<>(injector));
+
+                        return app;
+                    }
+                }
+                """.formatted(basePackage, appFactoryClass);
     }
 
     /**
@@ -1756,34 +1916,42 @@ public class InitCommand implements SystemCommand {
      * {@code UrlFormEncodedBodyWriter}.
      */
     static String jsonBodyReaderTemplate(String basePackage) {
-        return "package " + basePackage + ".jaxrs;\n\n"
-                + "import jakarta.ws.rs.WebApplicationException;\n"
-                + "import jakarta.ws.rs.core.MediaType;\n"
-                + "import jakarta.ws.rs.core.MultivaluedMap;\n"
-                + "import jakarta.ws.rs.ext.MessageBodyReader;\n"
-                + "import tools.jackson.databind.ObjectMapper;\n\n"
-                + "import java.io.IOException;\n"
-                + "import java.io.InputStream;\n"
-                + "import java.lang.annotation.Annotation;\n"
-                + "import java.lang.reflect.Type;\n"
-                + "import java.util.Objects;\n\n"
-                + "public class JsonBodyReader<T> implements MessageBodyReader<T> {\n"
-                + "    private final ObjectMapper mapper;\n\n"
-                + "    public JsonBodyReader(ObjectMapper mapper) {\n"
-                + "        this.mapper = mapper;\n"
-                + "    }\n\n"
-                + "    @Override\n"
-                + "    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {\n"
-                + "        return Objects.equals(mediaType.getSubtype(), \"json\");\n"
-                + "    }\n\n"
-                + "    @Override\n"
-                + "    public T readFrom(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType,\n"
-                + "            MultivaluedMap<String, String> httpHeaders, InputStream entityStream)\n"
-                + "            throws IOException, WebApplicationException {\n"
-                + "        return mapper.readerFor(mapper.getTypeFactory().constructType(genericType))\n"
-                + "                .readValue(entityStream);\n"
-                + "    }\n"
-                + "}\n";
+        return """
+                package %s.jaxrs;
+
+                import jakarta.ws.rs.WebApplicationException;
+                import jakarta.ws.rs.core.MediaType;
+                import jakarta.ws.rs.core.MultivaluedMap;
+                import jakarta.ws.rs.ext.MessageBodyReader;
+                import tools.jackson.databind.ObjectMapper;
+
+                import java.io.IOException;
+                import java.io.InputStream;
+                import java.lang.annotation.Annotation;
+                import java.lang.reflect.Type;
+                import java.util.Objects;
+
+                public class JsonBodyReader<T> implements MessageBodyReader<T> {
+                    private final ObjectMapper mapper;
+
+                    public JsonBodyReader(ObjectMapper mapper) {
+                        this.mapper = mapper;
+                    }
+
+                    @Override
+                    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+                        return Objects.equals(mediaType.getSubtype(), "json");
+                    }
+
+                    @Override
+                    public T readFrom(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType,
+                            MultivaluedMap<String, String> httpHeaders, InputStream entityStream)
+                            throws IOException, WebApplicationException {
+                        return mapper.readerFor(mapper.getTypeFactory().constructType(genericType))
+                                .readValue(entityStream);
+                    }
+                }
+                """.formatted(basePackage);
     }
 
     /**
@@ -1791,34 +1959,42 @@ public class InitCommand implements SystemCommand {
      * rationale. The pair is needed for the SerDes middleware to negotiate {@code application/json}.
      */
     static String jsonBodyWriterTemplate(String basePackage) {
-        return "package " + basePackage + ".jaxrs;\n\n"
-                + "import jakarta.ws.rs.WebApplicationException;\n"
-                + "import jakarta.ws.rs.core.MediaType;\n"
-                + "import jakarta.ws.rs.core.MultivaluedMap;\n"
-                + "import jakarta.ws.rs.ext.MessageBodyWriter;\n"
-                + "import tools.jackson.databind.ObjectMapper;\n\n"
-                + "import java.io.IOException;\n"
-                + "import java.io.OutputStream;\n"
-                + "import java.lang.annotation.Annotation;\n"
-                + "import java.lang.reflect.Type;\n"
-                + "import java.util.Objects;\n\n"
-                + "public class JsonBodyWriter<T> implements MessageBodyWriter<T> {\n"
-                + "    private final ObjectMapper mapper;\n\n"
-                + "    public JsonBodyWriter(ObjectMapper mapper) {\n"
-                + "        this.mapper = mapper;\n"
-                + "    }\n\n"
-                + "    @Override\n"
-                + "    public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {\n"
-                + "        return Objects.equals(mediaType.getSubtype(), \"json\");\n"
-                + "    }\n\n"
-                + "    @Override\n"
-                + "    public void writeTo(T o, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType,\n"
-                + "            MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream)\n"
-                + "            throws IOException, WebApplicationException {\n"
-                + "        mapper.writerFor(mapper.getTypeFactory().constructType(genericType))\n"
-                + "                .writeValue(entityStream, o);\n"
-                + "    }\n"
-                + "}\n";
+        return """
+                package %s.jaxrs;
+
+                import jakarta.ws.rs.WebApplicationException;
+                import jakarta.ws.rs.core.MediaType;
+                import jakarta.ws.rs.core.MultivaluedMap;
+                import jakarta.ws.rs.ext.MessageBodyWriter;
+                import tools.jackson.databind.ObjectMapper;
+
+                import java.io.IOException;
+                import java.io.OutputStream;
+                import java.lang.annotation.Annotation;
+                import java.lang.reflect.Type;
+                import java.util.Objects;
+
+                public class JsonBodyWriter<T> implements MessageBodyWriter<T> {
+                    private final ObjectMapper mapper;
+
+                    public JsonBodyWriter(ObjectMapper mapper) {
+                        this.mapper = mapper;
+                    }
+
+                    @Override
+                    public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+                        return Objects.equals(mediaType.getSubtype(), "json");
+                    }
+
+                    @Override
+                    public void writeTo(T o, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType,
+                            MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream)
+                            throws IOException, WebApplicationException {
+                        mapper.writerFor(mapper.getTypeFactory().constructType(genericType))
+                                .writeValue(entityStream, o);
+                    }
+                }
+                """.formatted(basePackage);
     }
 
     /**
@@ -1835,12 +2011,18 @@ public class InitCommand implements SystemCommand {
         Map<String, String> cache = new LinkedHashMap<>();
         for (CompletableFuture<Map.Entry<String, String>> f : futures) {
             try {
-                Map.Entry<String, String> entry = f.join();
+                Map.Entry<String, String> entry = f.get(15, TimeUnit.SECONDS);
                 if (entry != null) {
                     cache.put(entry.getKey(), entry.getValue());
                 }
-            } catch (CompletionException | CancellationException e) {
+            } catch (java.util.concurrent.TimeoutException e) {
+                LOG.warn("Reference fetch timed out after 15 s");
+                f.cancel(true);
+            } catch (java.util.concurrent.ExecutionException | CancellationException e) {
                 LOG.warn("Reference fetch future failed unexpectedly", e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
         return cache;
@@ -1863,7 +2045,10 @@ public class InitCommand implements SystemCommand {
      * degrades gracefully, trading some guidance quality for robustness.
      */
     Map<String, String> loadInitReference() {
-        Map<String, String> cache = new LinkedHashMap<>();
+        if (initReferenceCache != null) {
+            return initReferenceCache;
+        }
+        Map<String, String> loaded = new LinkedHashMap<>();
         for (String resource : INIT_REFERENCE_RESOURCES) {
             try (var in = InitCommand.class.getResourceAsStream(resource)) {
                 if (in == null) {
@@ -1873,19 +2058,23 @@ public class InitCommand implements SystemCommand {
                 String content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
                 // Strip the leading slash so the section header reads more naturally.
                 String key = resource.startsWith("/") ? resource.substring(1) : resource;
-                cache.put(key, content);
+                loaded.put(key, content);
             } catch (IOException e) {
                 LOG.warn("Failed to load init reference resource: {}", resource, e);
             }
         }
-        return cache;
+        if (loaded.isEmpty()) {
+            LOG.warn("No init-reference resources could be loaded from the classpath. "
+                    + "Generator will proceed with degraded guidance quality.");
+        }
+        initReferenceCache = loaded;
+        return initReferenceCache;
     }
 
     private CompletableFuture<Map.Entry<String, String>> fetchReferenceAsync(String url) {
         String filename = url.substring(url.lastIndexOf('/') + 1);
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .version(HttpClient.Version.HTTP_1_1)
                 .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();
@@ -1906,7 +2095,6 @@ public class InitCommand implements SystemCommand {
     void verifyApiReachable(String apiUrl, String apiKey) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(apiUrl))
-                .version(HttpClient.Version.HTTP_1_1)
                 .timeout(Duration.ofSeconds(10))
                 .header("Authorization", "Bearer " + apiKey)
                 .GET()
@@ -1923,7 +2111,7 @@ public class InitCommand implements SystemCommand {
         return defaultValue;
     }
 
-    private String safeMessage(Throwable t) {
+    private static String safeMessage(Throwable t) {
         String message = t.getMessage();
         return (message == null || message.isBlank()) ? t.getClass().getSimpleName() : message;
     }
@@ -1988,7 +2176,7 @@ public class InitCommand implements SystemCommand {
     }
 
     static String inferProjectName(String description) {
-        String lower = description.toLowerCase();
+        String lower = description.toLowerCase(Locale.ROOT);
         String cleaned = lower.replaceAll("\\b(a|an|the|for|with|and|or|that|which|using|build|create|make|want|to|i)\\b", "")
                 .replaceAll("[^a-z0-9\\s]", "")
                 .trim()
