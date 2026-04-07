@@ -9,10 +9,26 @@ import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 
-import static enkan.system.ReplResponse.ResponseStatus.DONE;
-
+/**
+ * A {@link Transport} implementation that writes to {@code System.out} /
+ * {@code System.err}, used as the in-JShell {@code transport} variable when
+ * commands are dispatched via {@code __commands.get(name).execute(...)}.
+ *
+ * <p>Output written here is captured by {@link JShellIoProxy}'s line-capturing
+ * stream replacement and then re-broadcast through every registered
+ * {@link Transport} on the host side.
+ *
+ * <p>Historically this class also printed a chunk-delimiter sentinel
+ * ({@code "-----------------END------------------"}) after every {@code DONE}
+ * response so a consumer could split the stdout stream into per-command
+ * chunks. No consumer was ever implemented — the {@link JShellIoProxy} path
+ * readers only filtered it out — and in practice the delimiter leaked through
+ * to REPL clients whenever the filter was bypassed by an alternate broadcast
+ * route. The delimiter has been removed. Completion is now signalled purely
+ * via the {@code DONE} status flag on the {@link ReplResponse}, which the host
+ * already reads.
+ */
 public class SystemIoTransport implements Transport {
-    public static final String CHUNK_DELIMITER = "-----------------END------------------";
     private final BufferedReader reader;
 
     public SystemIoTransport() {
@@ -31,11 +47,6 @@ public class SystemIoTransport implements Transport {
             if (err != null) {
                 System.err.println(err);
                 System.err.flush();
-            }
-
-            if (response.getStatus().contains(DONE)) {
-                System.out.println(CHUNK_DELIMITER);
-                System.out.flush();
             }
         }
     }
