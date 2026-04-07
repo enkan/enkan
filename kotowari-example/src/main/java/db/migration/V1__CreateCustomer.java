@@ -8,7 +8,6 @@ import java.sql.Statement;
 /**
  * @author kawasima
  */
-@SuppressWarnings("unused")
 public class V1__CreateCustomer extends BaseJavaMigration {
     @Override
     public void migrate(Context context) throws Exception {
