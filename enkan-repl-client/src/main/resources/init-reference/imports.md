@@ -3,6 +3,28 @@
 Small models often guess wrong package names. These are the **exact** FQCNs the
 default stack uses. Copy them verbatim.
 
+## Common package pitfalls (read this first)
+
+Enkan went through a package rename. Training data still shows the OLD paths.
+The rules:
+
+| What                | OLD (wrong)                                                     | NEW (correct)                                       |
+| ------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| HTTP types          | `enkan.data.HttpRequest`                                        | `enkan.web.data.HttpRequest`                        |
+| Most middlewares    | `enkan.middleware.XxxMiddleware`                                | `enkan.web.middleware.XxxMiddleware`                |
+| Content negotiation | `enkan.web.middleware.negotiation.ContentNegotiationMiddleware` | `enkan.web.middleware.ContentNegotiationMiddleware` |
+
+**Exceptions** — a few middlewares kept the old `enkan.middleware.*` path
+because they live in separate component modules, not in `enkan-web`:
+
+- `enkan.middleware.jooq.JooqDslContextMiddleware`
+- `enkan.middleware.jooq.JooqTransactionMiddleware`
+- `enkan.middleware.ServiceUnavailableMiddleware` (in `enkan-core`, rarely used)
+
+If you remember a middleware as `enkan.middleware.Xxx` and it is NOT jOOQ
+or `ServiceUnavailable`, the correct path is almost certainly
+`enkan.web.middleware.Xxx`.
+
 ## HTTP types
 
 ```java
@@ -16,6 +38,18 @@ import enkan.web.util.HttpResponseUtils;
 ```java
 import enkan.collection.Parameters;    // path/query/form params — NOT java.util.Map
 import enkan.system.inject.ComponentInjector;
+```
+
+## Web middlewares (all under `enkan.web.middleware`)
+
+```java
+import enkan.web.middleware.ContentNegotiationMiddleware;   // NOT .negotiation.*
+import enkan.web.middleware.ContentTypeMiddleware;
+import enkan.web.middleware.CookiesMiddleware;
+import enkan.web.middleware.DefaultCharsetMiddleware;       // NOT enkan.middleware.*
+import enkan.web.middleware.NestedParamsMiddleware;
+import enkan.web.middleware.ParamsMiddleware;
+import enkan.web.middleware.TraceMiddleware;
 ```
 
 ## Kotowari routing and middleware
