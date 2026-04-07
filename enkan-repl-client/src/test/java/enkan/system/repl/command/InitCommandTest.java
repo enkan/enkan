@@ -574,6 +574,83 @@ class InitCommandTest {
         assertThat(af).contains("import com.example.todo.jaxrs.JsonBodyWriter;");
     }
 
+    /**
+     * Regression guard: ApplicationFactory must use the correct FQCN for every
+     * middleware it references. Previous versions used the pre-rename packages
+     * {@code enkan.middleware.*} (most classes moved to {@code enkan.web.middleware.*})
+     * and {@code enkan.web.middleware.negotiation.ContentNegotiationMiddleware}
+     * (which actually lives directly under {@code enkan.web.middleware}). Those
+     * typos only surfaced when the generated project was actually compiled with mvn.
+     */
+    @Test
+    void applicationFactoryTemplateUsesCorrectMiddlewarePackages() {
+        String af = InitCommand.applicationFactoryTemplate("com.example.todo", "TodoApplicationFactory");
+
+        // enkan-web middlewares — ALL live directly under enkan.web.middleware
+        for (String cls : new String[]{
+                "DefaultCharsetMiddleware",
+                "TraceMiddleware",
+                "ContentTypeMiddleware",
+                "ParamsMiddleware",
+                "NestedParamsMiddleware",
+                "CookiesMiddleware",
+                "ContentNegotiationMiddleware",
+        }) {
+            assertThat(af)
+                    .as("%s must be imported from enkan.web.middleware", cls)
+                    .contains("import enkan.web.middleware." + cls + ";");
+        }
+
+        // No stale pre-rename package references.
+        assertThat(af).doesNotContain("import enkan.middleware.DefaultCharsetMiddleware");
+        assertThat(af).doesNotContain("import enkan.middleware.TraceMiddleware");
+        assertThat(af).doesNotContain("import enkan.middleware.ContentTypeMiddleware");
+        assertThat(af).doesNotContain("import enkan.web.middleware.negotiation.ContentNegotiationMiddleware");
+
+        // Kotowari middlewares — all under kotowari.middleware
+        for (String cls : new String[]{
+                "RoutingMiddleware",
+                "ControllerInvokerMiddleware",
+                "SerDesMiddleware",
+                "FormMiddleware",
+                "ValidateBodyMiddleware",
+        }) {
+            assertThat(af)
+                    .as("%s must be imported from kotowari.middleware", cls)
+                    .contains("import kotowari.middleware." + cls + ";");
+        }
+        assertThat(af).contains("import kotowari.middleware.serdes.ToStringBodyWriter;");
+
+        // jOOQ integration — lives in enkan.middleware.jooq (not enkan.web.middleware)
+        assertThat(af).contains("import enkan.middleware.jooq.JooqDslContextMiddleware;");
+        assertThat(af).contains("import enkan.middleware.jooq.JooqTransactionMiddleware;");
+
+        // Core framework types
+        assertThat(af).contains("import enkan.Application;");
+        assertThat(af).contains("import enkan.config.ApplicationFactory;");
+        assertThat(af).contains("import enkan.system.inject.ComponentInjector;");
+        assertThat(af).contains("import enkan.web.application.WebApplication;");
+        assertThat(af).contains("import enkan.web.data.HttpRequest;");
+        assertThat(af).contains("import enkan.web.data.HttpResponse;");
+
+        // Every import in the file should map to a class that is actually referenced
+        // somewhere after the import section — no dead imports (e.g. the old
+        // ServiceUnavailableMiddleware import that slipped through).
+        String[] lines = af.split("\n");
+        int classBodyStart = af.indexOf("public class ");
+        assertThat(classBodyStart).isGreaterThan(0);
+        String classBody = af.substring(classBodyStart);
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("import ") || trimmed.startsWith("import static ")) continue;
+            String withoutSemicolon = trimmed.substring("import ".length()).replace(";", "");
+            String simpleName = withoutSemicolon.substring(withoutSemicolon.lastIndexOf('.') + 1);
+            assertThat(classBody)
+                    .as("import %s has no usage in the class body", simpleName)
+                    .contains(simpleName);
+        }
+    }
+
     @Test
     void jsonBodyReaderAndWriterTemplatesLandInJaxrsSubPackage() {
         String reader = InitCommand.jsonBodyReaderTemplate("com.example.todo");
