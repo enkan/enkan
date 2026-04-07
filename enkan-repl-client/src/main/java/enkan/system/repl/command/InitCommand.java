@@ -24,7 +24,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
@@ -191,8 +193,27 @@ public class InitCommand implements SystemCommand {
                 transport.sendErr("Group ID '" + groupId + "' contains invalid characters. Use only alphanumerics, dots, hyphens, and underscores.");
                 return false;
             }
+            // Each dot-separated segment of groupId must be a valid Java package identifier
+            // (starts with a letter/underscore, contains only letters/digits/underscores).
+            // Hyphens are allowed by Maven but are not valid in Java package names.
+            for (String seg : groupId.split("\\.", -1)) {
+                if (seg.isEmpty() || !Character.isJavaIdentifierStart(seg.charAt(0))
+                        || !seg.chars().allMatch(Character::isJavaIdentifierPart)) {
+                    transport.sendErr("Group ID segment '" + seg + "' is not a valid Java package identifier.");
+                    transport.sendErr("  Each dot-separated segment must start with a letter or '_' and contain only letters, digits, or '_'.");
+                    return false;
+                }
+            }
             if (!SAFE_ARTIFACT_PATTERN.matcher(projectName).matches()) {
                 transport.sendErr("Project name '" + projectName + "' contains invalid characters. Use only alphanumerics, hyphens, and underscores (no dots).");
+                return false;
+            }
+            // normalizeProjectName strips hyphens/underscores to form class names; verify
+            // the result is a valid Java identifier (non-empty and starts with a letter).
+            String normalizedName = normalizeProjectName(projectName);
+            if (normalizedName.isEmpty() || !Character.isJavaIdentifierStart(normalizedName.charAt(0))) {
+                transport.sendErr("Project name '" + projectName + "' produces an invalid Java class name after normalization ('" + normalizedName + "').");
+                transport.sendErr("  Use a name that starts with a letter after removing hyphens and underscores.");
                 return false;
             }
             String outputDir = askWithDefault(transport,
@@ -1030,11 +1051,32 @@ public class InitCommand implements SystemCommand {
                     .directory(outPath.toFile())
                     .redirectErrorStream(true)
                     .start();
-            String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            // Drain stdout/stderr concurrently so the child never blocks on a full
+            // pipe buffer — if we called readAllBytes() first and only then waitFor(),
+            // a hung Maven invocation would block readAllBytes() indefinitely and the
+            // timeout would never fire.
+            final Process p = proc;
+            CompletableFuture<byte[]> outputFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return p.getInputStream().readAllBytes();
+                } catch (IOException e) {
+                    return new byte[0];
+                }
+            });
             boolean finished = proc.waitFor(MVN_PHASE_TIMEOUT_MINUTES, TimeUnit.MINUTES);
             if (!finished) {
+                outputFuture.cancel(true);
                 return new BuildResult(phase, "mvn " + String.join(" ", mvnArgs)
                         + " timed out after " + MVN_PHASE_TIMEOUT_MINUTES + " minutes.");
+            }
+            String output;
+            try {
+                output = new String(outputFuture.get(5, TimeUnit.SECONDS), StandardCharsets.UTF_8);
+            } catch (TimeoutException e) {
+                outputFuture.cancel(true);
+                output = "";
+            } catch (ExecutionException e) {
+                output = "";
             }
             int exitCode = proc.exitValue();
             if (exitCode == 0) return new BuildResult(phase, null);
@@ -1802,13 +1844,25 @@ public class InitCommand implements SystemCommand {
             proc = new ProcessBuilder("mvn", "-v")
                     .redirectErrorStream(true)
                     .start();
-            // Drain output to avoid the child blocking on a full pipe.
-            proc.getInputStream().readAllBytes();
+            // Drain stdout/stderr concurrently: readAllBytes() blocks until EOF (process
+            // exit), so calling it before waitFor() would make the 10 s timeout useless.
+            final Process p = proc;
+            CompletableFuture<Void> drain = CompletableFuture.runAsync(() -> {
+                try { p.getInputStream().readAllBytes(); } catch (IOException ignored) { }
+            });
             // Cap at 10 s: a slow Maven wrapper download should not block /init forever.
             boolean finished = proc.waitFor(10, TimeUnit.SECONDS);
             if (!finished) {
                 LOG.warn("mvn -v timed out after 10 s");
-            } else if (proc.exitValue() == 0) {
+            }
+            // destroyForcibly() closes the process stream, which unblocks readAllBytes()
+            // in the drain thread. We call it here (before drain.get) so the drain
+            // thread can finish promptly. The finally block is a no-op if proc is null.
+            proc.destroyForcibly();
+            // Wait up to 1 s for the drain thread to finish. cancel(true) would not
+            // interrupt a thread blocked in readAllBytes(), so we wait instead.
+            try { drain.get(1, TimeUnit.SECONDS); } catch (Exception ignored) { }
+            if (finished && p.exitValue() == 0) {
                 return true;
             }
         } catch (InterruptedException e) {

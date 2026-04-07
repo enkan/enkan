@@ -138,7 +138,10 @@ public class ReplClient {
             //     must close it in its finally block.
             final AtomicBoolean monitorSocketOwned = new AtomicBoolean(true); // true = monitor thread owns it
             final AtomicBoolean handshakeSeen = new AtomicBoolean(false);
-            ZThread.fork(ctx, (args, c, pipe) -> {
+            // Use ZThread.start (IDetachedRunnable) instead of ZThread.fork so no
+            // parent-side PAIR pipe socket is allocated — the monitor thread does not
+            // use the pipe at all, and the socket returned by fork() would be leaked.
+            ZThread.start(args -> {
                 int retryCnt = 0;
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
