@@ -68,6 +68,11 @@ class InitCommandTest {
             }
 
             @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                return true;
+            }
+
+            @Override
             String reviewPlanInteractively(Transport transport, String description, String projectName, String groupId, String outputDir) {
                 return "approved-plan";
             }
@@ -82,10 +87,12 @@ class InitCommandTest {
         transport.inputs.add("com.example");
         transport.inputs.add("./todo");
         System.setProperty("enkan.ai.apiKey", "dummy-key");
+        System.setProperty("enkan.version", "1.0.0-TEST");
         try {
             command.execute(EnkanSystem.of(), transport);
         } finally {
             System.clearProperty("enkan.ai.apiKey");
+            System.clearProperty("enkan.version");
         }
 
         assertThat(transport.promptLines)
@@ -96,19 +103,27 @@ class InitCommandTest {
 
     @Test
     void cancelsImmediatelyWhenPromptInputIsInterrupted() {
-        // Explicit verifyApiReachable override to keep the test independent from real connectivity.
+        // Explicit overrides to keep the test independent from real connectivity,
+        // the mvn executable, and the enkan version resolution.
         InitCommand command = new InitCommand() {
             @Override
             void verifyApiReachable(String apiUrl, String apiKey) {
+            }
+
+            @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                return true;
             }
         };
         CapturingTransport transport = new CapturingTransport();
         // No inputs queued → recv() returns null → PromptAbortedException path
         System.setProperty("enkan.ai.apiKey", "dummy-key");
+        System.setProperty("enkan.version", "1.0.0-TEST");
         try {
             command.execute(EnkanSystem.of(), transport);
         } finally {
             System.clearProperty("enkan.ai.apiKey");
+            System.clearProperty("enkan.version");
         }
 
         assertThat(transport.errLines).anyMatch(line -> line.contains("Init cancelled."));
@@ -981,5 +996,99 @@ class InitCommandTest {
         assertThat(planner).contains("RoutesDef");
         // The planner should also clearly separate legacy references.
         assertThat(planner).contains("LEGACY REFERENCE");
+    }
+
+    // ------------------------------------------------------------------------
+    //  Pre-flight checks: mvn availability + SNAPSHOT handling
+    // ------------------------------------------------------------------------
+
+    @Test
+    void executeAbortsWhenMavenMissing() {
+        InitCommand cmd = new InitCommand() {
+            @Override
+            void verifyApiReachable(String apiUrl, String apiKey) {
+            }
+
+            @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                transport.sendErr("Maven (mvn) is required but was not found on PATH.");
+                return false;
+            }
+        };
+        CapturingTransport transport = new CapturingTransport();
+        System.setProperty("enkan.ai.apiKey", "dummy-key");
+        try {
+            boolean result = cmd.execute(EnkanSystem.of(), transport);
+            assertThat(result).isFalse();
+        } finally {
+            System.clearProperty("enkan.ai.apiKey");
+        }
+
+        // Aborted before asking the user any questions.
+        assertThat(transport.promptLines).isEmpty();
+        assertThat(transport.recvCount).isZero();
+        assertThat(transport.errLines).anyMatch(l -> l.contains("Maven"));
+    }
+
+    @Test
+    void executeAbortsWhenEnkanVersionUnresolvable() {
+        InitCommand cmd = new InitCommand() {
+            @Override
+            void verifyApiReachable(String apiUrl, String apiKey) {
+            }
+
+            @Override
+            boolean verifyMavenAvailable(Transport transport) {
+                return true;
+            }
+        };
+        CapturingTransport transport = new CapturingTransport();
+        System.setProperty("enkan.ai.apiKey", "dummy-key");
+        // Intentionally do NOT set enkan.version → enkanVersion() returns "UNKNOWN"
+        // in the test classpath, exercising the abort branch.
+        try {
+            boolean result = cmd.execute(EnkanSystem.of(), transport);
+            assertThat(result).isFalse();
+        } finally {
+            System.clearProperty("enkan.ai.apiKey");
+        }
+
+        assertThat(transport.promptLines).isEmpty();
+        assertThat(transport.errLines).anyMatch(l -> l.contains("Cannot determine Enkan version"));
+    }
+
+    @Test
+    void resolveEnkanVersionDoesNotWarnWhenSnapshotOverrideIsExplicit() {
+        // When the user sets -Denkan.version=x.y.z-SNAPSHOT, they have explicitly
+        // opted into SNAPSHOTs, so no warning fires — the override itself is the
+        // acknowledgment.
+        InitCommand cmd = new InitCommand();
+        CapturingTransport transport = new CapturingTransport();
+        System.setProperty("enkan.version", "0.14.2-SNAPSHOT");
+        try {
+            String v = cmd.resolveEnkanVersionOrAbort(transport);
+            assertThat(v).isEqualTo("0.14.2-SNAPSHOT");
+        } finally {
+            System.clearProperty("enkan.version");
+        }
+
+        assertThat(String.join("\n", transport.outLines))
+                .doesNotContain("SNAPSHOT version");
+    }
+
+    @Test
+    void pomTemplateIncludesSnapshotNoteWhenVersionIsSnapshot() {
+        String pom = InitCommand.pomTemplate("com.example", "todo", "com.example.todo", "0.14.2-SNAPSHOT");
+        assertThat(pom).contains("NOTE: enkan.version is a SNAPSHOT");
+        assertThat(pom).contains("<enkan.version>0.14.2-SNAPSHOT</enkan.version>");
+    }
+
+    @Test
+    void pomTemplateOmitsSnapshotNoteForReleasedVersion() {
+        String pom = InitCommand.pomTemplate("com.example", "todo", "com.example.todo", "0.14.1");
+        // The generated project's own version is "0.1.0-SNAPSHOT", so "SNAPSHOT"
+        // appears at least once — but the *enkan-version note* must not appear.
+        assertThat(pom).doesNotContain("NOTE: enkan.version is a SNAPSHOT");
+        assertThat(pom).contains("<enkan.version>0.14.1</enkan.version>");
     }
 }

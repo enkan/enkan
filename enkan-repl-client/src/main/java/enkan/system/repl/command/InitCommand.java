@@ -156,6 +156,15 @@ public class InitCommand implements SystemCommand {
             return false;
         }
 
+        // Pre-flight: fail fast BEFORE asking the user for project details, so they do
+        // not waste time answering prompts for a generation run that can't finish.
+        if (!verifyMavenAvailable(transport)) {
+            return false;
+        }
+        if (resolveEnkanVersionOrAbort(transport) == null) {
+            return false;
+        }
+
         try {
             transport.sendOut(section("Project Setup"));
             String description = askRequired(transport,
@@ -652,10 +661,16 @@ public class InitCommand implements SystemCommand {
      *     to have validated it via {@link #resolveEnkanVersionOrAbort(Transport)}.
      */
     static String pomTemplate(String groupId, String projectName, String basePackage, String enkanVersion) {
+        String snapshotNote = enkanVersion.endsWith("-SNAPSHOT")
+                ? "\n    <!-- NOTE: enkan.version is a SNAPSHOT. Maven Central does not host SNAPSHOTs.\n"
+                + "         Run `mvn install` on the enkan source tree first, or override with\n"
+                + "         -Denkan.version=<released-version>. -->\n"
+                : "";
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"\n"
                 + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
                 + "         xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n"
+                + snapshotNote
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + groupId + "</groupId>\n"
                 + "    <artifactId>" + projectName + "</artifactId>\n"
@@ -1602,6 +1617,12 @@ public class InitCommand implements SystemCommand {
     /**
      * Resolves the Enkan version and, when unavailable, prints a user-actionable error
      * to the transport and returns {@code null}. Callers should abort on null.
+     *
+     * <p>A SNAPSHOT version is not an abort — the REPL may be running from a locally
+     * built enkan-repl-client against a locally installed snapshot of every enkan
+     * component — but the user gets a clear warning so they can diagnose "unresolved
+     * dependency" errors later. A user who just downloaded a release build of
+     * {@code enkan-repl} never sees the warning.
      */
     String resolveEnkanVersionOrAbort(Transport transport) {
         String v = enkanVersion();
@@ -1611,7 +1632,45 @@ public class InitCommand implements SystemCommand {
             transport.sendErr("  (or set the ENKAN_VERSION environment variable).");
             return null;
         }
+        if (v.endsWith("-SNAPSHOT") && System.getProperty("enkan.version") == null
+                && System.getenv("ENKAN_VERSION") == null) {
+            transport.sendOut(YELLOW + "⚠ Using SNAPSHOT version " + v + "." + RESET + "\n");
+            transport.sendOut(DIM + "  Maven Central does not host SNAPSHOT artifacts. The generated project\n"
+                    + "  will only build if you have run `mvn install` on the full enkan tree,\n"
+                    + "  or if you override with -Denkan.version=<released-version>.\n" + RESET);
+        }
         return v;
+    }
+
+    /**
+     * Verifies that the {@code mvn} executable is reachable on {@code PATH}. The
+     * generator relies on Maven both to validate the generated POM and to compile
+     * the project in the fix loop; there is no point continuing without it.
+     *
+     * <p>Prints an actionable error and returns {@code false} when Maven is missing,
+     * so the caller can abort {@code /init} before asking the user to fill in
+     * prompts for a run that cannot finish.
+     *
+     * @return {@code true} when {@code mvn -v} exits successfully, {@code false} otherwise
+     */
+    boolean verifyMavenAvailable(Transport transport) {
+        try {
+            Process proc = new ProcessBuilder("mvn", "-v")
+                    .redirectErrorStream(true)
+                    .start();
+            // Drain output to avoid the child blocking on a full pipe.
+            proc.getInputStream().readAllBytes();
+            int exitCode = proc.waitFor();
+            if (exitCode == 0) return true;
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            LOG.warn("Failed to locate mvn executable", e);
+        }
+        transport.sendErr("Maven (mvn) is required but was not found on PATH.");
+        transport.sendErr("  Install it from https://maven.apache.org/download.cgi");
+        transport.sendErr("  or via Homebrew (`brew install maven`), SDKMAN (`sdk install maven`),");
+        transport.sendErr("  or your system package manager (`apt install maven`, etc.).");
+        return false;
     }
 
     /**
