@@ -21,7 +21,7 @@ module enkan.web {
     requires transitive enkan.system;
     requires jakarta.cdi;
     requires jakarta.validation;
-    requires jakarta.ws.rs;
+    requires transitive jakarta.ws.rs;
     requires java.logging;
     requires static com.ibm.icu;
 

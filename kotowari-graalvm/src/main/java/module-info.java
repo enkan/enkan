@@ -3,10 +3,11 @@ module kotowari.graalvm {
     exports kotowari.graalvm;
 
     requires enkan.core;
-    requires enkan.web;
+    requires transitive enkan.system;
+    requires transitive enkan.web;
     requires jakarta.annotation;
-    requires kotowari;
-    requires org.graalvm.nativeimage;
+    requires transitive kotowari;
+    requires transitive org.graalvm.nativeimage;
 
     opens kotowari.graalvm;
     opens enkan.graalvm;

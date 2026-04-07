@@ -11,10 +11,10 @@ module enkan.system {
     requires transitive jakarta.inject;
     requires jakarta.annotation;
     requires jakarta.validation;
-    requires jakarta.transaction;
+    requires transitive jakarta.transaction;
     requires static java.desktop;  // optional: only used by StartCommand.execute() to open a browser
     requires java.logging;
-    requires java.sql;
+    requires transitive java.sql;
     requires org.crac;
     requires org.slf4j;
 }

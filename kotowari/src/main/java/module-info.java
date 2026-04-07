@@ -14,7 +14,6 @@ module kotowari {
     requires jakarta.cdi;
     requires jakarta.transaction;
     requires jakarta.validation;
-    requires jakarta.ws.rs;
     requires java.logging;
 
     // MixinUtils (enkan.core) needs privateLookupIn on interfaces in kotowari.data

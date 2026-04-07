@@ -12,7 +12,7 @@ module enkan.core {
     exports enkan.util;
 
     requires transitive jakarta.inject;
-    requires jakarta.cdi;
+    requires transitive jakarta.cdi;
     requires jakarta.validation;
     requires java.logging;
     requires org.slf4j;

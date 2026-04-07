@@ -4,7 +4,6 @@ import enkan.web.collection.Headers;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.data.StreamingBody;
-import enkan.exception.UnreachableException;
 import org.junit.jupiter.api.Test;
 
 import jakarta.servlet.ServletInputStream;

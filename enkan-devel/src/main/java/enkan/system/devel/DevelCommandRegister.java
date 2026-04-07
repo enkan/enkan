@@ -32,7 +32,6 @@ public class DevelCommandRegister implements SystemCommandRegister {
         registerOptionalInitCommand(repl);
     }
 
-    @SuppressWarnings("unchecked")
     private void registerOptionalInitCommand(Repl repl) {
         try {
             Class<?> clazz = Class.forName("enkan.system.repl.command.InitCommand");
