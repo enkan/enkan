@@ -774,4 +774,135 @@ class InitCommandTest {
 
         assertThat(InitCommand.parseManifest(response)).isEmpty();
     }
+
+    // ------------------------------------------------------------------------
+    //  init-reference classpath resources (Phase 1 static reference)
+    // ------------------------------------------------------------------------
+
+    @Test
+    void loadInitReferenceLoadsAllDeclaredResourcesFromClasspath() {
+        java.util.Map<String, String> refs = new InitCommand().loadInitReference();
+
+        // Every resource must load, be non-empty, and be keyed by its normalized path.
+        assertThat(refs).isNotEmpty();
+        assertThat(refs).containsKeys(
+                "init-reference/README.md",
+                "init-reference/imports.md",
+                "init-reference/patterns/routes.md",
+                "init-reference/patterns/controller.md",
+                "init-reference/patterns/raoh-decoder.md",
+                "init-reference/patterns/domain-record.md",
+                "init-reference/patterns/flyway-migration.md",
+                "init-reference/components/jooq.md",
+                "init-reference/components/overview.md");
+        refs.forEach((path, content) -> {
+            assertThat(content)
+                    .as("content for %s", path)
+                    .isNotBlank();
+        });
+    }
+
+    @Test
+    void loadInitReferenceDoesNotUseStaleResultDotOkSyntaxInCodeBlocks() {
+        // Regression guard: `Ok` and `Err` are top-level records in net.unit8.raoh,
+        // NOT nested in Result. Reference files are allowed to mention `Result.Ok`
+        // in anti-example text ("do NOT write ..."), but MUST NOT use it inside
+        // fenced code blocks, since that would teach the LLM the wrong pattern.
+        java.util.Map<String, String> refs = new InitCommand().loadInitReference();
+        refs.forEach((path, content) -> {
+            boolean inCode = false;
+            int lineNo = 0;
+            for (String line : content.split("\n", -1)) {
+                lineNo++;
+                if (line.trim().startsWith("```")) {
+                    inCode = !inCode;
+                    continue;
+                }
+                if (inCode) {
+                    assertThat(line)
+                            .as("file %s line %d (inside code block) must not use Result.Ok / Result.Err",
+                                    path, lineNo)
+                            .doesNotContain("Result.Ok")
+                            .doesNotContain("Result.Err");
+                }
+            }
+        });
+    }
+
+    @Test
+    void loadInitReferenceContainsKeyCanonicalTerms() {
+        java.util.Map<String, String> refs = new InitCommand().loadInitReference();
+        String combined = String.join("\n", refs.values());
+
+        // Routing + controller plumbing
+        assertThat(combined).contains("RoutesDef");
+        assertThat(combined).contains("Routes.define");
+        assertThat(combined).contains("jooqDslContext");
+        assertThat(combined).contains("request.getExtension(\"jooqDslContext\")");
+
+        // Raoh API — the exact decoders the LLM needs
+        assertThat(combined).contains("JooqRecordDecoders");
+        assertThat(combined).contains("combine(");
+        assertThat(combined).contains("field(");
+        assertThat(combined).contains("long_()");
+        assertThat(combined).contains("string()");
+        assertThat(combined).contains("bool()");
+
+        // Result sum type imports
+        assertThat(combined).contains("net.unit8.raoh.Ok");
+        assertThat(combined).contains("net.unit8.raoh.Err");
+
+        // HTTP type package — small models get this wrong
+        assertThat(combined).contains("enkan.web.data.HttpRequest");
+
+        // Transactional annotation source
+        assertThat(combined).contains("jakarta.transaction.Transactional");
+
+        // Flyway migration layout
+        assertThat(combined).contains("V1__");
+        assertThat(combined).contains("db/migration");
+    }
+
+    @Test
+    void generationPromptEmbedsCanonicalPatternContent() {
+        // Do NOT stub loadInitReference — we want to prove that the real classpath
+        // resources reach the prompt output.
+        InitCommand cmd = new InitCommand() {
+            @Override
+            java.util.Map<String, String> fetchAllReferences() {
+                return java.util.Map.of();  // skip GitHub fetch, keep classpath load
+            }
+        };
+        String[] prompts = cmd.buildPrompt("A TODO REST API", "todo", "com.example", Path.of("/tmp/todo"));
+        String sys = prompts[0];
+
+        // A line that is unique to each reference file, proving it was embedded.
+        assertThat(sys).contains("init-reference/patterns/routes.md");
+        assertThat(sys).contains("init-reference/patterns/controller.md");
+        assertThat(sys).contains("init-reference/patterns/raoh-decoder.md");
+        assertThat(sys).contains("Routes.define(r ->");
+        assertThat(sys).contains("Todo.DECODER");
+        assertThat(sys).contains("field(\"title\"");
+
+        // The "CANONICAL PATTERNS (authoritative" banner should be present so the
+        // LLM can find the section.
+        assertThat(sys).contains("CANONICAL PATTERNS");
+    }
+
+    @Test
+    void plannerPromptEmbedsCanonicalPatternContent() {
+        InitCommand cmd = new InitCommand() {
+            @Override
+            java.util.Map<String, String> fetchAllReferences() {
+                return java.util.Map.of();
+            }
+        };
+        String planner = cmd.buildPlannerSystemPrompt();
+
+        assertThat(planner).contains("CANONICAL PATTERNS");
+        assertThat(planner).contains("init-reference/patterns/routes.md");
+        assertThat(planner).contains("RoutesDef");
+        // The planner should also clearly separate legacy references.
+        assertThat(planner).contains("LEGACY REFERENCE");
+    }
 }

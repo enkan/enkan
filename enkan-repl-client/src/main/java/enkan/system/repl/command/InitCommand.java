@@ -93,6 +93,32 @@ public class InitCommand implements SystemCommand {
         GITHUB_RAW_BASE + "kotowari-example/pom.xml",
     };
 
+    /**
+     * Canonical copy-paste-ready patterns shipped with enkan-repl-client as classpath
+     * resources under {@code /init-reference/}. These are the single source of truth
+     * for what the generator expects the LLM to produce. They load synchronously on
+     * first use (no network), so the generator works fully offline and is not at the
+     * mercy of transient GitHub fetch failures.
+     *
+     * <p>Order matters — the list roughly follows a narrative flow (overview →
+     * imports → routes → controller → domain → decoder → migration → component
+     * specifics) so the prompt reads top-to-bottom for the LLM.
+     *
+     * <p>To add a new reference file: create it under
+     * {@code src/main/resources/init-reference/} and append its path here.
+     */
+    private static final String[] INIT_REFERENCE_RESOURCES = {
+        "/init-reference/README.md",
+        "/init-reference/components/overview.md",
+        "/init-reference/imports.md",
+        "/init-reference/patterns/routes.md",
+        "/init-reference/patterns/controller.md",
+        "/init-reference/patterns/domain-record.md",
+        "/init-reference/patterns/raoh-decoder.md",
+        "/init-reference/patterns/flyway-migration.md",
+        "/init-reference/components/jooq.md",
+    };
+
     private static class PromptAbortedException extends RuntimeException {
         private static final long serialVersionUID = 1L;
     }
@@ -261,10 +287,29 @@ public class InitCommand implements SystemCommand {
                   - Domain records / Raoh decoders
                   - src/main/resources/db/migration/V1__<name>.sql — H2-compatible DDL
 
+                == CANONICAL PATTERNS (authoritative — copy these verbatim) ==
+                These are the single source of truth for API shapes. Older examples
+                you may remember from training (Doma2, JPA, Spring) are WRONG for
+                this stack. When in doubt, copy from these files.
+
+                """);
+
+        loadInitReference().forEach((path, content) -> {
+            sys.append("### ").append(path).append("\n");
+            sys.append(content).append("\n\n");
+        });
+
+        sys.append("""
+                == LEGACY REFERENCE (architectural context only) ==
+                The files below are fetched from the kotowari-example project. They
+                use Doma2, NOT jOOQ — read them to understand the middleware
+                ordering and component wiring, but NEVER import from
+                kotowari.example.* and NEVER copy Doma2 code.
+
                 """);
 
         getOrFetchReferenceCache().forEach((filename, content) -> {
-            sys.append("## ").append(filename).append(" (architectural example, uses Doma2 — substitute jOOQ)\n");
+            sys.append("#### ").append(filename).append(" (uses Doma2 — substitute jOOQ)\n");
             sys.append("```\n").append(content).append("\n```\n\n");
         });
 
@@ -1409,45 +1454,29 @@ public class InitCommand implements SystemCommand {
 
         if (defaultStack) {
             sys.append("""
-                    == Raoh + jOOQ DECODER PATTERN (CANONICAL EXAMPLE) ==
-                    ```java
-                    import net.unit8.raoh.Result;
-                    import net.unit8.raoh.decode.Decoder;
-                    import org.jooq.Record;
-
-                    import static net.unit8.raoh.decode.ObjectDecoders.*;
-                    import static net.unit8.raoh.jooq.JooqRecordDecoders.combine;
-                    import static net.unit8.raoh.jooq.JooqRecordDecoders.field;
-
-                    public record Todo(Long id, String title, boolean completed) {
-                        public static final Decoder<Record, Todo> DECODER = combine(
-                                field("id",        long_()),
-                                field("title",     string()),
-                                field("completed", bool())
-                        ).map(Todo::new);
-                    }
-                    ```
-                    In the controller:
-                    ```java
-                    DSLContext dsl = request.getExtension("jooqDslContext");
-                    var records = dsl.select().from(table("todos")).fetch();
-                    var todos = records.stream()
-                            .map(Todo.DECODER::decode)
-                            .flatMap(r -> switch (r) {
-                                case Result.Ok<Todo>(var t) -> java.util.stream.Stream.of(t);
-                                case Result.Err<Todo> err -> java.util.stream.Stream.empty();
-                            })
-                            .toList();
-                    ```
+                    == CANONICAL PATTERNS (authoritative — copy these verbatim) ==
+                    The files below are the single source of truth for API shapes in
+                    the default jOOQ+Raoh stack. Training-data memory of Doma2, JPA,
+                    Spring Data, Lombok, etc. is WRONG for this stack. When in doubt,
+                    copy from these files rather than from anything else you remember.
 
                     """);
+            loadInitReference().forEach((path, content) -> {
+                sys.append("### ").append(path).append("\n");
+                sys.append(content).append("\n\n");
+            });
         }
 
         sys.append("""
-                == REFERENCE FILES (architectural examples — do NOT import from them) ==
+                == LEGACY REFERENCE FILES (architectural context only) ==
+                These are fetched from the kotowari-example project. They use Doma2,
+                NOT jOOQ. Read them to understand middleware ordering and component
+                wiring — but NEVER import from `kotowari.example.*` and NEVER copy
+                Doma2 code.
+
                 """);
         getOrFetchReferenceCache().forEach((filename, content) -> {
-            sys.append("### ").append(filename).append(" (uses Doma2 — substitute jOOQ)\n");
+            sys.append("#### ").append(filename).append(" (uses Doma2 — substitute jOOQ)\n");
             sys.append("```\n").append(content).append("\n```\n\n");
         });
 
@@ -1754,6 +1783,41 @@ public class InitCommand implements SystemCommand {
                 }
             } catch (CompletionException | CancellationException e) {
                 LOG.warn("Reference fetch future failed unexpectedly", e);
+            }
+        }
+        return cache;
+    }
+
+    /**
+     * Loads the canonical init-reference markdown files from the classpath. Unlike
+     * {@link #fetchAllReferences()} (which talks to GitHub over HTTP), this is
+     * synchronous, offline, and guaranteed to succeed as long as the
+     * enkan-repl-client jar is intact.
+     *
+     * <p>Keys in the returned map are the resource paths (e.g.
+     * {@code "init-reference/patterns/routes.md"}) so the prompt section headers
+     * make it obvious where each snippet came from. Preserves the declaration order
+     * of {@link #INIT_REFERENCE_RESOURCES}.
+     *
+     * <p>Any resource that cannot be read (shouldn't happen in a packaged jar but
+     * might during tests running from raw class directories if a file is missing)
+     * is skipped with a warning rather than aborting {@code /init} — the generator
+     * degrades gracefully, trading some guidance quality for robustness.
+     */
+    Map<String, String> loadInitReference() {
+        Map<String, String> cache = new LinkedHashMap<>();
+        for (String resource : INIT_REFERENCE_RESOURCES) {
+            try (var in = InitCommand.class.getResourceAsStream(resource)) {
+                if (in == null) {
+                    LOG.warn("Init reference resource not found on classpath: {}", resource);
+                    continue;
+                }
+                String content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                // Strip the leading slash so the section header reads more naturally.
+                String key = resource.startsWith("/") ? resource.substring(1) : resource;
+                cache.put(key, content);
+            } catch (IOException e) {
+                LOG.warn("Failed to load init reference resource: {}", resource, e);
             }
         }
         return cache;
