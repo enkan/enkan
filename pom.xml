@@ -5,7 +5,7 @@
 
     <groupId>net.unit8.enkan</groupId>
     <artifactId>enkan-parent</artifactId>
-    <version>0.14.2-SNAPSHOT</version>
+    <version>0.15.0</version>
     <packaging>pom</packaging>
 
     <name>enkan-parent</name>
@@ -23,7 +23,7 @@
             -XX:+EnableDynamicAgentLoading
         </surefire.argLine.common>
 
-        <enkan.version>0.14.2-SNAPSHOT</enkan.version>
+        <enkan.version>0.15.0</enkan.version>
         <maven.version>3.6.3</maven.version>
 
         <!-- Maven Plugin-->

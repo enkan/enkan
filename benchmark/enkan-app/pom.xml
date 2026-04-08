@@ -12,7 +12,7 @@
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <enkan.version>0.14.2-SNAPSHOT</enkan.version>
+        <enkan.version>0.15.0</enkan.version>
     </properties>
 
     <dependencies>
