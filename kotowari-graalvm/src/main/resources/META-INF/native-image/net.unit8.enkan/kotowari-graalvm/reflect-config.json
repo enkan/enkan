@@ -1,78 +1,78 @@
 [
   {
-    "type": "enkan.component.ApplicationComponent",
+    "name": "enkan.component.ApplicationComponent",
     "allDeclaredConstructors": true
   },
   {
-    "type": "enkan.data.Routable",
+    "name": "enkan.data.Routable",
     "allDeclaredMethods": true
   },
   {
-    "type": "enkan.data.SessionAvailable",
+    "name": "enkan.data.SessionAvailable",
     "allDeclaredMethods": true
   },
   {
-    "type": "enkan.data.FlashAvailable",
+    "name": "enkan.data.FlashAvailable",
     "allDeclaredMethods": true
   },
   {
-    "type": "enkan.data.ContentNegotiable",
+    "name": "enkan.data.ContentNegotiable",
     "allDeclaredMethods": true
   },
   {
-    "type": "enkan.middleware.ContentNegotiationMiddleware"
+    "name": "enkan.middleware.ContentNegotiationMiddleware"
   },
   {
-    "type": "enkan.middleware.ContentTypeMiddleware"
+    "name": "enkan.middleware.ContentTypeMiddleware"
   },
   {
-    "type": "enkan.middleware.CookiesMiddleware"
+    "name": "enkan.middleware.CookiesMiddleware"
   },
   {
-    "type": "enkan.middleware.DefaultCharsetMiddleware"
+    "name": "enkan.middleware.DefaultCharsetMiddleware"
   },
   {
-    "type": "enkan.middleware.ParamsMiddleware"
+    "name": "enkan.middleware.ParamsMiddleware"
   },
   {
-    "type": "enkan.middleware.ResourceMiddleware"
+    "name": "enkan.middleware.ResourceMiddleware"
   },
   {
-    "type": "kotowari.graalvm.NativeControllerInvokerMiddleware",
+    "name": "kotowari.graalvm.NativeControllerInvokerMiddleware",
     "methods": [
       {"name": "setupParameterInjectors", "parameterTypes": []}
     ]
   },
   {
-    "type": "kotowari.inject.parameter.HttpRequestInjector",
+    "name": "kotowari.inject.parameter.HttpRequestInjector",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
   {
-    "type": "kotowari.inject.parameter.BodySerializableInjector",
+    "name": "kotowari.inject.parameter.BodySerializableInjector",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
   {
-    "type": "kotowari.inject.parameter.MapInjector",
+    "name": "kotowari.inject.parameter.MapInjector",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
   {
-    "type": "kotowari.inject.parameter.FormInjector",
+    "name": "kotowari.inject.parameter.FormInjector",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
   {
-    "type": "kotowari.inject.parameter.PrincipalInjector",
+    "name": "kotowari.inject.parameter.PrincipalInjector",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
   {
-    "type": "kotowari.middleware.RoutingMiddleware"
+    "name": "kotowari.middleware.RoutingMiddleware"
   },
   {
-    "type": "kotowari.middleware.SerDesMiddleware",
+    "name": "kotowari.middleware.SerDesMiddleware",
     "fields": [{"name": "beans"}],
     "methods": [
       {"name": "loadReaderAndWriter", "parameterTypes": []}

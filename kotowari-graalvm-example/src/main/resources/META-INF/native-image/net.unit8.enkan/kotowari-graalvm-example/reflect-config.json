@@ -1,6 +1,6 @@
 [
   {
-    "type": "org.hibernate.validator.HibernateValidator",
+    "name": "org.hibernate.validator.HibernateValidator",
     "allDeclaredConstructors": true
   }
 ]
