@@ -37,6 +37,7 @@ app.use(new ServiceUnavailableMiddleware(serviceUnavailableEndpoint));
 |Name    |Type    |Description|
 |:-------|:-------|:-----------|
 |endpoint|Endpoint|Returns the response when service is unavailable.|
+
 ## Web
 
 enkan-web package has middlewares as follows:
@@ -119,6 +120,42 @@ Parses `Cookie` header and sets the `Set-Cookie` header to the response.
 app.use(new CookiesMiddleware());
 ```
 
+### CspNonce
+
+Generates a cryptographically random per-request CSP nonce (128-bit, Base64url-encoded) and
+injects it into the `Content-Security-Policy` `script-src` directive.
+
+Place **before** `SecurityHeadersMiddleware` so the nonce is injected into the CSP header that
+`SecurityHeadersMiddleware` adds.
+
+The nonce is available to controllers and templates via:
+
+```java
+String nonce = request.getExtension(CspNonceMiddleware.EXTENSION_KEY); // "cspNonce"
+```
+
+#### Usage
+
+```java
+CspNonceMiddleware nonce = new CspNonceMiddleware();
+nonce.setStrictDynamic(true); // adds 'strict-dynamic' to script-src
+app.use(nonce);
+app.use(new SecurityHeadersMiddleware()); // downstream
+```
+
+```html
+<!-- Thymeleaf / Freemarker template -->
+<script th:nonce="${#request.getExtension('cspNonce')}">
+  // inline script
+</script>
+```
+
+#### Properties
+
+| Name | Type | Default | Description |
+|:---|:---|:---|:---|
+| `strictDynamic` | `boolean` | `false` | Adds `'strict-dynamic'` to the `script-src` directive |
+
 ### DefaultCharset
 
 Adds the default charset to the response.
@@ -128,6 +165,47 @@ Adds the default charset to the response.
 ```java
 app.use(new DefaultCharsetMiddleware());
 ```
+
+### DigestValidation
+
+Validates `Content-Digest` and `Repr-Digest` request headers per
+[RFC 9530](https://www.rfc-editor.org/rfc/rfc9530). Supports `sha-256` and `sha-512`.
+Returns 400 if the digest does not match; passes through if neither header is present.
+
+> **Note:** The entire request body is buffered for digest computation. Do not apply to
+> large streaming uploads unconditionally — use a predicate to scope it to relevant routes.
+
+#### Usage
+
+```java
+app.use(new DigestValidationMiddleware());
+```
+
+### FetchMetadata
+
+Implements the W3C [Resource Isolation Policy](https://www.w3.org/TR/fetch-metadata/) using
+`Sec-Fetch-Site` and `Sec-Fetch-Mode` request headers. Blocks cross-origin, non-navigational
+requests by default. Returns 403 for blocked requests.
+
+Browsers that do not send `Sec-Fetch-*` headers (non-browser clients, legacy browsers) are
+always allowed through. Combine with CSRF tokens for full defense against those clients.
+
+When using `CorsMiddleware`, add the CORS-enabled paths to `allowedPaths` so preflight
+(`OPTIONS`) requests are not blocked before reaching `CorsMiddleware`.
+
+#### Usage
+
+```java
+FetchMetadataMiddleware fm = new FetchMetadataMiddleware();
+fm.setAllowedPaths(Set.of("/api/public/feed", "/health"));
+app.use(fm);
+```
+
+#### Properties
+
+| Name | Type | Default | Description |
+|:---|:---|:---|:---|
+| `allowedPaths` | `Set<String>` | empty | Exact URI paths allowed to receive cross-origin requests |
 
 ### Flash
 
@@ -199,6 +277,34 @@ ParamMiddleware enables to parse urlencoded query string and post body and set t
 app.use(new ParamsMiddleware());
 ```
 
+### RequestTimeout
+
+Enforces a per-request processing timeout using Java's `StructuredTaskScope` (preview API).
+Runs the downstream middleware chain in a virtual thread; returns the configured HTTP status
+(default 504 Gateway Timeout) if processing exceeds the timeout.
+
+> **Preview API:** requires `--enable-preview` at both compile and run time.
+>
+> **ThreadLocal warning:** ThreadLocal state is not inherited by the virtual thread spawned
+> internally. Doma2's `DomaTransactionMiddleware` uses ThreadLocal and must be placed
+> **downstream** (inside) of `RequestTimeoutMiddleware`.
+
+#### Usage
+
+```java
+RequestTimeoutMiddleware timeout = new RequestTimeoutMiddleware();
+timeout.setTimeoutMillis(30_000); // 30 seconds
+timeout.setTimeoutStatus(504);
+app.use(timeout);
+```
+
+#### Properties
+
+| Name | Type | Default | Description |
+|:---|:---|:---|:---|
+| `timeoutMillis` | `long` | `30000` | Timeout in milliseconds. Must be positive. |
+| `timeoutStatus` | `int` | `504` | HTTP status code returned on timeout (100–599). |
+
 ### Resources
 
 Returns the asset file that is searched from classpath.
@@ -214,8 +320,6 @@ app.use(new ResourceMiddleware());
 |Name|Description|
 |:-----|:----|
 |rootPath|The path prefix. Default value is `public`|
-
-
 
 ### Session
 
@@ -233,17 +337,6 @@ app.use(new SessionMiddleware());
 |:-----|:----|
 |cookieName|A name of cookie for session id. Default value is `enkan-session`|
 |store|A storage for session.|
-
-
-### Trace
-
-Adds the response header for tracing using middlewares.
-
-#### Usage
-
-```java
-app.use(new TraceMiddleware());
-```
 
 ### SecurityHeaders
 
@@ -263,6 +356,8 @@ All headers are enabled by default with safe values. Pass `null` to any setter t
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Cross-Origin-Opener-Policy` | `same-origin` |
 | `Cross-Origin-Resource-Policy` | `same-origin` |
+| `Cross-Origin-Embedder-Policy` | `require-corp` |
+| `Permissions-Policy` | _(disabled by default)_ |
 
 #### Usage
 
@@ -289,6 +384,46 @@ app.use(sec);
 | `referrerPolicy` | `Referrer-Policy` value. |
 | `crossOriginOpenerPolicy` | `Cross-Origin-Opener-Policy` value. |
 | `crossOriginResourcePolicy` | `Cross-Origin-Resource-Policy` value. |
+| `crossOriginEmbedderPolicy` | `Cross-Origin-Embedder-Policy` value. |
+| `permissionsPolicy` | `Permissions-Policy` value. `null` (default) disables the header. |
+| `reportingEndpoints` | `Reporting-Endpoints` value. `null` (default) disables the header. |
+
+### SignatureVerification
+
+Verifies [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) HTTP Message Signatures on incoming
+requests. Verified results are stored in the request extension under the key
+`SignatureVerificationMiddleware.EXTENSION_KEY` (`"signatureVerifyResults"`).
+
+Returns 401 if required labels or components are missing/invalid; 400 on malformed headers.
+
+See [Security guide](../guide/security.html#http-message-signatures) for full usage.
+
+#### Usage
+
+```java
+SignatureVerificationMiddleware verify =
+    new SignatureVerificationMiddleware(keyResolver);
+verify.setRequiredLabels(Set.of("sig1"));
+verify.setRequiredComponents(Set.of("@method", "@path", "content-type"));
+app.use(verify);
+```
+
+#### Properties
+
+| Name | Type | Description |
+|:---|:---|:---|
+| `requiredLabels` | `Set<String>` | Signature labels that must be present and valid |
+| `requiredComponents` | `Set<String>` | Component identifiers that must be covered by the signature |
+
+### Trace
+
+Adds the response header for tracing using middlewares.
+
+#### Usage
+
+```java
+app.use(new TraceMiddleware());
+```
 
 ## Kotowari
 

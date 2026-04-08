@@ -102,6 +102,10 @@
                     <configuration>
                         <source>${java.version}</source>
                         <doclint>none</doclint>
+                        <additionalOptions>--enable-preview</additionalOptions>
+                        <additionalJOptions>
+                            <additionalJOption>--enable-preview</additionalJOption>
+                        </additionalJOptions>
                     </configuration>
                 </plugin>
                 <plugin>

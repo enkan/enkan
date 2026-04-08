@@ -96,7 +96,11 @@ public class Multimap<K, V> implements Map<K, V> {
     }
 
     /**
-     * {@inheritDoc}
+     * Adds a value to the list associated with the given key.
+     * If the key does not yet exist, a new list is created.
+     *
+     * @param key   the key
+     * @param value the value to add
      */
     public void add(K key, V value) {
         if (hashMap.containsKey(key)) {

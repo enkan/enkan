@@ -267,6 +267,43 @@ Jackson component provides a bean converter using Jackson ObjectMapper.
 </dependency>
 ```
 
+## LocalJobExecutor
+
+`LocalJobExecutor` is the default `JobExecutor` implementation for background task submission.
+It uses virtual threads (`Executors.newThreadPerTaskExecutor`) so thousands of concurrent jobs
+can run without a fixed thread pool limit. Required when using Server-Sent Events (SSE).
+
+### Usage
+
+```xml
+<dependency>
+  <groupId>net.unit8.enkan</groupId>
+  <artifactId>enkan-system</artifactId>
+</dependency>
+```
+
+```java
+EnkanSystem system = EnkanSystem.of(
+    "jobExecutor", new LocalJobExecutor(),
+    "app",         new ApplicationComponent(AppFactory.class.getName()),
+    "http",        new JettyComponent()
+).relationships(
+    component("app").using("jobExecutor"),
+    component("http").using("app")
+);
+```
+
+### Properties
+
+| Name | Type | Description | Default |
+|:---|:---|:---------|:------|
+| `name` | `String` | Virtual thread name prefix | `"enkan-job"` |
+| `shutdownTimeoutMs` | `long` | Graceful shutdown wait (ms) | `30000` |
+
+### Dependencies
+
+- None
+
 ## Micrometer
 
 Micrometer component provides application metrics via the [Micrometer](https://micrometer.io/) facade.

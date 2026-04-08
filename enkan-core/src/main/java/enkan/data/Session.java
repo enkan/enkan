@@ -13,7 +13,7 @@ import java.util.Set;
  * the Servlet API and can be used in any transport layer.
  * Attributes are stored in a plain {@link java.util.HashMap} and the entire
  * session is serialized to the session store by
- * {@link enkan.middleware.SessionMiddleware}.
+ * {@link enkan.web.middleware.SessionMiddleware}.
  *
  * <p>A freshly created {@code Session} is marked as {@link #isNew() new}.
  * Once it has been persisted to the backing store, {@link #persist()} is called

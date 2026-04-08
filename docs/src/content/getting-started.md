@@ -5,19 +5,50 @@ title=Getting started | Enkan
 
 # Getting started
 
+Enkan is a middleware-chain-based web framework for Java 25. Its core idea is
+**explicitness over convention**: every component, every middleware, and every
+dependency is declared in plain Java code — no classpath scanning, no
+auto-configuration, no magic.
+
+The fastest path from zero to a running application is the `/init` command,
+which turns a plain-English description of your app into a compilable project
+skeleton in minutes.
+
 ## Prerequisite
 
 - Java 25 or higher
 - Maven 3.6.3 or higher
 - An API key for an OpenAI-compatible chat completion endpoint (only for `/init`)
 
+---
+
 ## Scaffold a project with `/init` (recommended)
 
-The fastest way to start an Enkan project is the AI-powered `/init` command in the
-REPL client. It interactively collects your requirements, lets you review and
-revise the generated plan, writes a compilable project skeleton, runs
-`mvn compile` with an automatic fix loop, and optionally launches the app and
-connects the REPL.
+`/init` is the entry point to the Enkan ecosystem. It is an AI-powered project
+generator built into the standalone REPL client. You describe your application
+in natural language, review a generated plan, and `init` writes a compilable
+project skeleton — complete with routing, controllers, domain records, database
+migrations, and a development REPL server — then compiles it and optionally
+starts it for you.
+
+No Enkan knowledge is required to run `/init`. It is intentionally designed as
+**the first thing a new user does**.
+
+```
+You describe your app
+        ↓
+/init collects requirements interactively
+        ↓
+LLM generates a plan (you can revise it)
+        ↓
+Project files are written
+        ↓
+mvn compile runs (with auto-fix loop)
+        ↓
+App starts + REPL connects
+        ↓
+You are live inside a running Enkan application
+```
 
 ### 1. Download the REPL client
 
@@ -87,6 +118,8 @@ At the `enkan(3001)❯` prompt you are connected to a running REPL server inside
 your new project. From here you can run [`/routes`](reference/repl.html#routes-app),
 [`/start`, `/stop`, `/reset`](guide/repl.html), or evaluate live Java expressions.
 
+### What `/init` generates
+
 `/init` writes the following files verbatim (without touching the LLM), so the
 scaffold is always consistent:
 
@@ -95,7 +128,18 @@ scaffold is always consistent:
 - `src/main/java/.../<Project>SystemFactory.java` — minimal `EnkanSystem.of(...)` skeleton
 
 The LLM then fills in the `ApplicationFactory`, controllers, and domain classes
-based on your approved plan.
+based on your approved plan. The default generated stack is:
+
+| Layer | Technology |
+|-------|-----------|
+| HTTP server | Jetty (virtual threads) |
+| MVC | Kotowari |
+| JSON | Jackson |
+| Connection pool | HikariCP |
+| SQL | jOOQ |
+| Row mapping | Raoh |
+| Migrations | Flyway |
+| Database | H2 (in-memory, dev) |
 
 ---
 
@@ -108,12 +152,12 @@ server component to your `pom.xml`:
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>kotowari</artifactId>
-  <version>0.14.2-SNAPSHOT</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>enkan-component-jetty</artifactId>
-  <version>0.14.2-SNAPSHOT</version>
+  <version>0.15.0</version>
 </dependency>
 ```
 
@@ -207,5 +251,8 @@ Access [http://localhost:3000/](http://localhost:3000/) in your browser.
 - [Why Enkan?](guide/why-enkan.html) — design philosophy and comparison with other frameworks
 - [EnkanSystem](guide/enkan-system.html) — component lifecycle and dependency wiring
 - [Controllers](guide/controller.html) — parameter injection, form handling, templates
+- [Real-time: WebSocket & SSE](guide/websocket.html) — push updates and streaming
+- [Security](guide/security.html) — JWT, CSP nonce, HTTP Signatures, Fetch Metadata
+- [GraalVM & CRaC](guide/graalvm.html) — native images and instant restore
 - [Component Catalog](reference/components.html) — all available components and their configuration
 - [Middleware Reference](reference/middlewares.html) — all available middleware
