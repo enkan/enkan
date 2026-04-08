@@ -147,3 +147,4 @@ Apply this checklist both when reviewing others' code **and** before submitting 
 - Always target `develop` as the base branch when creating PRs (not `main`)
 - Use `gh pr create --base develop` explicitly
 - Workflow: create feature branch → commit → `gh pr create --base develop`
+- **Exception — chore commits:** Housekeeping commits (version bumps, dependency updates, config tweaks) do **not** need a PR. Push directly to `develop`.
