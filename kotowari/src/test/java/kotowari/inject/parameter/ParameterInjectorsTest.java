@@ -5,7 +5,6 @@ import enkan.data.*;
 import enkan.web.data.ContentNegotiable;
 import enkan.web.data.DefaultHttpRequest;
 import enkan.web.data.HttpRequest;
-import enkan.web.data.HttpResponse;
 import enkan.util.MixinUtils;
 import org.junit.jupiter.api.Test;
 

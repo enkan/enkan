@@ -63,7 +63,6 @@ class EnkanFeatureTest {
 
     static class UnnamedInjectComponent extends SystemComponent<UnnamedInjectComponent> {
         @Inject
-        @SuppressWarnings("unused")
         DependencyComponent dep;  // no @Named — should be excluded from binder
 
         @Override
@@ -144,7 +143,6 @@ class EnkanFeatureTest {
      */
     static class MiddleComponent extends SystemComponent<MiddleComponent> {
         @Inject
-        @SuppressWarnings("unused")
         DependencyComponent unnamedDep;  // no @Named — resolved by type
 
         @Override

@@ -6,6 +6,7 @@ import enkan.system.Transport;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -1212,11 +1213,10 @@ class InitCommandTest {
         // The output will contain neither [ERROR] nor [FATAL] on a machine with mvn
         // available, so the fallback tail path is exercised. Skip gracefully when
         // mvn is not on PATH.
-        java.nio.file.Files.writeString(tmp.resolve("pom.xml"), "<invalid/>");
-        InitCommand cmd = new InitCommand();
+        Files.writeString(tmp.resolve("pom.xml"), "<invalid/>");
         // The test just verifies that runMvnPhase does not throw and returns a
         // non-null BuildResult regardless of which branch it takes.
-        InitCommand.BuildResult result = cmd.runMvnPhase(tmp,
+        InitCommand.BuildResult result = InitCommand.runMvnPhase(tmp,
                 InitCommand.BuildPhase.VALIDATE, "validate");
         // If mvn is not on PATH, the result will wrap the exception message.
         assertThat(result).isNotNull();

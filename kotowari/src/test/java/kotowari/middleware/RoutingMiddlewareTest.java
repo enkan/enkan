@@ -42,7 +42,6 @@ class RoutingMiddlewareTest {
                 .set(HttpRequest::setParams, Parameters.empty())
                 .build();
 
-        HttpResponse[] captured = new HttpResponse[1];
         HttpResponse response = middleware.handle(request,
                 new DefaultMiddlewareChain<>(Predicates.any(), "endpoint",
                         (Endpoint<HttpRequest, HttpResponse>) req -> {
