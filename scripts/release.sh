@@ -61,18 +61,12 @@ echo "=== Step 6: Bump develop to $NEXT_VERSION ==="
 git checkout develop
 git pull origin develop
 git merge master --no-edit
-
-git checkout -b "feature/next-snapshot-${NEXT_VERSION%-SNAPSHOT}"
 ./scripts/update-version.sh "$NEXT_VERSION"
 git add -A
 git commit -m "chore: bump version to ${NEXT_VERSION}"
-git push -u origin "feature/next-snapshot-${NEXT_VERSION%-SNAPSHOT}"
-gh pr create --base develop \
-  --head "feature/next-snapshot-${NEXT_VERSION%-SNAPSHOT}" \
-  --title "chore: bump version to ${NEXT_VERSION}" \
-  --body "Post-release version bump to \`${NEXT_VERSION}\`."
+git push origin develop
 
 echo ""
 echo "=== Release v${RELEASE_VERSION} complete ==="
 echo "  - Tag v${RELEASE_VERSION} pushed → CI will publish to Maven Central"
-echo "  - PR opened to bump develop to ${NEXT_VERSION}"
+echo "  - develop bumped to ${NEXT_VERSION} (pushed directly)"
