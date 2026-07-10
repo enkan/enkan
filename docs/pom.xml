@@ -105,7 +105,14 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-configuration2</artifactId>
-            <version>2.13.0</version>
+            <version>2.15.0</version>
+        </dependency>
+        <!-- commons-configuration2 2.15.0 requires commons-io >= 2.12 (org.apache.commons.io.build.AbstractSupplier);
+             jbake-core pulls in the older 2.11.0 via dependency mediation, so pin a newer version here -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.20.0</version>
         </dependency>
     </dependencies>
 
