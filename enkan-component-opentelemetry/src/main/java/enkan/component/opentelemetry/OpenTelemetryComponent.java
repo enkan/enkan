@@ -4,6 +4,7 @@ import enkan.component.ComponentLifecycle;
 import enkan.component.SystemComponent;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Tracer;
+import org.jspecify.annotations.Nullable;
 
 /**
  * System component that wraps an OpenTelemetry instance and provides tracer access.
@@ -20,7 +21,7 @@ public class OpenTelemetryComponent extends SystemComponent<OpenTelemetryCompone
 
     private OpenTelemetry openTelemetry;
     private String instrumentationName = DEFAULT_INSTRUMENTATION_NAME;
-    private Tracer tracer;
+    private @Nullable Tracer tracer;
 
     /**
      * Creates a component with the noop OpenTelemetry instance.
@@ -59,7 +60,7 @@ public class OpenTelemetryComponent extends SystemComponent<OpenTelemetryCompone
         return openTelemetry;
     }
 
-    public Tracer getTracer() {
+    public @Nullable Tracer getTracer() {
         return tracer;
     }
 

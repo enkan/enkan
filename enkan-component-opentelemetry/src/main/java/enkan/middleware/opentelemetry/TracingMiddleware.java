@@ -14,8 +14,10 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapPropagator;
+import org.jspecify.annotations.Nullable;
 
 import jakarta.inject.Inject;
+import java.util.Objects;
 
 /**
  * Middleware that creates OpenTelemetry spans for each HTTP request.
@@ -51,11 +53,12 @@ public class TracingMiddleware implements WebMiddleware {
             AttributeKey.stringKey("error.type");
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(
             HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
 
-        Tracer tracer = openTelemetry.getTracer();
+        Tracer tracer = Objects.requireNonNull(openTelemetry.getTracer(),
+                "OpenTelemetryComponent has not been started");
 
         // Extract propagated context from incoming headers
         TextMapPropagator propagator = openTelemetry.getOpenTelemetry()
