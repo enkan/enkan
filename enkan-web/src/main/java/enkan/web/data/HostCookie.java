@@ -1,5 +1,7 @@
 package enkan.web.data;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A cookie with the {@code __Host-} prefix (RFC 6265bis §4.1.3.2).
  *
@@ -67,7 +69,7 @@ public final class HostCookie extends Cookie {
      * @throws UnsupportedOperationException if {@code domain} is not {@code null}
      */
     @Override
-    public void setDomain(String domain) {
+    public void setDomain(@Nullable String domain) {
         if (domain != null) {
             throw new UnsupportedOperationException("__Host- cookies must not have a Domain attribute");
         }
@@ -93,7 +95,7 @@ public final class HostCookie extends Cookie {
      * @throws IllegalArgumentException if {@code path} is not {@code "/"}
      */
     @Override
-    public void setPath(String path) {
+    public void setPath(@Nullable String path) {
         if (path == null || !"/".equals(path)) {
             throw new IllegalArgumentException("__Host- cookies must have Path=/");
         }

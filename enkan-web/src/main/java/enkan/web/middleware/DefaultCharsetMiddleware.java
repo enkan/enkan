@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.util.HttpResponseUtils;
 
 import static enkan.web.util.HttpResponseUtils.getHeader;
@@ -42,14 +43,15 @@ public class DefaultCharsetMiddleware implements WebMiddleware {
 
     protected void addCharset(HttpResponse response, String charset) {
         String contentType = getHeader(response, "Content-Type");
-        if (isTextBasedContentType(contentType)
+        if (contentType != null
+                && isTextBasedContentType(contentType)
                 && !isContainsCharset(contentType)) {
             HttpResponseUtils.charset(response, charset);
         }
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
         if (response != null) {
             addCharset(response, defaultCharset);

@@ -3,6 +3,7 @@ package enkan.web.middleware;
 import enkan.DecoratorMiddleware;
 import enkan.MiddlewareChain;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.data.TraceLog;
 import enkan.data.Traceable;
 import enkan.util.MixinUtils;
@@ -16,7 +17,7 @@ public class TraceMiddleware<REQ, RES> implements DecoratorMiddleware<REQ, RES> 
     private boolean enabled = true;
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
         if (req != null) {
             req = MixinUtils.mixin(req, Traceable.class);
         }

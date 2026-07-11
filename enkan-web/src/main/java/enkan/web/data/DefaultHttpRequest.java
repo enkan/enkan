@@ -4,6 +4,8 @@ import enkan.data.Session;
 import enkan.web.collection.Headers;
 import enkan.collection.Parameters;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Locale;
@@ -11,40 +13,46 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * A default implementation for HTTP request
+ * A default implementation for HTTP request.
+ *
+ * <p>This is a mutable bean populated incrementally: the server adapter sets the
+ * transport fields and middleware fill in the rest. A field being {@code null}
+ * is meaningful — it marks state that has not been populated yet (e.g. {@code
+ * ParamsMiddleware} keys off {@code getParams() == null} to decide whether to
+ * parse). Every accessor is therefore {@code @Nullable}.
  *
  * @author kawasima
  */
 public class DefaultHttpRequest implements HttpRequest {
     private int serverPort;
-    private String serverName;
-    private String remoteAddr;
-    private String uri;
-    private String queryString;
-    private String scheme;
-    private String requestMethod;
-    private String protocol;
-    private Headers headers;
-    private String contentType;
-    private Long contentLength;
-    private String characterEncoding;
-    private InputStream body;
+    private @Nullable String serverName;
+    private @Nullable String remoteAddr;
+    private @Nullable String uri;
+    private @Nullable String queryString;
+    private @Nullable String scheme;
+    private @Nullable String requestMethod;
+    private @Nullable String protocol;
+    private @Nullable Headers headers;
+    private @Nullable String contentType;
+    private @Nullable Long contentLength;
+    private @Nullable String characterEncoding;
+    private @Nullable InputStream body;
 
-    private Parameters params;
-    private Parameters formParams;
-    private Parameters queryParams;
+    private @Nullable Parameters params;
+    private @Nullable Parameters formParams;
+    private @Nullable Parameters queryParams;
 
-    private Session session;
-    private Map<String, Cookie> cookies;
-    private Map<String, Object> extensions;
+    private @Nullable Session session;
+    private @Nullable Map<String, Cookie> cookies;
+    private @Nullable Map<String, Object> extensions;
 
     @Override
-    public String getUri() {
+    public @Nullable String getUri() {
         return uri;
     }
 
     @Override
-    public void setUri(String uri) {
+    public void setUri(@Nullable String uri) {
         this.uri = uri;
     }
 
@@ -59,164 +67,164 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     @Override
-    public String getServerName() {
+    public @Nullable String getServerName() {
         return serverName;
     }
 
     @Override
-    public void setServerName(String serverName) {
+    public void setServerName(@Nullable String serverName) {
         this.serverName = serverName;
     }
 
     @Override
-    public String getRemoteAddr() {
+    public @Nullable String getRemoteAddr() {
         return remoteAddr;
     }
 
     @Override
-    public void setRemoteAddr(String remoteAddr) {
+    public void setRemoteAddr(@Nullable String remoteAddr) {
         this.remoteAddr = remoteAddr;
     }
 
     @Override
-    public String getQueryString() {
+    public @Nullable String getQueryString() {
         return queryString;
     }
 
     @Override
-    public void setQueryString(String queryString) {
+    public void setQueryString(@Nullable String queryString) {
         this.queryString = queryString;
     }
 
     @Override
-    public String getScheme() {
+    public @Nullable String getScheme() {
         return scheme;
     }
 
     @Override
-    public void setScheme(String scheme) {
+    public void setScheme(@Nullable String scheme) {
         this.scheme = scheme;
     }
 
     @Override
-    public String getRequestMethod() {
+    public @Nullable String getRequestMethod() {
         return requestMethod;
     }
 
     @Override
-    public void setRequestMethod(String requestMethod) {
+    public void setRequestMethod(@Nullable String requestMethod) {
         this.requestMethod = Optional.ofNullable(requestMethod)
                 .map(m -> m.toUpperCase(Locale.ENGLISH))
                 .orElse(null);
     }
 
     @Override
-    public String getProtocol() {
+    public @Nullable String getProtocol() {
         return protocol;
     }
 
     @Override
-    public void setProtocol(String protocol) {
+    public void setProtocol(@Nullable String protocol) {
         this.protocol = protocol;
     }
 
     @Override
-    public Headers getHeaders() {
+    public @Nullable Headers getHeaders() {
         return headers;
     }
 
     @Override
-    public void setHeaders(Headers headers) {
+    public void setHeaders(@Nullable Headers headers) {
         this.headers = headers;
     }
 
     @Override
-    public String getContentType() {
+    public @Nullable String getContentType() {
         return contentType;
     }
 
     @Override
-    public void setContentType(String contentType) {
+    public void setContentType(@Nullable String contentType) {
         this.contentType = contentType;
     }
 
     @Override
-    public Long getContentLength() {
+    public @Nullable Long getContentLength() {
         return contentLength;
     }
 
     @Override
-    public void setContentLength(Long contentLength) {
+    public void setContentLength(@Nullable Long contentLength) {
         this.contentLength = contentLength;
     }
 
     @Override
-    public String getCharacterEncoding() {
+    public @Nullable String getCharacterEncoding() {
         return characterEncoding;
     }
 
     @Override
-    public void setCharacterEncoding(String characterEncoding) {
+    public void setCharacterEncoding(@Nullable String characterEncoding) {
         this.characterEncoding = characterEncoding;
     }
 
     @Override
-    public InputStream getBody() {
+    public @Nullable InputStream getBody() {
         return body;
     }
 
     @Override
-    public void setBody(InputStream body) {
+    public void setBody(@Nullable InputStream body) {
         this.body = body;
     }
 
     @Override
-    public Parameters getParams() {
+    public @Nullable Parameters getParams() {
         return params;
     }
 
     @Override
-    public void setParams(Parameters params) {
+    public void setParams(@Nullable Parameters params) {
         this.params = params;
     }
 
     @Override
-    public Parameters getFormParams() {
+    public @Nullable Parameters getFormParams() {
         return formParams;
     }
 
     @Override
-    public void setFormParams(Parameters formParams) {
+    public void setFormParams(@Nullable Parameters formParams) {
         this.formParams = formParams;
     }
 
     @Override
-    public Parameters getQueryParams() {
+    public @Nullable Parameters getQueryParams() {
         return queryParams;
     }
 
     @Override
-    public void setQueryParams(Parameters queryParams) {
+    public void setQueryParams(@Nullable Parameters queryParams) {
         this.queryParams = queryParams;
     }
 
     @Override
-    public Map<String, Cookie> getCookies() {
+    public @Nullable Map<String, Cookie> getCookies() {
         return cookies;
     }
 
     @Override
-    public void setCookies(Map<String, Cookie> cookies) {
+    public void setCookies(@Nullable Map<String, Cookie> cookies) {
         this.cookies = cookies;
     }
 
     @Override
-    public Session getSession() {
+    public @Nullable Session getSession() {
         return session;
     }
 
     @Override
-    public void setSession(Session session) {
+    public void setSession(@Nullable Session session) {
         this.session = session;
     }
 
@@ -230,7 +238,7 @@ public class DefaultHttpRequest implements HttpRequest {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> T getExtension(String name) {
+    public <T> @Nullable T getExtension(String name) {
         if (extensions == null) {
             extensions = new HashMap<>();
         }

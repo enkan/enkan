@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.collection.Parameters;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.exception.MisconfigurationException;
 
 import java.util.ArrayList;
@@ -191,7 +192,7 @@ public class NestedParamsMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         return castToHttpResponse(chain.next(nestedParamsRequest(request, parseNestedKeys)));
     }
 }

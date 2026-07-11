@@ -4,6 +4,8 @@ import enkan.data.Session;
 import enkan.web.collection.Headers;
 import enkan.collection.Multimap;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -20,11 +22,11 @@ public class DefaultHttpResponse implements HttpResponse {
     private int status;
     private Headers headers;
     private Multimap<String, Cookie> cookies;
-    private Session session;
-    private String bodyString;
-    private InputStream bodyStream;
-    private File bodyFile;
-    private StreamingBody bodyStreaming;
+    private @Nullable Session session;
+    private @Nullable String bodyString;
+    private @Nullable InputStream bodyStream;
+    private @Nullable File bodyFile;
+    private @Nullable StreamingBody bodyStreaming;
 
     private final Map<String, Object> extensions;
 
@@ -67,7 +69,7 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     @Override
-    public Object getBody() {
+    public @Nullable Object getBody() {
         if (bodyStreaming != null) {
             return bodyStreaming;
         } else if (bodyString != null) {
@@ -126,7 +128,7 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     @Override
-    public void setBody(String body) {
+    public void setBody(@Nullable String body) {
         this.bodyString = body;
         bodyStream = null;
         bodyFile = null;
@@ -177,18 +179,18 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     @Override
-    public Session getSession() {
+    public @Nullable Session getSession() {
         return session;
     }
 
     @Override
-    public void setSession(Session session) {
+    public void setSession(@Nullable Session session) {
         this.session = session;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> T getExtension(String name) {
+    public <T> @Nullable T getExtension(String name) {
         return (T) extensions.get(name);
     }
 

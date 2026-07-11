@@ -2,6 +2,7 @@ package enkan.web.signature;
 
 import enkan.exception.MisconfigurationException;
 import enkan.web.data.HttpRequest;
+import org.jspecify.annotations.Nullable;
 import enkan.web.data.HttpResponse;
 import enkan.web.http.fields.sf.*;
 
@@ -48,7 +49,7 @@ public final class SignatureBaseBuilder {
      * @return the signature base string
      */
     public static String buildSignatureBase(HttpRequest request,
-                                            HttpResponse response,
+                                            @Nullable HttpResponse response,
                                             List<SignatureComponent> components,
                                             SfParameters params) {
         StringBuilder sb = new StringBuilder();
@@ -72,7 +73,7 @@ public final class SignatureBaseBuilder {
     /**
      * Resolves the value of a single component from the request/response.
      */
-    static String resolveComponentValue(HttpRequest request, HttpResponse response,
+    static String resolveComponentValue(HttpRequest request, @Nullable HttpResponse response,
                                         SignatureComponent component) {
         if (component.isDerived()) {
             return resolveDerived(request, response, component);
@@ -99,10 +100,10 @@ public final class SignatureBaseBuilder {
     // Derived components (§2.2)
     // -------------------------------------------------------------------------
 
-    private static String resolveDerived(HttpRequest request, HttpResponse response,
+    private static String resolveDerived(HttpRequest request, @Nullable HttpResponse response,
                                          SignatureComponent component) {
         return switch (component.name()) {
-            case "@method" -> request.getRequestMethod().toUpperCase(Locale.ROOT);
+            case "@method" -> java.util.Objects.requireNonNull(request.getRequestMethod()).toUpperCase(Locale.ROOT);
             case "@path" -> {
                 String uri = request.getUri();
                 yield (uri == null || uri.isEmpty()) ? "/" : uri;
@@ -111,7 +112,7 @@ public final class SignatureBaseBuilder {
                 String qs = request.getQueryString();
                 yield "?" + (qs != null ? qs : "");
             }
-            case "@scheme" -> request.getScheme().toLowerCase(Locale.ROOT);
+            case "@scheme" -> java.util.Objects.requireNonNull(request.getScheme()).toLowerCase(Locale.ROOT);
             case "@authority" -> resolveAuthority(request);
             case "@target-uri" -> resolveTargetUri(request);
             case "@request-target" -> {
@@ -133,11 +134,11 @@ public final class SignatureBaseBuilder {
 
     private static String resolveAuthority(HttpRequest request) {
         // RFC 9421 §2.2.5: prefer the Host header when present (reflects what the client signed)
-        Object hostHeader = request.getHeaders().get("host");
+        Object hostHeader = java.util.Objects.requireNonNull(request.getHeaders()).get("host");
         if (hostHeader != null) {
             return hostHeader.toString().strip().toLowerCase(Locale.ROOT);
         }
-        String host = request.getServerName().toLowerCase(Locale.ROOT);
+        String host = java.util.Objects.requireNonNull(request.getServerName()).toLowerCase(Locale.ROOT);
         int port = request.getServerPort();
         String scheme = request.getScheme();
         boolean defaultPort = ("http".equals(scheme) && port == 80)
@@ -147,7 +148,7 @@ public final class SignatureBaseBuilder {
     }
 
     private static String resolveTargetUri(HttpRequest request) {
-        String scheme = request.getScheme().toLowerCase(Locale.ROOT);
+        String scheme = java.util.Objects.requireNonNull(request.getScheme()).toLowerCase(Locale.ROOT);
         String authority = resolveAuthority(request);
         String path = request.getUri();
         if (path == null || path.isEmpty()) path = "/";
@@ -212,18 +213,18 @@ public final class SignatureBaseBuilder {
     // Header components (§2.1)
     // -------------------------------------------------------------------------
 
-    private static String resolveHeader(HttpRequest request, HttpResponse response,
+    private static String resolveHeader(HttpRequest request, @Nullable HttpResponse response,
                                         SignatureComponent component) {
         // Headers stores keys in ASCII lowercase (see Headers class Javadoc), so the
         // lowercase component.name() from SignatureComponent always matches the stored key.
         // ;req flag: resolve from request even when signing a response
         Object headerObj;
         if (component.isReq() && response != null) {
-            headerObj = request.getHeaders().get(component.name());
+            headerObj = java.util.Objects.requireNonNull(request.getHeaders()).get(component.name());
         } else if (response != null && !component.isReq()) {
             headerObj = response.getHeaders().get(component.name());
         } else {
-            headerObj = request.getHeaders().get(component.name());
+            headerObj = java.util.Objects.requireNonNull(request.getHeaders()).get(component.name());
         }
 
         if (headerObj == null) {

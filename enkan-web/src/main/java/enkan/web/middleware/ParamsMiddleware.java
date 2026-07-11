@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.collection.Parameters;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.exception.FalteringEnvironmentException;
 
 import java.io.BufferedReader;
@@ -104,7 +105,7 @@ public class ParamsMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest httpRequest, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest httpRequest, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
         paramsRequest(httpRequest);
         return castToHttpResponse(next.next(httpRequest));
     }

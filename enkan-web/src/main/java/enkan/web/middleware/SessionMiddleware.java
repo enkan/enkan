@@ -7,6 +7,7 @@ import enkan.data.Session;
 import enkan.web.data.Cookie;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.data.PersistentMarkedSession;
 import enkan.web.data.WebSessionAvailable;
 import enkan.web.middleware.session.MemoryStore;
@@ -66,10 +67,12 @@ public class SessionMiddleware implements WebMiddleware {
         some(request.getCookies(), cs -> cs.get(cookieName))
                 .ifPresent(sessionCookie -> {
                     String reqKey = sessionCookie.getValue();
-                    Session session = reqKey != null ? (Session) store.read(reqKey) : null;
-                    request.setSession(session);
-                    if (session != null) {
-                        ((WebSessionAvailable) request).setSessionKey(reqKey);
+                    if (reqKey != null) {
+                        Session session = (Session) store.read(reqKey);
+                        request.setSession(session);
+                        if (session != null) {
+                            ((WebSessionAvailable) request).setSessionKey(reqKey);
+                        }
                     }
                 });
     }
@@ -84,7 +87,7 @@ public class SessionMiddleware implements WebMiddleware {
         // Invalidate session.
         // - Call response.session == null
         // - response.session.isNew && request.session != null
-        if (session == null || (session.isNew() && request.getSession() != null)) {
+        if (sessionKey != null && (session == null || (session.isNew() && request.getSession() != null))) {
             store.delete(sessionKey);
         }
 
@@ -95,9 +98,9 @@ public class SessionMiddleware implements WebMiddleware {
                 newSessionKey = store.write(sessionKey, session);
             }
         }
-        Cookie cookie = Cookie.create(cookieName, newSessionKey != null ? newSessionKey : sessionKey);
-        populateAttrs(cookie);
         if (newSessionKey != null && !newSessionKey.equals(sessionKey)) {
+            Cookie cookie = Cookie.create(cookieName, newSessionKey);
+            populateAttrs(cookie);
             response.getCookies().put(cookieName, cookie);
         }
     }
@@ -111,11 +114,13 @@ public class SessionMiddleware implements WebMiddleware {
      * @return the HTTP response, potentially with an updated session cookie
      */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         request = MixinUtils.mixin(request, WebSessionAvailable.class);
         sessionRequest(request);
         HttpResponse response = castToHttpResponse(chain.next(request));
-        sessionResponse(response, request);
+        if (response != null) {
+            sessionResponse(response, request);
+        }
         return response;
     }
 

@@ -1,5 +1,7 @@
 package enkan;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.function.Predicate;
 
 /**
@@ -48,7 +50,8 @@ public interface MiddlewareChain<REQ, RES, NREQ, NRES> {
      * Process the next middleware.
      *
      * @param req  A request object
-     * @return A response object
+     * @return A response object, or {@code null} if a middleware produced none.
+     *         An exhausted chain (no middleware matched) throws instead.
      */
-    RES next(REQ req);
+    @Nullable RES next(REQ req);
 }

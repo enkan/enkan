@@ -1,5 +1,7 @@
 package enkan.web.util;
 
+import org.jspecify.annotations.Nullable;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,7 +35,7 @@ public final class ETagUtils {
      * @param contentEncoding the Content-Encoding header value, or null
      * @return a weak ETag string, or null if the body type is not supported
      */
-    public static String generateWeakETag(Object body, String contentEncoding) {
+    public static @Nullable String generateWeakETag(@Nullable Object body, @Nullable String contentEncoding) {
         byte[] data;
         if (body instanceof String s) {
             data = s.getBytes(StandardCharsets.UTF_8);
@@ -100,7 +102,7 @@ public final class ETagUtils {
      * @param weakComparison true for If-None-Match (weak), false for If-Match (strong)
      * @return true if a match is found
      */
-    public static boolean matchesHeader(String headerValue, String etag, boolean weakComparison) {
+    public static boolean matchesHeader(String headerValue, @Nullable String etag, boolean weakComparison) {
         if (headerValue == null || etag == null) return false;
         String trimmed = headerValue.strip();
         if ("*".equals(trimmed)) return true;

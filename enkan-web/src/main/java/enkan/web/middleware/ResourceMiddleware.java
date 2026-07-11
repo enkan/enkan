@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -24,10 +25,14 @@ public class ResourceMiddleware implements WebMiddleware {
 
     private static final Set<String> ACCEPTABLE_METHODS = Set.of("GET", "HEAD");
 
-    protected HttpResponse resourceRequest(HttpRequest request, String rootPath) {
+    protected @Nullable HttpResponse resourceRequest(HttpRequest request, String rootPath) {
         if (ACCEPTABLE_METHODS.contains(
                 Objects.toString(request.getRequestMethod(), "").toUpperCase(Locale.ENGLISH))) {
-            String path = urlDecode(pathInfo(request)).substring(1);
+            String pathInfo = pathInfo(request);
+            if (pathInfo == null) {
+                return null;
+            }
+            String path = urlDecode(pathInfo).substring(1);
             if (!path.startsWith(uriPrefix)) {
                 return null;
             }
@@ -40,7 +45,7 @@ public class ResourceMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = resourceRequest(request, rootPath);
         if (response == null) {
             response = castToHttpResponse(chain.next(request));

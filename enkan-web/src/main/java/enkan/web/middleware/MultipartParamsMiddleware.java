@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.collection.Parameters;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.MisconfigurationException;
 import enkan.web.middleware.multipart.BoundedInputStream;
@@ -79,12 +80,16 @@ public class MultipartParamsMiddleware implements WebMiddleware {
             throw new MisconfigurationException("web.MULTIPART_TOO_LARGE", maxTotalSize);
         }
         InputStream body = request.getBody();
+        if (body == null) {
+            return Parameters.empty();
+        }
         if (maxTotalSize >= 0) {
             body = new BoundedInputStream(body, maxTotalSize);
         }
+        var reqHeaders = java.util.Objects.requireNonNull(request.getHeaders());
         try {
             return MultipartParser.parse(body, length,
-                    request.getHeaders().get("content-type"), 16384,
+                    reqHeaders.get("content-type"), 16384,
                     maxFileSize, maxFormFieldSize);
         } catch (BoundedInputStream.SizeLimitExceededException e) {
             throw new MisconfigurationException("web.MULTIPART_TOO_LARGE", maxTotalSize);
@@ -115,9 +120,9 @@ public class MultipartParamsMiddleware implements WebMiddleware {
      * @param <NNRES> the type of the next response object
      */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         Parameters multipartParams = extractMultipart(request);
-        request.getParams().putAll(multipartParams);
+        java.util.Objects.requireNonNull(request.getParams()).putAll(multipartParams);
         try {
             return castToHttpResponse(chain.next(request));
         } finally {

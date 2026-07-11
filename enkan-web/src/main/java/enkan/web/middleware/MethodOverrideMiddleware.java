@@ -5,6 +5,8 @@ import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -13,18 +15,21 @@ import java.util.function.Function;
  */
 @Middleware(name = "methodOverride", dependencies = {"params"})
 public class MethodOverrideMiddleware implements WebMiddleware {
-    private Function<HttpRequest, String> getterFunction = createGetter("_method");
+    private Function<HttpRequest, @Nullable String> getterFunction = createGetter("_method");
 
     public void setGetterFunction(String functionName) {
         getterFunction = createGetter(functionName);
     }
 
-    public void setGetterFunction(Function<HttpRequest, String> getterFunction) {
+    public void setGetterFunction(Function<HttpRequest, @Nullable String> getterFunction) {
         this.getterFunction = getterFunction;
     }
 
-    protected Function<HttpRequest, String> createQueryGetter(String key) {
-        return req -> req.getParams().get(key);
+    protected Function<HttpRequest, @Nullable String> createQueryGetter(String key) {
+        return req -> {
+            var params = req.getParams();
+            return params != null ? params.get(key) : null;
+        };
     }
 
     /**
@@ -33,12 +38,15 @@ public class MethodOverrideMiddleware implements WebMiddleware {
      * @param str header
      * @return A getter function
      */
-    protected Function<HttpRequest, String> createHeaderGetter(String str) {
+    protected Function<HttpRequest, @Nullable String> createHeaderGetter(String str) {
         String header = str.toLowerCase();
-        return req -> Optional.ofNullable(req.getHeaders().get(header)).orElse("");
+        return req -> {
+            var headers = req.getHeaders();
+            return headers != null ? Optional.ofNullable(headers.get(header)).orElse("") : "";
+        };
     }
 
-    protected Function<HttpRequest, String> createGetter(String str) {
+    protected Function<HttpRequest, @Nullable String> createGetter(String str) {
         if (str.substring(0, 2).equalsIgnoreCase("X-")) {
             return createHeaderGetter(str);
         }
@@ -46,7 +54,7 @@ public class MethodOverrideMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         String val = getterFunction.apply(request);
         if (val != null) {
             request.setRequestMethod(val);

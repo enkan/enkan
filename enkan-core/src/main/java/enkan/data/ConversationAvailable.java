@@ -1,5 +1,7 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.enterprise.context.Conversation;
 
 /**
@@ -8,7 +10,7 @@ import jakarta.enterprise.context.Conversation;
  * @author kawasima
  */
 public interface ConversationAvailable extends Extendable {
-    default Conversation getConversation() {
+    default @Nullable Conversation getConversation() {
         return getExtension("conversation");
     }
 
@@ -16,7 +18,7 @@ public interface ConversationAvailable extends Extendable {
         setExtension("conversation", conversation);
     }
 
-    default ConversationState getConversationState() {
+    default @Nullable ConversationState getConversationState() {
         return getExtension("conversationState");
     }
 

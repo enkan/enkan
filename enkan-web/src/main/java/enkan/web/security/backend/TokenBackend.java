@@ -2,6 +2,9 @@ package enkan.web.security.backend;
 
 import enkan.web.data.HttpRequest;
 import enkan.security.AuthBackend;
+import enkan.web.collection.Headers;
+
+import org.jspecify.annotations.Nullable;
 
 import java.security.Principal;
 
@@ -11,8 +14,9 @@ import java.security.Principal;
 public class TokenBackend implements AuthBackend<HttpRequest, String> {
     private String tokenName = "Token";
 
-    protected String parseAuthorizationHeader(HttpRequest request, String tokenName) {
-        Object authHeader = request.getHeaders().get("Authorization");
+    protected @Nullable String parseAuthorizationHeader(HttpRequest request, String tokenName) {
+        Headers headers = request.getHeaders();
+        Object authHeader = headers != null ? headers.get("Authorization") : null;
         if (authHeader == null) return null;
         String auth = authHeader.toString();
         String prefix = tokenName + " ";
@@ -23,12 +27,12 @@ public class TokenBackend implements AuthBackend<HttpRequest, String> {
     }
 
     @Override
-    public String parse(HttpRequest request) {
+    public @Nullable String parse(HttpRequest request) {
         return parseAuthorizationHeader(request, tokenName);
     }
 
     @Override
-    public Principal authenticate(HttpRequest request, String token) {
+    public @Nullable Principal authenticate(HttpRequest request, String token) {
         return null;
     }
 

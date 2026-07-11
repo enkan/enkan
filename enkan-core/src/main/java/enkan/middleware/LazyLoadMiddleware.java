@@ -34,7 +34,7 @@ public class LazyLoadMiddleware<REQ, RES, NREQ, NRES> implements Middleware<REQ,
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <NNREQ, NNRES> RES handle(REQ request, MiddlewareChain<NREQ, NRES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ request, MiddlewareChain<NREQ, NRES, NNREQ, NNRES> chain) {
         Middleware<REQ, RES, NREQ, NRES> loaded = instance;
         if (loaded == null) {
             initializingLock.lock();

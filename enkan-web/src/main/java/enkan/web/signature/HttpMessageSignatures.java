@@ -4,6 +4,7 @@ import enkan.security.crypto.Signer;
 import enkan.security.crypto.Verifier;
 import enkan.web.collection.Headers;
 import enkan.web.data.HttpRequest;
+import org.jspecify.annotations.Nullable;
 import enkan.web.data.HttpResponse;
 import enkan.web.http.fields.sf.*;
 
@@ -102,7 +103,7 @@ public final class HttpMessageSignatures {
      * @param verifier       the cryptographic verifier
      * @return the verification result, or {@code null} if verification fails
      */
-    public static VerifyResult verify(HttpRequest request, String label,
+    public static @Nullable VerifyResult verify(HttpRequest request, String label,
                                        SfInnerList signatureInput, byte[] signatureBytes,
                                        Verifier verifier) {
         return verify(request, null, label, signatureInput, signatureBytes, verifier);
@@ -111,7 +112,7 @@ public final class HttpMessageSignatures {
     /**
      * Verifies a single signature on a response.
      */
-    public static VerifyResult verify(HttpRequest request, HttpResponse response,
+    public static @Nullable VerifyResult verify(HttpRequest request, @Nullable HttpResponse response,
                                        String label, SfInnerList signatureInput,
                                        byte[] signatureBytes, Verifier verifier) {
         List<SignatureComponent> components = signatureInput.items().stream()
@@ -173,10 +174,10 @@ public final class HttpMessageSignatures {
     /**
      * Creates a signature over the given response.
      */
-    public static SignatureResult sign(HttpRequest request, HttpResponse response,
+    public static SignatureResult sign(HttpRequest request, @Nullable HttpResponse response,
                                         List<SignatureComponent> components,
                                         SignatureAlgorithm algorithm,
-                                        Signer signer, String keyId, String tag) {
+                                        Signer signer, String keyId, @Nullable String tag) {
         Map<String, SfValue> paramMap = new LinkedHashMap<>();
         paramMap.put("alg", new SfValue.SfString(algorithm.sfName()));
         paramMap.put("keyid", new SfValue.SfString(keyId));
@@ -215,7 +216,10 @@ public final class HttpMessageSignatures {
      * This method retrieves the raw object via the {@code Map<String,Object>} view
      * and joins list values with {@code ", "} before SF parsing.
      */
-    private static String getHeaderForParsing(Headers headers, String name) {
+    private static @Nullable String getHeaderForParsing(@Nullable Headers headers, String name) {
+        if (headers == null) {
+            return null;
+        }
         // Parameters.get() overrides Map.get() to return val.toString(), losing List structure.
         // Use entrySet() to access the raw Object value for proper multi-value joining.
         String lowerName = name.toLowerCase(Locale.ROOT);

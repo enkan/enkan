@@ -1,9 +1,11 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * @author kawasima
  */
 public interface SessionAvailable extends Extendable {
-    Session getSession();
-    void setSession(Session session);
+    @Nullable Session getSession();
+    void setSession(@Nullable Session session);
 }

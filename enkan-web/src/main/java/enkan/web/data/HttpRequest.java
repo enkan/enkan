@@ -9,6 +9,8 @@ import enkan.data.UriAvailable;
 import enkan.web.collection.Headers;
 import enkan.collection.Parameters;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.InputStream;
 import java.util.Map;
 
@@ -45,100 +47,100 @@ public interface HttpRequest
     void setServerPort(int serverPort);
 
     /** Returns the host name of the server that received the request. */
-    String getServerName();
+    @Nullable String getServerName();
 
     /** Sets the host name of the server that received the request. */
-    void setServerName(String serverName);
+    void setServerName(@Nullable String serverName);
 
     /** Returns the IP address of the client that sent the request. */
-    String getRemoteAddr();
+    @Nullable String getRemoteAddr();
 
     /** Sets the IP address of the client that sent the request. */
-    void setRemoteAddr(String remoteAddr);
+    void setRemoteAddr(@Nullable String remoteAddr);
 
-    /** Returns the request URI (path portion, without the query string). */
-    String getUri();
+    /** Returns the request URI (path portion, without the query string), or {@code null} until set. */
+    @Nullable String getUri();
 
     /** Sets the request URI. */
-    void setUri(String uri);
+    void setUri(@Nullable String uri);
 
     /** Returns the query string portion of the request URL, or {@code null} if none. */
-    String getQueryString();
+    @Nullable String getQueryString();
 
     /** Sets the query string portion of the request URL. */
-    void setQueryString(String queryString);
+    void setQueryString(@Nullable String queryString);
 
     /** Returns the scheme (e.g. {@code "http"} or {@code "https"}) of the request. */
-    String getScheme();
+    @Nullable String getScheme();
 
     /** Sets the scheme of the request. */
-    void setScheme(String scheme);
+    void setScheme(@Nullable String scheme);
 
-    /** Returns the HTTP method (e.g. {@code "GET"}, {@code "POST"}) of the request. */
-    String getRequestMethod();
+    /** Returns the HTTP method (e.g. {@code "GET"}, {@code "POST"}) of the request, or {@code null} until set. */
+    @Nullable String getRequestMethod();
 
     /** Sets the HTTP method of the request. */
-    void setRequestMethod(String requestMethod);
+    void setRequestMethod(@Nullable String requestMethod);
 
     /** Returns the protocol and version (e.g. {@code "HTTP/1.1"}) of the request. */
-    String getProtocol();
+    @Nullable String getProtocol();
 
     /** Sets the protocol and version of the request. */
-    void setProtocol(String protocol);
+    void setProtocol(@Nullable String protocol);
 
     /** Returns the HTTP headers associated with this request. */
-    Headers getHeaders();
+    @Nullable Headers getHeaders();
 
     /** Sets the HTTP headers for this request. */
-    void setHeaders(Headers headers);
+    void setHeaders(@Nullable Headers headers);
 
     /** Returns the MIME type of the request body, or {@code null} if not specified. */
-    String getContentType();
+    @Nullable String getContentType();
 
     /** Sets the MIME type of the request body. */
-    void setContentType(String contentType);
+    void setContentType(@Nullable String contentType);
 
     /** Returns the length of the request body in bytes, or {@code null} if unknown. */
-    Long getContentLength();
+    @Nullable Long getContentLength();
 
     /** Sets the length of the request body in bytes. */
-    void setContentLength(Long contentLength);
+    void setContentLength(@Nullable Long contentLength);
 
     /** Returns the character encoding of the request body, or {@code null} if not specified. */
-    String getCharacterEncoding();
+    @Nullable String getCharacterEncoding();
 
     /** Sets the character encoding of the request body. */
-    void setCharacterEncoding(String characterEncoding);
+    void setCharacterEncoding(@Nullable String characterEncoding);
 
-    /** Returns the request body as an {@link InputStream}. */
-    InputStream getBody();
+    /** Returns the request body as an {@link InputStream}, or {@code null} if absent. */
+    @Nullable InputStream getBody();
 
     /** Sets the request body. */
-    void setBody(InputStream body);
+    void setBody(@Nullable InputStream body);
 
-    /** Returns the merged request parameters (query + form + path). */
-    Parameters getParams();
+    /** Returns the merged request parameters (query + form + path), or {@code null} until parsed. */
+    @Nullable Parameters getParams();
 
     /** Sets the merged request parameters. */
-    void setParams(Parameters params);
+    void setParams(@Nullable Parameters params);
 
-    /** Returns the form (POST body) parameters. */
-    Parameters getFormParams();
+    /** Returns the form (POST body) parameters, or {@code null} until parsed. */
+    @Nullable Parameters getFormParams();
 
     /** Sets the form parameters. */
-    void setFormParams(Parameters formParams);
+    void setFormParams(@Nullable Parameters formParams);
 
-    /** Returns the query string parameters. */
-    Parameters getQueryParams();
+    /** Returns the query string parameters, or {@code null} until parsed. */
+    @Nullable Parameters getQueryParams();
 
     /** Sets the query string parameters. */
-    void setQueryParams(Parameters queryParams);
+    void setQueryParams(@Nullable Parameters queryParams);
 
-    /** Returns the cookies sent with this request, keyed by cookie name. */
-    Map<String, Cookie> getCookies();
+    /** Returns the cookies sent with this request keyed by cookie name, or {@code null} until parsed. */
+    @Nullable Map<String, Cookie> getCookies();
 
     /** Sets the cookies for this request. */
-    void setCookies(Map<String, Cookie> cookies);
+    void setCookies(@Nullable Map<String, Cookie> cookies);
 
     /**
      * Attaches an arbitrary extension object to this request.
@@ -156,5 +158,5 @@ public interface HttpRequest
      * @param <T>  the expected extension type
      * @return the extension object, or {@code null} if not present
      */
-    <T> T getExtension(String name);
+    <T> @Nullable T getExtension(String name);
 }

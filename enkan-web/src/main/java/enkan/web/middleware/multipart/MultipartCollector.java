@@ -2,6 +2,8 @@ package enkan.web.middleware.multipart;
 
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,25 +16,25 @@ import java.util.stream.Stream;
  * @author kawasima
  */
 public class MultipartCollector {
-    private final BiFunction<String, String, File> tempfileFactory;
+    private final BiFunction<String, @Nullable String, File> tempfileFactory;
     private final List<MimePart> mimeParts = new ArrayList<>();
     private final List<Long> partSizes = new ArrayList<>();
     private final List<Boolean> isFile = new ArrayList<>();
     private final long maxFileSize;
     private final long maxFormFieldSize;
 
-    public MultipartCollector(BiFunction<String, String, File> tempfileFactory) {
+    public MultipartCollector(BiFunction<String, @Nullable String, File> tempfileFactory) {
         this(tempfileFactory, -1, -1);
     }
 
-    public MultipartCollector(BiFunction<String, String, File> tempfileFactory,
+    public MultipartCollector(BiFunction<String, @Nullable String, File> tempfileFactory,
                               long maxFileSize, long maxFormFieldSize) {
         this.tempfileFactory = tempfileFactory;
         this.maxFileSize = maxFileSize;
         this.maxFormFieldSize = maxFormFieldSize;
     }
 
-    public void onMimeHead(int mimeIndex, String head, String filename, String contentType, String name) throws IOException {
+    public void onMimeHead(int mimeIndex, String head, @Nullable String filename, @Nullable String contentType, @Nullable String name) throws IOException {
         if (filename != null) {
             File tempfile = tempfileFactory.apply(filename, contentType);
             mimeParts.add(new TempfilePart(tempfile, head, filename, contentType, name));

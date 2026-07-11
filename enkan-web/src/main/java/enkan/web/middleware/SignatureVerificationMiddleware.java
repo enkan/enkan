@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.signature.*;
 import enkan.web.http.fields.sf.*;
 
@@ -37,20 +38,21 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
     private Set<String> requiredComponents = Set.of();
 
     // Accept-Signature negotiation
-    private String acceptSignatureLabel;
-    private List<SignatureComponent> acceptComponents;
-    private SignatureAlgorithm acceptAlgorithm;
-    private String acceptKeyId;
+    private @Nullable String acceptSignatureLabel;
+    private @Nullable List<SignatureComponent> acceptComponents;
+    private @Nullable SignatureAlgorithm acceptAlgorithm;
+    private @Nullable String acceptKeyId;
 
     public SignatureVerificationMiddleware(SignatureKeyResolver keyResolver) {
         this.keyResolver = keyResolver;
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
                                               MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
-        String signatureHeader = request.getHeaders().get("Signature");
-        String signatureInputHeader = request.getHeaders().get("Signature-Input");
+        var reqHeaders = java.util.Objects.requireNonNull(request.getHeaders());
+        String signatureHeader = reqHeaders.get("Signature");
+        String signatureInputHeader = reqHeaders.get("Signature-Input");
 
         if (signatureHeader == null || signatureInputHeader == null) {
             if (!requiredLabels.isEmpty() || !requiredComponents.isEmpty()) {
@@ -99,8 +101,8 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
         return chain.next(request);
     }
 
-    private HttpResponse errorResponse(int status, String message) {
-        HttpResponse response = builder(HttpResponse.of(message))
+    private HttpResponse errorResponse(int status, @Nullable String message) {
+        HttpResponse response = builder(HttpResponse.of(message != null ? message : ""))
                 .set(HttpResponse::setStatus, status)
                 .build();
         if (status == 401 && acceptSignatureLabel != null) {
@@ -110,7 +112,8 @@ public class SignatureVerificationMiddleware implements WebMiddleware {
     }
 
     private String buildAcceptSignature() {
-        List<SfItem> items = acceptComponents.stream()
+        List<SignatureComponent> components = java.util.Objects.requireNonNull(acceptComponents);
+        List<SfItem> items = components.stream()
                 .map(c -> new SfItem(new SfValue.SfString(c.name()), c.parameters()))
                 .toList();
         Map<String, SfValue> paramMap = new LinkedHashMap<>();

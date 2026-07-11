@@ -1,5 +1,7 @@
 package enkan.web.middleware.session;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 
 /**
@@ -21,9 +23,9 @@ public interface KeyValueStore {
      * Read the value.
      *
      * @param key a String contains a store key
-     * @return a stored object
+     * @return a stored object, or {@code null} if absent or expired
      */
-    Serializable read(String key);
+    @Nullable Serializable read(String key);
 
     /**
      * Write the value with the given key.
@@ -32,15 +34,15 @@ public interface KeyValueStore {
      * @param value a stored object
      * @return new store key
      */
-    String write(String key, Serializable value);
+    String write(@Nullable String key, Serializable value);
 
     /**
      * Delete the key and the value.
      *
      * @param key a String contains a store key
-     * @return a String contains a store key
+     * @return a String contains a store key, or {@code null}
      */
-    String delete(String key);
+    @Nullable String delete(String key);
 
     /**
      * Attempts to write the value only if no entry exists for the given key.

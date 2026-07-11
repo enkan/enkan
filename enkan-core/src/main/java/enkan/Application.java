@@ -63,9 +63,9 @@ public interface Application<AREQ, ARES> {
      * Handle a request using middleware stack in this application.
      *
      * @param req   A request object
-     * @return      A response object
+     * @return      A response object, or {@code null} if the stack yields none
      */
-    ARES handle(AREQ req);
+    @Nullable ARES handle(AREQ req);
 
     /**
      * Validate a middleware stack.

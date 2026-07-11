@@ -1,5 +1,7 @@
 package enkan.util;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * ThreadingFunction is a functional interface that can throw an exception.
  *
@@ -7,5 +9,5 @@ package enkan.util;
  */
 @FunctionalInterface
 public interface ThreadingFunction<T, R> {
-    R apply(T t) throws Exception;
+    @Nullable R apply(T t) throws Exception;
 }

@@ -129,7 +129,7 @@ public class Parameters implements Map<String, Object>, Serializable {
      * @return a new parameters map with the given entries
      * @throws MisconfigurationException if the array length is odd
      */
-    public static Parameters of(Object... init) {
+    public static Parameters of(@Nullable Object... init) {
         if (init.length % 2 != 0) {
             throw new MisconfigurationException("core.MISSING_KEY_VALUE_PAIR");
         }
@@ -300,7 +300,7 @@ public class Parameters implements Map<String, Object>, Serializable {
 
     @SuppressWarnings("unchecked")
     @Override
-    public @Nullable Object put(String key, Object value) {
+    public @Nullable Object put(String key, @Nullable Object value) {
         if (!caseSensitive) {
             key = asciiLowerCase(key);
         }

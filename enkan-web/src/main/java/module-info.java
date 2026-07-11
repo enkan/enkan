@@ -19,6 +19,7 @@ module enkan.web {
 
     requires transitive enkan.core;
     requires transitive enkan.system;
+    requires transitive org.jspecify;
     requires jakarta.cdi;
     requires jakarta.validation;
     requires transitive jakarta.ws.rs;

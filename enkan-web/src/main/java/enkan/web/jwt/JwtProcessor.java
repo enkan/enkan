@@ -6,6 +6,8 @@ import enkan.security.crypto.JcaVerifier;
 import enkan.security.crypto.Signer;
 import enkan.security.crypto.Verifier;
 
+import org.jspecify.annotations.Nullable;
+
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -65,7 +67,7 @@ public final class JwtProcessor {
     public static String sign(JwtHeader header, byte[] claimsJsonBytes, Key key) {
         // serializeHeader validates alg is present before we attempt JwsAlgorithm lookup
         byte[] headerJson = serializeHeader(header);
-        JwsAlgorithm alg = JwsAlgorithm.fromJwsName(header.alg());
+        JwsAlgorithm alg = JwsAlgorithm.fromJwsName(java.util.Objects.requireNonNull(header.alg(), "alg"));
         String encodedHeader = URL_ENCODER.encodeToString(headerJson);
         String encodedPayload = URL_ENCODER.encodeToString(claimsJsonBytes);
         byte[] signingInput = buildSigningInput(encodedHeader, encodedPayload);
@@ -84,7 +86,7 @@ public final class JwtProcessor {
      * @param verifier the cryptographic verifier
      * @return the decoded payload bytes, or {@code null} on failure
      */
-    public static byte[] verify(String token, Verifier verifier) {
+    public static byte @Nullable [] verify(@Nullable String token, Verifier verifier) {
         if (token == null) return null;
         String[] parts = token.split("\\.", 4);
         if (parts.length != 3) return null;
@@ -135,7 +137,7 @@ public final class JwtProcessor {
      * @param key   the verification key (SecretKey for HMAC, PublicKey for asymmetric)
      * @return the decoded payload bytes, or {@code null} on failure
      */
-    public static byte[] verify(String token, Key key) {
+    public static byte @Nullable [] verify(@Nullable String token, Key key) {
         JwtHeader header = decodeHeader(token);
         if (header == null || header.alg() == null) return null;
         JwsAlgorithm alg;
@@ -159,7 +161,7 @@ public final class JwtProcessor {
      * @param key               the verification key
      * @return the decoded payload bytes, or {@code null} on failure
      */
-    public static byte[] verify(String token, JwsAlgorithm expectedAlgorithm, Key key) {
+    public static byte @Nullable [] verify(@Nullable String token, JwsAlgorithm expectedAlgorithm, Key key) {
         JwtHeader header = decodeHeader(token);
         if (header == null || header.alg() == null) return null;
         if (!expectedAlgorithm.jwsName().equals(header.alg())) return null;
@@ -176,7 +178,7 @@ public final class JwtProcessor {
      * @param <T>          the payload type
      * @return the deserialized payload, or {@code null} on failure
      */
-    public static <T> T verify(String token, Key key, Function<byte[], T> deserializer) {
+    public static <T> @Nullable T verify(@Nullable String token, Key key, Function<byte[], T> deserializer) {
         byte[] payload = verify(token, key);
         if (payload == null) return null;
         return deserializer.apply(payload);
@@ -188,7 +190,7 @@ public final class JwtProcessor {
      * @param token the JWT string
      * @return the parsed header, or {@code null} if malformed
      */
-    public static JwtHeader decodeHeader(String token) {
+    public static @Nullable JwtHeader decodeHeader(@Nullable String token) {
         if (token == null) return null;
         int dot = token.indexOf('.');
         if (dot <= 0) return null;
@@ -275,7 +277,7 @@ public final class JwtProcessor {
         return new JwtHeader(typ, alg, kid);
     }
 
-    private static String extractJsonString(String json, String key) {
+    private static @Nullable String extractJsonString(String json, String key) {
         String search = "\"" + key + "\"";
         int idx = 0;
         while (true) {
@@ -390,7 +392,7 @@ public final class JwtProcessor {
         }
     }
 
-    private static Long extractJsonNumber(String json, String key) {
+    private static @Nullable Long extractJsonNumber(String json, String key) {
         String search = "\"" + key + "\"";
         int idx = 0;
         int colonIdx = -1;

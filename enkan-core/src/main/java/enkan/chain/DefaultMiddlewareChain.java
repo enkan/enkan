@@ -5,6 +5,8 @@ import enkan.MiddlewareChain;
 import enkan.data.Traceable;
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.function.Predicate;
 
 /**
@@ -60,7 +62,7 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
      * @param middlewareName  a name of middleware
      * @param middleware      a middleware
      */
-    public DefaultMiddlewareChain(Predicate<? super REQ> predicate, String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware) {
+    public DefaultMiddlewareChain(Predicate<? super REQ> predicate, @Nullable String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware) {
         this.predicate = predicate;
         this.middleware = middleware;
         enkan.annotation.Middleware anno = middleware.getClass().getAnnotation(enkan.annotation.Middleware.class);
@@ -95,7 +97,7 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
         return middleware;
     }
 
-    protected void writeTraceLog(Object reqOrRes, String middlewareName) {
+    protected void writeTraceLog(@Nullable Object reqOrRes, String middlewareName) {
         if (reqOrRes instanceof Traceable t) {
             t.getTraceLog().write(middlewareName);
         }
@@ -112,7 +114,7 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
     // unchanged, so REQ == NREQ and RES == NRES at the call site.
     @SuppressWarnings("unchecked")
     @Override
-    public RES next(REQ req) {
+    public @Nullable RES next(REQ req) {
         writeTraceLog(req, middlewareName);
 
         if (predicate.test(req)) {

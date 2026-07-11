@@ -1,6 +1,7 @@
 package enkan.web.endpoint;
 
 import enkan.Endpoint;
+import org.jspecify.annotations.Nullable;
 import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
@@ -17,7 +18,7 @@ public class ResourceEndpoint implements Endpoint<HttpRequest, HttpResponse> {
     }
 
     @Override
-    public HttpResponse handle(HttpRequest request) {
+    public @Nullable HttpResponse handle(HttpRequest request) {
         return HttpResponseUtils.resourceResponse(path, OptionMap.empty());
     }
 }

@@ -13,6 +13,8 @@ import enkan.predicate.PathPredicate;
 import enkan.util.MixinUtils;
 import enkan.util.Predicates;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -27,7 +29,7 @@ import java.util.function.Supplier;
  */
 public class WebApplication implements Application<HttpRequest, HttpResponse> {
     private final List<MiddlewareChain<?, ?, ?, ?>> middlewareStack = new LinkedList<>();
-    private volatile Supplier<HttpRequest> requestFactory;
+    private volatile @Nullable Supplier<HttpRequest> requestFactory;
 
     /** Registers a middleware for GET requests matching the given path. */
     public <REQ extends UriAvailable, RES, NREQ, NRES> void get(String path, Middleware<REQ, RES, NREQ, NRES> middleware) {
@@ -47,12 +49,12 @@ public class WebApplication implements Application<HttpRequest, HttpResponse> {
         use(PathPredicate.DELETE(path), middleware);
     }
 
-    public <REQ extends UriAvailable, RES> void use(Predicate<? super REQ> decision, String middlewareName, Endpoint<REQ, RES> endpoint) {
+    public <REQ extends UriAvailable, RES> void use(Predicate<? super REQ> decision, @Nullable String middlewareName, Endpoint<REQ, RES> endpoint) {
         use(decision, middlewareName, (Middleware<REQ, RES, REQ, RES>) endpoint);
     }
 
     @Override
-    public <REQ, RES, NREQ, NRES> void use(Predicate<? super REQ> decision, String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware) {
+    public <REQ, RES, NREQ, NRES> void use(Predicate<? super REQ> decision, @Nullable String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware) {
         MiddlewareChain<REQ, RES, NREQ, NRES> chain = new DefaultMiddlewareChain<>(decision, middlewareName, middleware);
         if (!middlewareStack.isEmpty()) {
             middlewareStack.getLast().setNext(cast(chain));
@@ -62,10 +64,10 @@ public class WebApplication implements Application<HttpRequest, HttpResponse> {
     }
 
     @Override
-    public HttpResponse handle(HttpRequest req) {
+    public @Nullable HttpResponse handle(HttpRequest req) {
         return new DefaultMiddlewareChain<> (Predicates.any(), "bootstrap", new Middleware<HttpRequest, HttpResponse, HttpRequest, HttpResponse>() {
             @Override
-            public <NNREQ, NNRES> HttpResponse handle(HttpRequest req1, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+            public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest req1, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
                 return chain.next(req1);
             }
         }).setNext(cast(middlewareStack.getFirst())).next(req);

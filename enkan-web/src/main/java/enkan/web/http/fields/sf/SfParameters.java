@@ -1,5 +1,7 @@
 package enkan.web.http.fields.sf;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,7 +25,7 @@ public record SfParameters(Map<String, SfValue> map) {
         return map.isEmpty();
     }
 
-    public SfValue get(String key) {
+    public @Nullable SfValue get(String key) {
         return map.get(key);
     }
 

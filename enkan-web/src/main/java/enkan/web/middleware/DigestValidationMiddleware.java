@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.http.fields.digest.DigestFields;
 import enkan.web.http.fields.sf.*;
 
@@ -46,10 +47,11 @@ public class DigestValidationMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
                                               MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
-        String contentDigestHeader = request.getHeaders().get("Content-Digest");
-        String reprDigestHeader    = request.getHeaders().get("Repr-Digest");
+        var reqHeaders = request.getHeaders();
+        String contentDigestHeader = reqHeaders != null ? reqHeaders.get("Content-Digest") : null;
+        String reprDigestHeader    = reqHeaders != null ? reqHeaders.get("Repr-Digest") : null;
 
         if (contentDigestHeader == null && reprDigestHeader == null) {
             return chain.next(request);

@@ -1,5 +1,7 @@
 package enkan.web.signature;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Map;
 
 /**
@@ -18,7 +20,7 @@ import java.util.Map;
  */
 public record VerifyResult(
         String label,
-        String keyId,
-        SignatureAlgorithm algorithm,
+        @Nullable String keyId,
+        @Nullable SignatureAlgorithm algorithm,
         Map<String, String> coveredValues) {
 }
