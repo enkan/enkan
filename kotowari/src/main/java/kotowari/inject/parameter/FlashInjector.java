@@ -4,6 +4,8 @@ import enkan.data.Flash;
 import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 
 public class FlashInjector<T extends Serializable> implements ParameterInjector<Flash<T>> {
@@ -19,7 +21,7 @@ public class FlashInjector<T extends Serializable> implements ParameterInjector<
 
     @Override
     @SuppressWarnings("unchecked")
-    public Flash<T> getInjectObject(HttpRequest request) {
+    public @Nullable Flash<T> getInjectObject(HttpRequest request) {
         return (Flash<T>) request.getFlash();
     }
 }

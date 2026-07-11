@@ -15,13 +15,15 @@ import kotowari.data.BodyDeserializable;
 import kotowari.inject.ParameterInjector;
 import kotowari.util.ParameterUtils;
 
-import jakarta.annotation.PostConstruct;
+import org.jspecify.annotations.Nullable;
+
 import jakarta.inject.Inject;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Sets the form object to the request.
@@ -33,17 +35,10 @@ public class FormMiddleware implements WebMiddleware {
     @Inject
     protected BeansConverter beans;
 
-    private List<ParameterInjector<?>> parameterInjectors;
-
-    @PostConstruct
-    protected void setupParameterInjectors() {
-        if (parameterInjectors == null) {
-            parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
-        }
-    }
+    private List<ParameterInjector<?>> parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         Method method = ((Routable) request).getControllerMethod();
         if (method == null) {
             throw new MisconfigurationException("kotowari.CONTROLLER_METHOD_NOT_FOUND", "FormMiddleware");
@@ -59,10 +54,12 @@ public class FormMiddleware implements WebMiddleware {
             try {
                 if (body == null) {
                     if (!Collection.class.isAssignableFrom(type) && !type.isArray()) {
-                        bodyDeserializable.setDeserializedBody(beans.createFrom(request.getParams(), type));
+                        bodyDeserializable.setDeserializedBody(beans.createFrom(
+                                Objects.requireNonNull(request.getParams(), "request params"), type));
                     }
                 } else {
-                    beans.copy(request.getParams(), body, BeansConverter.CopyOption.REPLACE_NON_NULL);
+                    beans.copy(Objects.requireNonNull(request.getParams(), "request params"),
+                            body, BeansConverter.CopyOption.REPLACE_NON_NULL);
                     bodyDeserializable.setDeserializedBody(body);
                 }
             } catch (ClassCastException e) {

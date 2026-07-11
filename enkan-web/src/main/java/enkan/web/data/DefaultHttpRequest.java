@@ -229,7 +229,7 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     @Override
-    public <T> void setExtension(String name, T extension) {
+    public <T> void setExtension(String name, @Nullable T extension) {
         if (extensions == null) {
             extensions = new HashMap<>();
         }

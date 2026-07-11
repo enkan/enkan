@@ -4,6 +4,8 @@ import enkan.collection.Multimap;
 import enkan.data.Extendable;
 import enkan.util.ThreadingUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
 
 /**
@@ -23,10 +25,11 @@ public interface Validatable extends Extendable {
     }
 
     default List<Object> getErrors(String key) {
-        return getErrors().getAll(key);
+        Multimap<String, Object> errors = getErrors();
+        return errors == null ? List.of() : errors.getAll(key);
     }
 
-    default Multimap<String, Object> getErrors() {
+    default @Nullable Multimap<String, Object> getErrors() {
         return getExtension("errors");
     }
 

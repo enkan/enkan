@@ -43,13 +43,13 @@ public class OptionMap extends HashMap<String, Object> {
      * @return a new option map
      * @throws enkan.exception.MisconfigurationException if the array length is odd
      */
-    public static OptionMap of(Object... init) {
+    public static OptionMap of(@Nullable Object... init) {
         if (init.length % 2 != 0) {
             throw new enkan.exception.MisconfigurationException("core.MISSING_KEY_VALUE_PAIR");
         }
         OptionMap m = empty();
         for(int i = 0; i < init.length; i += 2) {
-            m.put(init[i].toString(), init[i + 1]);
+            m.put(Objects.toString(init[i]), init[i + 1]);
         }
         return m;
     }

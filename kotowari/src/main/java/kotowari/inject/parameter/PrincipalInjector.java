@@ -3,6 +3,8 @@ package kotowari.inject.parameter;
 import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 import java.security.Principal;
 
 public class PrincipalInjector implements ParameterInjector<Principal> {
@@ -17,10 +19,9 @@ public class PrincipalInjector implements ParameterInjector<Principal> {
     }
 
     @Override
-    public Principal getInjectObject(HttpRequest request) {
-        if (request != null) {
-            return request.getPrincipal();
-        }
-        return null;
+    @SuppressWarnings("ConstantValue")
+    public @Nullable Principal getInjectObject(HttpRequest request) {
+        //noinspection ConstantValue - tolerate a null request defensively
+        return request != null ? request.getPrincipal() : null;
     }
 }

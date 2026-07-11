@@ -149,7 +149,7 @@ public interface HttpRequest
      * @param extension the extension object
      * @param <T>       the extension type
      */
-    <T> void setExtension(String name, T extension);
+    <T> void setExtension(String name, @Nullable T extension);
 
     /**
      * Retrieves an extension object previously attached to this request.

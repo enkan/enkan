@@ -38,5 +38,5 @@ public interface Extendable {
      * @param name      the extension key
      * @param extension the value to store
      */
-    <T> void setExtension(String name, T extension);
+    <T> void setExtension(String name, @Nullable T extension);
 }

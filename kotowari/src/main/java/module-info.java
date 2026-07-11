@@ -10,6 +10,7 @@ module kotowari {
     exports kotowari.util;
 
     requires transitive enkan.web;
+    requires transitive org.jspecify;
     requires jakarta.annotation;
     requires jakarta.cdi;
     requires jakarta.transaction;

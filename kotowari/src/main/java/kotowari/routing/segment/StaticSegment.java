@@ -4,6 +4,10 @@ import enkan.collection.OptionMap;
 import kotowari.routing.RegexpUtils;
 import kotowari.routing.Segment;
 
+import org.jspecify.annotations.Nullable;
+
+import java.util.Objects;
+
 /**
  * @author kawasima
  */
@@ -11,11 +15,11 @@ public class StaticSegment extends Segment {
 
     private boolean raw;
 
-    public StaticSegment(String value) {
+    public StaticSegment(@Nullable String value) {
         this(value, OptionMap.of());
     }
 
-    public StaticSegment(String value,  OptionMap options) {
+    public StaticSegment(@Nullable String value,  OptionMap options) {
         super(value);
         if (options.containsKey("raw")) {
             this.raw = options.getBoolean("raw");
@@ -28,12 +32,12 @@ public class StaticSegment extends Segment {
 
     @Override
     public String interpolationChunk(OptionMap hash) {
-        return raw ? getValue() : super.interpolationChunk(hash);
+        return raw ? Objects.requireNonNull(getValue()) : super.interpolationChunk(hash);
     }
 
     @Override
     public String regexpChunk() {
-        String chunk = RegexpUtils.escape(getValue());
+        String chunk = RegexpUtils.escape(Objects.requireNonNull(getValue()));
         return isOptional() ? RegexpUtils.optionalize(chunk) : chunk;
     }
 
@@ -44,7 +48,7 @@ public class StaticSegment extends Segment {
 
     @Override
     public String buildPattern(String pattern) {
-        String escaped = RegexpUtils.escape(getValue());
+        String escaped = RegexpUtils.escape(Objects.requireNonNull(getValue()));
         if (isOptional() && !pattern.isEmpty()) {
             return "(?:" + RegexpUtils.optionalize(escaped) + "\\Z|" + escaped + RegexpUtils.unoptionalize(pattern) + ")";
         } else if (isOptional()) {
@@ -56,6 +60,6 @@ public class StaticSegment extends Segment {
 
     @Override
     public String toString() {
-        return getValue();
+        return Objects.requireNonNullElse(getValue(), "");
     }
 }

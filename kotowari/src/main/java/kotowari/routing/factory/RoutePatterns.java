@@ -5,6 +5,8 @@ import kotowari.routing.Route;
 import kotowari.routing.RouteBuilder;
 import kotowari.routing.Routes;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
@@ -20,7 +22,7 @@ public class RoutePatterns {
     private final RouteBuilder builder;
     private final Function<List<Route>, Routes> routeCompiler;
 
-    public RoutePatterns(String prefix, Function<List<Route>, Routes> routeCompiler) {
+    public RoutePatterns(@Nullable String prefix, Function<List<Route>, Routes> routeCompiler) {
         this.routeCompiler = routeCompiler;
 
         routeList = new ArrayList<>();
@@ -28,7 +30,7 @@ public class RoutePatterns {
         context = new PatternsContext(prefix, this);
     }
 
-    RoutingCondition httpMethodCondition(String method, String path) {
+    RoutingCondition httpMethodCondition(@Nullable String method, String path) {
         RoutingCondition cond = new RoutingCondition(method, path);
         cond.setContext(context);
         return cond;
@@ -58,7 +60,7 @@ public class RoutePatterns {
         return httpMethodCondition("DELETE", path);
     }
 
-    public Route resource(Class<?> controller) {
+    public @Nullable Route resource(Class<?> controller) {
         return resource(controller, null);
     }
 
@@ -70,7 +72,7 @@ public class RoutePatterns {
         }
     }
 
-    public Route resource(Class<?> controller, OptionMap options) {
+    public @Nullable Route resource(Class<?> controller, @Nullable OptionMap options) {
         String name = decapitalize(controller.getSimpleName().replaceAll("Controller$", ""));
         get(name + "/").to(controller, "index");
         get(name + "/:id"     ).requires("id", "\\d+").to(controller, "show");
@@ -101,7 +103,7 @@ public class RoutePatterns {
         return routeCompiler.apply(routeList);
     }
 
-    public record PatternsContext(String prefix, RoutePatterns patterns) {
+    public record PatternsContext(@Nullable String prefix, RoutePatterns patterns) {
         public void addRoute(Route route) {
             patterns.addRoute_(route);
         }

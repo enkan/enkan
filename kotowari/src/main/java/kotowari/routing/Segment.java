@@ -3,7 +3,10 @@ package kotowari.routing;
 import enkan.collection.OptionMap;
 import enkan.web.util.CodecUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -13,13 +16,13 @@ import java.util.regex.Pattern;
 public abstract class Segment {
     public static final String RESERVED_PCHAR = ":@&=+$,;";
 
-    private String value;
+    private @Nullable String value;
     private boolean isOptional;
 
     public Segment() {
         this(null);
     }
-    public Segment(String value) {
+    public Segment(@Nullable String value) {
         this.value = value;
         isOptional = false;
     }
@@ -28,7 +31,7 @@ public abstract class Segment {
         return Pattern.compile(regexpChunk()).matcher("").groupCount();
     }
 
-    public String getExtractionCode() {
+    public @Nullable String getExtractionCode() {
         return null;
     }
 
@@ -41,7 +44,8 @@ public abstract class Segment {
         }
     }
     public String interpolationChunk(OptionMap hash) {
-        return CodecUtils.urlEncode(value);
+        // Only reached for segments that carry a value (e.g. StaticSegment).
+        return CodecUtils.urlEncode(Objects.requireNonNull(value));
     }
 
     public String interpolationStatement(List<Segment> list, OptionMap hash) {
@@ -59,8 +63,12 @@ public abstract class Segment {
 
     public boolean allOptionalsAvailableCondition(List<Segment> priorSegments, OptionMap hash) {
         for (Segment segment : priorSegments) {
-            if (!segment.isOptional() && segment.hasKey() && hash.getString(segment.getKey()).isEmpty()) {
-                return false;
+            String key = segment.getKey();
+            if (!segment.isOptional() && key != null) {
+                String v = hash.getString(key);
+                if (v == null || v.isEmpty()) {
+                    return false;
+                }
             }
         }
         return true;
@@ -73,7 +81,7 @@ public abstract class Segment {
         return false;
     }
 
-    public String getKey() {
+    public @Nullable String getKey() {
         return null;
     }
 
@@ -81,11 +89,11 @@ public abstract class Segment {
         return false;
     }
 
-    public String getDefault() {
+    public @Nullable String getDefault() {
         return null;
     }
 
-    public String getValue() {
+    public @Nullable String getValue() {
         return value;
     }
 
@@ -99,13 +107,11 @@ public abstract class Segment {
     }
 
     public void setRegexp(Pattern regexp) {}
-    public void setDefault(String def) {}
+    public void setDefault(@Nullable String def) {}
 
-    public String buildPattern(String pattern) {
-        return null;
-    }
+    public abstract String buildPattern(String pattern);
 
-    public String getRegexp() {
+    public @Nullable String getRegexp() {
         return null;
     }
 }

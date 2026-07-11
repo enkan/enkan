@@ -1,5 +1,7 @@
 package kotowari.io;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -8,7 +10,7 @@ import java.io.InputStream;
  */
 public class LazyRenderInputStream extends InputStream {
     private final LazyRenderer renderer;
-    private InputStream in;
+    private @Nullable InputStream in;
 
     public LazyRenderInputStream(LazyRenderer renderer) {
         this.renderer = renderer;
@@ -16,10 +18,12 @@ public class LazyRenderInputStream extends InputStream {
 
     @Override
     public int read() throws IOException {
-        if (in == null) {
-            in = renderer.render();
+        InputStream stream = in;
+        if (stream == null) {
+            stream = renderer.render();
+            in = stream;
         }
-        return in.read();
+        return stream.read();
     }
 
     @Override

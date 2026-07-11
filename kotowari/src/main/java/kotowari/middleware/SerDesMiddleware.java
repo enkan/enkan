@@ -22,6 +22,8 @@ import kotowari.data.BodyDeserializable;
 import kotowari.inject.ParameterInjector;
 import kotowari.util.ParameterUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.MediaType;
@@ -51,7 +53,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
 
     private final List<MessageBodyReader<?>> bodyReaders = new ArrayList<>();
     private final List<MessageBodyWriter<?>> bodyWriters = new ArrayList<>();
-    private List<ParameterInjector<?>> parameterInjectors;
+    private List<ParameterInjector<?>> parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
 
     @PostConstruct
     private void loadReaderAndWriter() {
@@ -69,13 +71,10 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
             bodyWriters.add(writer);
         }
 
-        if (parameterInjectors == null) {
-            parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
-        }
     }
 
     @SuppressWarnings("unchecked")
-    protected <T> T deserialize(HttpRequest request, Class<T> type, Type genericType, MediaType mediaType) throws IOException {
+    protected <T> @Nullable T deserialize(HttpRequest request, Class<T> type, Type genericType, MediaType mediaType) throws IOException {
         try {
             MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
             return bodyReaders.stream()
@@ -97,7 +96,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
     }
 
     @SuppressWarnings("unchecked")
-    protected InputStream serialize(Object obj, MediaType mediaType) throws IOException {
+    protected @Nullable InputStream serialize(@Nullable Object obj, MediaType mediaType) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
 
@@ -168,7 +167,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
                     if (parameterInjectors.stream().anyMatch(injector-> injector.isApplicable(type)))
                         continue;
                     bodyDeserializable.setDeserializedBody(beans.createFrom(
-                            request.getParams(), type
+                            Objects.requireNonNull(request.getParams(), "request params"), type
                     ));
                 }
             }
@@ -181,13 +180,14 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
     @Override
     public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, NRES, NNREQ, NNRES> chain) {
         request = MixinUtils.mixin(request, BodyDeserializable.class);
-        MediaType responseType = ((ContentNegotiable) request).getMediaType();
+        MediaType responseType = Objects.requireNonNull(
+                ((ContentNegotiable) request).getMediaType(), "negotiated media type");
         try {
             handleRequest(request);
         } catch (IOException e) {
             try {
-                return builder(HttpResponse.of(serialize(Parameters.of("title",
-                        "bad request format"), responseType)))
+                return builder(HttpResponse.of(Objects.requireNonNull(serialize(Parameters.of("title",
+                        "bad request format"), responseType))))
                         .set(HttpResponse::setStatus, 400)
                         .build();
             } catch (IOException serializeEx) {
@@ -230,7 +230,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
         this.parameterInjectors = parameterInjectors;
     }
 
-    private Object extractBody(NRES response) {
+    private @Nullable Object extractBody(@Nullable NRES response) {
         if (response instanceof HasBody hasBody) {
             return hasBody.getBody();
         } else {
@@ -238,7 +238,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
         }
     }
 
-    private Headers extractHeaders(NRES response, MediaType responseType) {
+    private Headers extractHeaders(@Nullable NRES response, MediaType responseType) {
         Headers headers;
         if (response instanceof HasHeaders hasHeaders) {
             headers = hasHeaders.getHeaders();
@@ -249,7 +249,7 @@ public class SerDesMiddleware<NRES> implements Middleware<HttpRequest, HttpRespo
         return headers;
     }
 
-    private int extractStatus(NRES response) {
+    private int extractStatus(@Nullable NRES response) {
         if (response instanceof HasStatus hasStatus) {
             return hasStatus.getStatus();
         } else {

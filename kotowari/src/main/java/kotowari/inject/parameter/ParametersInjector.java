@@ -4,6 +4,8 @@ import enkan.collection.Parameters;
 import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 public class ParametersInjector implements ParameterInjector<Parameters> {
     @Override
     public String getName() {
@@ -16,7 +18,7 @@ public class ParametersInjector implements ParameterInjector<Parameters> {
     }
 
     @Override
-    public Parameters getInjectObject(HttpRequest request) {
+    public @Nullable Parameters getInjectObject(HttpRequest request) {
         return request.getParams();
     }
 }

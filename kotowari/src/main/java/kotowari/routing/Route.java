@@ -7,6 +7,8 @@ import enkan.web.util.CodecUtils;
 import enkan.web.util.HttpRequestUtils;
 import kotowari.routing.segment.DividerSegment;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.ws.rs.core.MediaType;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -26,12 +28,12 @@ public class Route {
 
     private final OptionMap constraints;
     private final OptionMap conditions;
-    private List<String> significantKeys;
-    private OptionMap parameterShell;
+    private @Nullable List<String> significantKeys;
+    private @Nullable OptionMap parameterShell;
     private boolean matchingPrepared;
-    private String controllerRequirement;
-    private String actionRequirement;
-    private Pattern recognizePattern;
+    private @Nullable String controllerRequirement;
+    private @Nullable String actionRequirement;
+    private @Nullable Pattern recognizePattern;
 
     /**
      * Constructs an instance of a routing given its path segments, constraints and conditions.
@@ -102,11 +104,11 @@ public class Route {
      * @return recognized routing information
      */
     @SuppressWarnings("unchecked")
-    public OptionMap recognize(HttpRequest request) {
+    public @Nullable OptionMap recognize(HttpRequest request) {
         Set<MediaType> produces = (Set<MediaType>) conditions.get("produces");
         if (produces != null && request instanceof ContentNegotiable cn) {
             MediaType produceType = cn.getMediaType();
-            if (produces.stream().noneMatch(produceType::isCompatible)) {
+            if (produceType == null || produces.stream().noneMatch(produceType::isCompatible)) {
                 return null;
             }
         }
@@ -121,10 +123,13 @@ public class Route {
             }
         }
 
-        return recognize(request.getUri(), request.getRequestMethod().toUpperCase(Locale.ENGLISH));
+        // In routing context the adapter has already populated URI and method.
+        String uri = Objects.requireNonNull(request.getUri(), "request URI");
+        String method = Objects.requireNonNull(request.getRequestMethod(), "request method");
+        return recognize(uri, method.toUpperCase(Locale.ENGLISH));
     }
 
-    public OptionMap recognize(String path, String method) {
+    public @Nullable OptionMap recognize(String path, String method) {
         List<Object> methods = conditions.getList("method");
         if (!methods.isEmpty() && !methods.contains(method)) {
             return null;
@@ -213,7 +218,7 @@ public class Route {
                 (actionRequirement == null || action.equals(actionRequirement));
     }
 
-    public String generate(OptionMap options, OptionMap hash) {
+    public @Nullable String generate(OptionMap options, OptionMap hash) {
         if (generationRequirements(options, hash)) {
             int lastIndex = segments.size() - 1;
             Segment last = segments.get(lastIndex);
@@ -231,18 +236,19 @@ public class Route {
         for(String key : constraints.keySet()) {
             Object req = constraints.get(key);
             if (req instanceof Pattern p) {
-                matched &= (hash.containsKey(key) && p.matcher(options.getString(key)).matches());
+                String optionValue = options.getString(key);
+                matched &= (hash.containsKey(key) && optionValue != null && p.matcher(optionValue).matches());
             } else {
-                matched &= hash.getString(key).equals(constraints.getString(key));
+                matched &= Objects.equals(hash.getString(key), constraints.getString(key));
             }
         }
         return matched;
     }
-    private String requirementFor(String key) {
+    private @Nullable String requirementFor(String key) {
         if (constraints.containsKey(key))
             return constraints.getString(key);
         for (Segment segment : segments) {
-            if (segment.hasKey() && segment.getKey().equals(key)) {
+            if (segment.hasKey() && key.equals(segment.getKey())) {
                 return segment.getRegexp();
             }
         }
@@ -256,7 +262,7 @@ public class Route {
         }
     }
 
-    private String appendQueryString(String path, OptionMap hash, List<String> queryKeys) {
+    private @Nullable String appendQueryString(@Nullable String path, OptionMap hash, @Nullable List<String> queryKeys) {
         if (path == null)
             return null;
 
@@ -266,17 +272,18 @@ public class Route {
         return path + buildQueryString(hash, queryKeys);
     }
 
-    private List<String> extraKeys(OptionMap hash) {
+    private List<String> extraKeys(@Nullable OptionMap hash) {
         List<String> extraKeys = new ArrayList<>();
         if (hash != null) {
+            List<String> keys = significantKeys();
             extraKeys.addAll(hash.keySet().stream()
-                    .filter(key -> !significantKeys.contains(key))
+                    .filter(key -> !keys.contains(key))
                     .toList());
         }
         return extraKeys;
     }
 
-    public String getActionRequirement() {
+    public @Nullable String getActionRequirement() {
         return actionRequirement;
     }
 

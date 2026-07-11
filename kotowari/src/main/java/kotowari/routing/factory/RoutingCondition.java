@@ -3,6 +3,8 @@ package kotowari.routing.factory;
 import enkan.collection.OptionMap;
 import kotowari.routing.Route;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.ws.rs.core.MediaType;
 import java.util.Arrays;
 import java.util.Collections;
@@ -17,14 +19,14 @@ import java.util.stream.Collectors;
  * @author kawasima
  */
 public class RoutingCondition {
-    private final String method;
+    private final @Nullable String method;
     private final String path;
     private final OptionMap requirements;
     private Set<MediaType> consumes;
     private Set<MediaType> produces;
-    private RoutePatterns.PatternsContext context;
+    private RoutePatterns.@Nullable PatternsContext context;
 
-    public RoutingCondition(String method, String path) {
+    public RoutingCondition(@Nullable String method, String path) {
         this.method = method;
         this.path = path;
         this.requirements = OptionMap.empty();
@@ -85,7 +87,7 @@ public class RoutingCondition {
      * @param controllerMethod The method of destination
      * @return a routing definition
      */
-    public Route to(Class<?> controllerClass, String controllerMethod) {
+    public Route to(Class<?> controllerClass, @Nullable String controllerMethod) {
         OptionMap conditions = OptionMap.empty();
         if (method != null) {
             conditions.put("method", method);
@@ -106,8 +108,9 @@ public class RoutingCondition {
             options.put("requirements", requirements);
         }
 
-        Route route = context.build(path, options);
-        context.addRoute(route);
+        RoutePatterns.PatternsContext ctx = Objects.requireNonNull(context, "routing context");
+        Route route = ctx.build(path, options);
+        ctx.addRoute(route);
         return route;
     }
 }

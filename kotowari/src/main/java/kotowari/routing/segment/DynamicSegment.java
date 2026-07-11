@@ -6,7 +6,10 @@ import kotowari.routing.RegexpUtils;
 import kotowari.routing.RouteBuilder;
 import kotowari.routing.Segment;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,8 +18,8 @@ import java.util.regex.Pattern;
  */
 public class DynamicSegment extends Segment {
     private final String key;
-    private String defaultValue;
-    private Pattern regexp;
+    private @Nullable String defaultValue;
+    private @Nullable Pattern regexp;
     private boolean wrapParentheses = false;
 
     public DynamicSegment(String key) {
@@ -27,7 +30,7 @@ public class DynamicSegment extends Segment {
         if (options.containsKey("default"))
             this.defaultValue = options.getString("default");
         if (options.containsKey("regexp"))
-            this.regexp = Pattern.compile(options.getString("regexp"));
+            this.regexp = Pattern.compile(Objects.requireNonNull(options.getString("regexp")));
         if (options.containsKey("wrapParentheses"))
             this.wrapParentheses = options.getBoolean("wrapParentheses");
     }
@@ -61,12 +64,12 @@ public class DynamicSegment extends Segment {
         return true;
     }
     @Override
-    public String getDefault() {
+    public @Nullable String getDefault() {
         return defaultValue;
     }
 
     @Override
-    public void setDefault(String defaultValue) {
+    public void setDefault(@Nullable String defaultValue) {
         this.defaultValue = defaultValue;
     }
 
@@ -100,6 +103,9 @@ public class DynamicSegment extends Segment {
     @Override
     public String interpolationChunk(OptionMap hash) {
         String value = hash.getString(getKey());
+        if (value == null) {
+            return "";
+        }
         try {
             return CodecUtils.urlEncode(value);
         } catch(Exception e) {
@@ -110,7 +116,7 @@ public class DynamicSegment extends Segment {
     @Override
     public String stringStructure(List<Segment> list, OptionMap hash) {
         if (isOptional()) {
-            if (hash.getString(getKey()).equals(getDefault())) {
+            if (Objects.equals(hash.getString(getKey()), getDefault())) {
                 return continueStringStructure(list, hash);
             } else {
                 return interpolationStatement(list, hash);
