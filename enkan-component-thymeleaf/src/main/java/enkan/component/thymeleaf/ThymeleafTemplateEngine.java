@@ -16,6 +16,8 @@ import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.templateresolver.ITemplateResolver;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.ByteArrayInputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
@@ -32,28 +34,29 @@ import java.util.function.Function;
 public class ThymeleafTemplateEngine extends TemplateEngine<ThymeleafTemplateEngine> {
     private String prefix = "templates/";
     private String suffix = ".html";
-    private ClassLoader classLoader;
+    private @Nullable ClassLoader classLoader;
     private Charset charset = StandardCharsets.UTF_8;
     private Locale locale = Locale.getDefault();
 
-    private Set<IDialect> dialects;
-    private Set<ITemplateResolver> templateResolvers;
-    private Set<IMessageResolver> messageResolvers;
-    private Set<ILinkBuilder> linkBuilders;
+    private @Nullable Set<IDialect> dialects;
+    private @Nullable Set<ITemplateResolver> templateResolvers;
+    private @Nullable Set<IMessageResolver> messageResolvers;
+    private @Nullable Set<ILinkBuilder> linkBuilders;
 
-    private ICacheManager cacheManager;
+    private @Nullable ICacheManager cacheManager;
 
-    private org.thymeleaf.TemplateEngine thymeleafEngine;
+    private org.thymeleaf.@Nullable TemplateEngine thymeleafEngine;
 
     @Override
     public HttpResponse render(String name, Object... keyOrVals) {
-        if (thymeleafEngine == null) {
+        final org.thymeleaf.TemplateEngine engine = thymeleafEngine;
+        if (engine == null) {
             throw new MisconfigurationException("core.COMPONENT_NOT_FOUND", "ThymeleafTemplateEngine", getClass().getSimpleName());
         }
         TemplatedHttpResponse response = TemplatedHttpResponse.create(name, keyOrVals);
         response.setBody(new LazyRenderInputStream(() -> {
             Context ctx = new Context(locale, response.getContext());
-            return new ByteArrayInputStream(thymeleafEngine.process(name, ctx).getBytes(charset));
+            return new ByteArrayInputStream(engine.process(name, ctx).getBytes(charset));
         }));
 
         HttpResponseUtils.contentType(response, "text/html; charset=" + charset.name());
