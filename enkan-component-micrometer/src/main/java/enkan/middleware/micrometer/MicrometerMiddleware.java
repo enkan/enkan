@@ -5,6 +5,7 @@ import enkan.MiddlewareChain;
 import enkan.component.micrometer.MicrometerComponent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
+import org.jspecify.annotations.Nullable;
 
 import jakarta.inject.Inject;
 import java.util.Objects;
@@ -23,7 +24,7 @@ public class MicrometerMiddleware<REQ, RES> implements DecoratorMiddleware<REQ, 
     private MicrometerComponent micrometer;
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
         Timer requestTimer = Objects.requireNonNull(micrometer.getRequestTimer(),
                 "MicrometerComponent is not started");
         Counter errorCounter = Objects.requireNonNull(micrometer.getErrorCounter(),
