@@ -15,6 +15,7 @@ import kotowari.component.TemplateEngine;
 import kotowari.data.TemplatedHttpResponse;
 import kotowari.data.Validatable;
 import kotowari.io.LazyRenderInputStream;
+import org.jspecify.annotations.Nullable;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.function.Function;
 
 
@@ -33,12 +35,12 @@ import java.util.function.Function;
  * @author kawasima
  */
 public class FreemarkerTemplateEngine extends TemplateEngine<FreemarkerTemplateEngine> {
-    private Configuration config;
+    private @Nullable Configuration config;
     private String prefix = "templates";
     private String suffix = ".ftl";
-    private ClassLoader classLoader;
+    private @Nullable ClassLoader classLoader;
     private Charset encoding = StandardCharsets.UTF_8;
-    private TemplateLoader templateLoader;
+    private @Nullable TemplateLoader templateLoader;
 
     private OutputFormat outputFormat = HTMLOutputFormat.INSTANCE;
 
@@ -50,7 +52,8 @@ public class FreemarkerTemplateEngine extends TemplateEngine<FreemarkerTemplateE
         TemplatedHttpResponse response = TemplatedHttpResponse.create(name, keyOrVals);
         response.setBody(new LazyRenderInputStream(() -> {
             try {
-                Template template = config.getTemplate(name + suffix, encoding.name());
+                Template template = Objects.requireNonNull(config, "FreemarkerTemplateEngine has not been started")
+                        .getTemplate(name + suffix, encoding.name());
                 StringWriter writer = new StringWriter();
                 template.process(response.getContext(), writer);
                 return new ByteArrayInputStream(writer.toString().getBytes(encoding));

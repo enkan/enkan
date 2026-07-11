@@ -6,6 +6,7 @@ import freemarker.template.TemplateMethodModelEx;
 import freemarker.template.TemplateModel;
 import freemarker.template.TemplateModelException;
 import kotowari.data.Validatable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Form object model.
@@ -31,7 +32,7 @@ public class ValidatableFormAdapter extends BeanModel {
         };
     }
 
-    public TemplateModel get(String key) throws TemplateModelException {
+    public @Nullable TemplateModel get(String key) throws TemplateModelException {
         TemplateModel model = super.get(key);
         if (model == null) {
             return switch (key) {
