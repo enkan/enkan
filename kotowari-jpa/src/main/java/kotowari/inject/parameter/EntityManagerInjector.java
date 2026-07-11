@@ -4,6 +4,8 @@ import enkan.web.data.HttpRequest;
 import enkan.data.jpa.EntityManageable;
 import kotowari.inject.ParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.persistence.EntityManager;
 import java.util.Optional;
 
@@ -33,7 +35,7 @@ public class EntityManagerInjector implements ParameterInjector<EntityManager> {
      * {@inheritDoc}
      */
     @Override
-    public EntityManager getInjectObject(HttpRequest request) {
+    public @Nullable EntityManager getInjectObject(HttpRequest request) {
         return Optional.ofNullable(request)
                 .filter(EntityManageable.class::isInstance)
                 .map(EntityManageable.class::cast)
