@@ -9,6 +9,8 @@ import enkan.throttling.Throttle;
 import enkan.web.middleware.WebMiddleware;
 import enkan.web.util.HttpResponseUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -22,7 +24,7 @@ public class ThrottlingMiddleware implements WebMiddleware {
     private List<Throttle> throttles = Collections.emptyList();
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         if (throttles.stream()
                 .anyMatch(throttle -> throttle.apply(request))) {
             return builder(HttpResponseUtils.response("Too Many Request"))
