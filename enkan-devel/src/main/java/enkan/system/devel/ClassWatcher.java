@@ -70,7 +70,9 @@ public class ClassWatcher implements Runnable, Closeable {
                 if (kind == StandardWatchEventKinds.OVERFLOW) continue;
 
                 @SuppressWarnings("unchecked") WatchEvent<Path> pathEvent = (WatchEvent<Path>) event;
-                Path path = watchings.get(key).resolve(pathEvent.context());
+                Path watchDir = watchings.get(key);
+                if (watchDir == null) continue;
+                Path path = watchDir.resolve(pathEvent.context());
 
                 if (kind == ENTRY_MODIFY) {
                     if (!path.toFile().isDirectory()) {

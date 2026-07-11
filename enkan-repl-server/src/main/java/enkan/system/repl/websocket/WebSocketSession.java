@@ -1,8 +1,11 @@
 package enkan.system.repl.websocket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 /**
  * Represents a single WebSocket connection.
@@ -48,7 +51,7 @@ public class WebSocketSession implements Closeable {
      * @return the text message, or null if the connection was closed
      * @throws IOException if an I/O error occurs
      */
-    public String readMessage() throws IOException {
+    public @Nullable String readMessage() throws IOException {
         while (!closed) {
             int firstByte = in.read();
             if (firstByte == -1) {
@@ -81,7 +84,7 @@ public class WebSocketSession implements Closeable {
             byte[] payload = readExact((int) payloadLength);
 
             if (masked) {
-                unmask(payload, maskKey);
+                unmask(payload, Objects.requireNonNull(maskKey));
             }
 
             switch (opcode) {

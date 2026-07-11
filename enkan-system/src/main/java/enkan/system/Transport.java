@@ -2,6 +2,8 @@ package enkan.system;
 
 import enkan.system.ReplResponse.ResponseStatus;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Arrays;
 
 import static enkan.system.ReplResponse.ResponseStatus.*;
@@ -35,7 +37,7 @@ public interface Transport {
      *                indefinitely
      * @return the received message, or {@code null} on timeout
      */
-    String recv(long timeout);
+    @Nullable String recv(long timeout);
 
     /**
      * Sends a normal output message with status {@code DONE}.
@@ -77,7 +79,7 @@ public interface Transport {
      *
      * @return the received message
      */
-    default String recv() {
+    default @Nullable String recv() {
         return recv(-1);
     }
 

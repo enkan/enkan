@@ -189,7 +189,7 @@ public class JShellIoProxy {
                     if (line == null) break;
                     broadcast(ReplResponse.withOut(line));
                 } catch (IOException e) {
-                    broadcast(ReplResponse.withErr(e.getMessage()));
+                    broadcast(ReplResponse.withErr(e.toString()));
                     break;
                 }
             }
@@ -203,7 +203,7 @@ public class JShellIoProxy {
                     if (line == null) break;
                     broadcast(ReplResponse.withErr(line));
                 } catch (IOException e) {
-                    broadcast(ReplResponse.withErr(e.getMessage()));
+                    broadcast(ReplResponse.withErr(e.toString()));
                     break;
                 }
             }

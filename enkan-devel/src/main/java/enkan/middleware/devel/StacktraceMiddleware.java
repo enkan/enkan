@@ -15,6 +15,7 @@ import net.unit8.moshas.Snippet;
 import net.unit8.moshas.Template;
 import net.unit8.moshas.context.Context;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,7 +154,8 @@ public class StacktraceMiddleware implements WebMiddleware {
      * @return HttpResponse
      */
     protected HttpResponse exResponse(HttpRequest request, Throwable ex) {
-        String accept = request.getHeaders().get("accept");
+        Headers headers = request.getHeaders();
+        String accept = headers != null ? headers.get("accept") : null;
         if (accept != null && accept.stripLeading().regionMatches(true, 0, "text/javascript", 0, "text/javascript".length())) {
             StringWriter sw = new StringWriter();
             ex.printStackTrace(new PrintWriter(sw));
@@ -182,7 +184,7 @@ public class StacktraceMiddleware implements WebMiddleware {
      * @param <NNRES> A response object
      */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         try {
             return castToHttpResponse(chain.next(request));
         } catch (Throwable t) {

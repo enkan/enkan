@@ -1,5 +1,7 @@
 package enkan.system;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.concurrent.Future;
 
 /**
@@ -28,9 +30,9 @@ public interface Repl extends Runnable {
      * Get a future object for a background task.
      *
      * @param name The name of a background task
-     * @return The future of background task
+     * @return The future of background task, or {@code null} if none is registered
      */
-    Future<?> getBackground(String name);
+    @Nullable Future<?> getBackground(String name);
 
     /**
      * Get the port number of this REPL.

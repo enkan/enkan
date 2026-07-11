@@ -1,5 +1,7 @@
 package enkan.system.devel;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 
 /**
@@ -7,7 +9,7 @@ import java.io.Serializable;
  *
  * @author kawasima
  */
-public record CompileResult(Throwable executionException) implements Serializable {
+public record CompileResult(@Nullable Throwable executionException) implements Serializable {
     public static CompileResult success() {
         return new CompileResult(null);
     }

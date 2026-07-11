@@ -1,6 +1,7 @@
 package enkan.system.command;
 
 import enkan.system.EnkanSystem;
+import org.jspecify.annotations.Nullable;
 import enkan.system.ReplResponse;
 import enkan.system.SystemCommand;
 import enkan.system.Transport;
@@ -34,7 +35,7 @@ public class HelpCommand implements SystemCommand {
     }
 
     @Override
-    public boolean execute(EnkanSystem system, Transport transport, String... args) {
+    public boolean execute(@Nullable EnkanSystem system, Transport transport, String... args) {
         if (args.length > 0 && !args[0].isEmpty()) {
             String name = args[0].startsWith("/") ? args[0].substring(1) : args[0];
             SystemCommand cmd = commands.get(name);

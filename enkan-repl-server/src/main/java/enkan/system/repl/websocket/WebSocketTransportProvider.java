@@ -3,6 +3,8 @@ package enkan.system.repl.websocket;
 import enkan.system.repl.TransportContext;
 import enkan.system.repl.TransportProvider;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -13,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class WebSocketTransportProvider implements TransportProvider {
     private final int port;
-    private WebSocketServer wsServer;
+    private @Nullable WebSocketServer wsServer;
 
     /**
      * Create a provider with an ephemeral (auto-assigned) port.

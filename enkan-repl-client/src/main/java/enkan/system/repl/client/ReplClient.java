@@ -7,6 +7,7 @@ import enkan.system.repl.serdes.Fressian;
 import enkan.system.repl.serdes.ReplResponseReader;
 import enkan.system.repl.serdes.ReplResponseWriter;
 import enkan.system.repl.serdes.ResponseStatusReader;
+import org.jspecify.annotations.Nullable;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -47,16 +48,16 @@ public class ReplClient {
     private static final String LOCAL_HELP_HEADER = "Client commands (available without server connection):";
     private static final Map<String, String> LOCAL_COMMAND_HELP = createLocalCommandHelp();
     private final ExecutorService clientThread = Executors.newSingleThreadExecutor();
-    private ConsoleHandler consoleHandler;
+    private @Nullable ConsoleHandler consoleHandler;
 
     /** Package-private so tests in the same package can drive {@code connect()}
      *  directly without spinning up the full {@link ReplClient} CLI loop. */
     static class ConsoleHandler implements Runnable {
         private static final String MONITOR_ADDRESS = "inproc://monitor-";
-        private ZContext ctx;
-        private volatile ZMQ.Socket socket;
-        private volatile ZMQ.Socket rendererSock;
-        private volatile ZMQ.Socket completerSock;
+        private @Nullable ZContext ctx;
+        private volatile ZMQ.@Nullable Socket socket;
+        private volatile ZMQ.@Nullable Socket rendererSock;
+        private volatile ZMQ.@Nullable Socket completerSock;
         private final LineReader reader;
         private final Fressian fressian;
         private final Map<String, SystemCommand> clientLocalCommands = new LinkedHashMap<>();
@@ -103,15 +104,18 @@ public class ReplClient {
             // Guard against a race where closeSockets() nulls ctx between here and
             // createSocket(). If the REPL is already shutting down, skip the attempt.
             if (!isAvailable.get()) return;
+            // Capture ctx once: closeSockets() may null it concurrently on shutdown.
+            final ZContext zctx = ctx;
+            if (zctx == null) return;
             // Build all per-attempt state on the stack so a failure leaves the
             // existing connection (and the REPL itself) untouched. Only after
             // the completer handshake succeeds do we publish the new sockets to
             // instance fields.
-            final ZMQ.Socket newSocket = ctx.createSocket(SocketType.DEALER);
+            final ZMQ.Socket newSocket = zctx.createSocket(SocketType.DEALER);
             newSocket.setLinger(0);
 
             newSocket.connect("tcp://" + host + ":" + port);
-            final ZMQ.Poller poller = ctx.createPoller(1);
+            final ZMQ.Poller poller = zctx.createPoller(1);
             poller.register(newSocket, ZMQ.Poller.POLLIN);
             newSocket.send("/completer");
 
@@ -148,7 +152,7 @@ public class ReplClient {
             final String monitorAddress = MONITOR_ADDRESS + UUID.randomUUID();
             if (newSocket.monitor(monitorAddress, ZMQ.EVENT_DISCONNECTED | ZMQ.EVENT_CLOSED)) {
                 ZThread.start(args -> {
-                    ZMQ.Socket monSock = ctx.createSocket(SocketType.PAIR);
+                    ZMQ.Socket monSock = zctx.createSocket(SocketType.PAIR);
                     monSock.setLinger(0);
                     monSock.connect(monitorAddress);
                     try {
@@ -183,7 +187,7 @@ public class ReplClient {
             String completerPort = completerRes.getOut();
             ZMQ.Socket newCompleterSock = null;
             if (completerPort != null && completerPort.matches("\\d+")) {
-                newCompleterSock = ctx.createSocket(SocketType.DEALER);
+                newCompleterSock = zctx.createSocket(SocketType.DEALER);
                 newCompleterSock.connect("tcp://" + host + ":" + Integer.parseInt(completerPort));
                 if (reader instanceof org.jline.reader.impl.LineReaderImpl impl) {
                     RemoteCompleter completer = new RemoteCompleter(newCompleterSock);

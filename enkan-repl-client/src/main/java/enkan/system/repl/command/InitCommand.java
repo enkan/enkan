@@ -1,6 +1,7 @@
 package enkan.system.repl.command;
 
 import enkan.system.EnkanSystem;
+import org.jspecify.annotations.Nullable;
 import enkan.system.SystemCommand;
 import enkan.system.Transport;
 import org.slf4j.Logger;
@@ -69,23 +70,23 @@ public class InitCommand implements SystemCommand {
             .build();
 
     /** LLM API configuration resolved once per {@link #execute} call from env vars or system properties. */
-    String apiUrl;
-    String apiKey;
-    String model;
+    @Nullable String apiUrl;
+    @Nullable String apiKey;
+    @Nullable String model;
 
     /**
      * Reference files fetched from GitHub, shared between planning and generation phases.
      * {@code null} means "not yet attempted"; an empty map means "fetched but everything failed"
      * (so offline runs do not re-hit the network on every prompt).
      */
-    private Map<String, String> referenceCache = null;
+    private @Nullable Map<String, String> referenceCache = null;
 
     /**
      * Cached result of {@link #loadInitReference()}. Loaded once on first use; reused
      * across the planning, generation, and fix-loop phases so classpath resources are
      * not re-read on every prompt build.
      */
-    private Map<String, String> initReferenceCache = null;
+    private @Nullable Map<String, String> initReferenceCache = null;
 
     private static final String[] FORBIDDEN_MARKERS = {
             "springframework",
@@ -148,7 +149,7 @@ public class InitCommand implements SystemCommand {
     }
 
     @Override
-    public boolean execute(EnkanSystem system, Transport transport, String... args) {
+    public boolean execute(@Nullable EnkanSystem system, Transport transport, String... args) {
         transport.sendOut(BOLD + CYAN + "\n  Enkan Project Generator" + RESET + "\n");
 
         this.apiUrl = config("ENKAN_AI_API_URL", "enkan.ai.apiUrl", DEFAULT_API_URL);
@@ -246,7 +247,7 @@ public class InitCommand implements SystemCommand {
         return "Generate a new Enkan project using AI";
     }
 
-    String reviewPlanInteractively(Transport transport, String description,
+    @Nullable String reviewPlanInteractively(Transport transport, String description,
             String projectName, String groupId, String outputDir) {
         String plan;
         try {
@@ -970,7 +971,7 @@ public class InitCommand implements SystemCommand {
     /**
      * Structured result of a Maven build step. {@link #errors} is {@code null} on success.
      */
-    record BuildResult(BuildPhase phase, String errors) {
+    record BuildResult(BuildPhase phase, @Nullable String errors) {
         boolean succeeded() { return errors == null; }
     }
 
@@ -1132,7 +1133,7 @@ public class InitCommand implements SystemCommand {
     }
 
     static String buildFixUserPrompt(BuildResult result, Path outPath) {
-        var filesToInclude = result.errors().lines()
+        var filesToInclude = java.util.Objects.requireNonNull(result.errors()).lines()
                 .map(line -> extractFileFromError(line, outPath))
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
@@ -1179,7 +1180,7 @@ public class InitCommand implements SystemCommand {
      * Returns a {@link Path} contained within {@code outPath}, or {@code null} if no
      * path could be extracted or the path is outside the project root.
      */
-    static Path extractFileFromError(String errorLine, Path outPath) {
+    static @Nullable Path extractFileFromError(String errorLine, Path outPath) {
         if (!errorLine.startsWith("[ERROR]") && !errorLine.startsWith("[FATAL]")) return null;
         String body = errorLine.substring(errorLine.indexOf(']') + 1).trim();
 
@@ -1203,7 +1204,7 @@ public class InitCommand implements SystemCommand {
         return null;
     }
 
-    private static Path safeInProjectPath(String candidate, Path outPath) {
+    private static @Nullable Path safeInProjectPath(String candidate, Path outPath) {
         if (candidate == null || candidate.isBlank()) return null;
         try {
             Path p = Path.of(candidate).toAbsolutePath().normalize();
@@ -1266,7 +1267,8 @@ public class InitCommand implements SystemCommand {
      * {@code /chat/completions} is appended. A trailing slash on the base URL is tolerated.
      */
     URI resolveChatCompletionUri() {
-        String base = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
+        String url = java.util.Objects.requireNonNull(apiUrl);
+        String base = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
         if (base.endsWith("/chat/completions")) {
             return URI.create(base);
         }
@@ -1277,7 +1279,7 @@ public class InitCommand implements SystemCommand {
             throws IOException, InterruptedException {
         if (transport != null) transport.startSpinner(spinnerLabel);
         try {
-            String requestBody = buildRequestBody(model, systemPrompt, userPrompt, true);
+            String requestBody = buildRequestBody(java.util.Objects.requireNonNull(model), systemPrompt, userPrompt, true);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(resolveChatCompletionUri())
                     .timeout(Duration.ofMinutes(10))
@@ -1349,7 +1351,7 @@ public class InitCommand implements SystemCommand {
      *
      * @return the unescaped text, or {@code null} if the line has no text delta
      */
-    private String extractSseContent(String line) {
+    private @Nullable String extractSseContent(String line) {
         if (!line.startsWith("data: ")) return null;
         String data = line.substring(6).trim();
         if (data.equals("[DONE]")) return null;
@@ -1366,7 +1368,7 @@ public class InitCommand implements SystemCommand {
      * Extracts a JSON string value identified by {@code key} from {@code data},
      * skipping any occurrence that is actually part of {@code excludeKey}.
      */
-    String extractJsonStringField(String data, String key, String excludeKey) {
+    @Nullable String extractJsonStringField(String data, String key, @Nullable String excludeKey) {
         int searchFrom = 0;
         while (true) {
             int idx = data.indexOf(key, searchFrom);
@@ -1455,7 +1457,7 @@ public class InitCommand implements SystemCommand {
      * Extracts a relative file path from a markdown header line.
      * Handles formats like {@code ### src/main/java/Foo.java} or {@code **src/main/java/Foo.java**}.
      */
-    static String extractFilePath(String line) {
+    static @Nullable String extractFilePath(String line) {
         // ### path/to/file
         if (line.startsWith("### ")) {
             String candidate = line.substring(4).trim();
@@ -1804,7 +1806,7 @@ public class InitCommand implements SystemCommand {
      * dependency" errors later. A user who just downloaded a release build of
      * {@code enkan-repl} never sees the warning.
      */
-    String resolveEnkanVersionOrAbort(Transport transport) {
+    @Nullable String resolveEnkanVersionOrAbort(Transport transport) {
         String v = enkanVersion();
         if ("UNKNOWN".equals(v)) {
             transport.sendErr("Cannot determine Enkan version for the generated pom.xml.");

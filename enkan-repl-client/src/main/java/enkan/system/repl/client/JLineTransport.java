@@ -5,6 +5,7 @@ import enkan.system.Transport;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.UserInterruptException;
+import org.jspecify.annotations.Nullable;
 
 import java.io.PrintWriter;
 import java.util.concurrent.Executors;
@@ -41,9 +42,9 @@ public class JLineTransport implements Transport, AutoCloseable {
                 t.setDaemon(true);
                 return t;
             });
-    private ScheduledFuture<?> spinnerFuture;
+    private @Nullable ScheduledFuture<?> spinnerFuture;
     private final AtomicInteger spinnerTick = new AtomicInteger(0);
-    private volatile Consumer<Integer> connectCallback;
+    private volatile @Nullable Consumer<Integer> connectCallback;
 
     public JLineTransport(LineReader reader) {
         this.reader = reader;
@@ -68,7 +69,7 @@ public class JLineTransport implements Transport, AutoCloseable {
     }
 
     @Override
-    public String recv(long timeout) {
+    public @Nullable String recv(long timeout) {
         try {
             String p = pendingPrompt;
             pendingPrompt = "";

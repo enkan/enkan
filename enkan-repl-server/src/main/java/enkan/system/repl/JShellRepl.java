@@ -21,6 +21,8 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.jspecify.annotations.Nullable;
+
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -232,7 +234,7 @@ public class JShellRepl implements Repl {
      * {@inheritDoc}
      */
     @Override
-    public Future<?> getBackground(String name) {
+    public @Nullable Future<?> getBackground(String name) {
         Future<?> future = backgroundTasks.get(name);
         if (future != null && (future.isCancelled() || future.isDone())) {
             backgroundTasks.remove(name);
@@ -337,7 +339,7 @@ public class JShellRepl implements Repl {
              ZMQ.Socket server = ctx.createSocket(SocketType.ROUTER);
              ZMQ.Socket completerSock = ctx.createSocket(SocketType.ROUTER)) {
             int port = Env.getInt("repl.port", 0);
-            String host = Env.getString("repl.host", "localhost");
+            String host = Objects.requireNonNull(Env.getString("repl.host", "localhost"));
             localOnly = host.equals("localhost") || host.equals("127.0.0.1") || host.equals("::1");
             if (port == 0) {
                 port = server.bindToRandomPort("tcp://" + host);
@@ -408,8 +410,8 @@ public class JShellRepl implements Repl {
 
     }
 
-    private volatile Integer lastWrittenPort = null;
-    private volatile Path lastPortFile = null;
+    private volatile @Nullable Integer lastWrittenPort = null;
+    private volatile @Nullable Path lastPortFile = null;
 
     private static Path getPortFile() {
         String override = System.getProperty("enkan.repl.portFile");

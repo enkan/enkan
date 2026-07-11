@@ -1,5 +1,7 @@
 package enkan.system.repl.websocket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -28,9 +30,9 @@ public class WebSocketServer implements Runnable, Closeable {
     private final int port;
     private final BiConsumer<WebSocketSession, String> messageHandler;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
-    private volatile ServerSocket serverSocket;
+    private volatile @Nullable ServerSocket serverSocket;
     private volatile boolean stopped;
-    private volatile Consumer<String> onDisconnect;
+    private volatile @Nullable Consumer<String> onDisconnect;
 
     /**
      * @param port           the port to listen on
@@ -163,7 +165,7 @@ public class WebSocketServer implements Runnable, Closeable {
     /**
      * Read a single line (terminated by \r\n or \n) byte-by-byte.
      */
-    private static String readLine(InputStream in) throws IOException {
+    private static @Nullable String readLine(InputStream in) throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         int b;
         while ((b = in.read()) != -1) {

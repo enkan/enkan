@@ -11,6 +11,8 @@ import net.unit8.moshas.MoshasEngine;
 import net.unit8.moshas.Template;
 import net.unit8.moshas.context.Context;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.StringWriter;
 
 import static enkan.web.util.HttpResponseUtils.*;
@@ -36,7 +38,7 @@ public class HttpStatusCatMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
         if (response != null && (isEmptyBody(response) || isMoreCats(response))) {
             String type = getHeader(response, "Content-Type");
