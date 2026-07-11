@@ -39,7 +39,7 @@ public class NativeControllerInvokerMiddleware<RES> implements Middleware<HttpRe
     private final Map<Class<?>, Object> controllerCache = new ConcurrentHashMap<>();
     private final Map<String, ParameterInjector<?>[]> injectorCache = new ConcurrentHashMap<>();
     private static final ParameterInjector<?> BODY_SERIALIZABLE_INJECTOR = new BodySerializableInjector<>();
-    private List<ParameterInjector<?>> parameterInjectors;
+    private List<ParameterInjector<?>> parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
 
     public NativeControllerInvokerMiddleware(ComponentInjector componentInjector) {
         this.componentInjector = componentInjector;
@@ -47,9 +47,8 @@ public class NativeControllerInvokerMiddleware<RES> implements Middleware<HttpRe
 
     @PostConstruct
     protected void setupParameterInjectors() {
-        if (parameterInjectors == null) {
-            parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
-        }
+        // parameterInjectors is initialized inline; retained as a @PostConstruct
+        // hook and for callers that invoke it directly.
     }
 
     private ParameterInjector<?>[] resolveInjectors(Method method) {

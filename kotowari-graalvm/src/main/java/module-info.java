@@ -8,6 +8,7 @@ module kotowari.graalvm {
     requires jakarta.annotation;
     requires transitive kotowari;
     requires transitive org.graalvm.nativeimage;
+    requires transitive org.jspecify;
 
     opens kotowari.graalvm;
     opens enkan.graalvm;

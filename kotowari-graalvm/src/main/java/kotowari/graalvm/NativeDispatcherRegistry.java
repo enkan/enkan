@@ -13,7 +13,7 @@ package kotowari.graalvm;
  * no memory-visibility guarantee is needed once the value is baked into the heap.
  */
 public final class NativeDispatcherRegistry {
-    private static KotowariDispatcherInvoker invoker;
+    private static @org.jspecify.annotations.Nullable KotowariDispatcherInvoker invoker;
 
     private NativeDispatcherRegistry() {}
 
@@ -21,7 +21,7 @@ public final class NativeDispatcherRegistry {
         invoker = inv;
     }
 
-    public static KotowariDispatcherInvoker get() {
+    public static @org.jspecify.annotations.Nullable KotowariDispatcherInvoker get() {
         return invoker;
     }
 }
