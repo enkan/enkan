@@ -4,6 +4,8 @@ import enkan.web.data.HttpRequest;
 import kotowari.data.BodyDeserializable;
 import kotowari.inject.RuntimeParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Injects the deserialized request body when it is type-compatible.
  *
@@ -40,7 +42,7 @@ public class BodySerializableInjector<T> implements RuntimeParameterInjector<T> 
     }
 
     @Override
-    public T getInjectObject(HttpRequest request) {
+    public @Nullable T getInjectObject(HttpRequest request) {
         return ((BodyDeserializable) request).getDeserializedBody();
     }
 }

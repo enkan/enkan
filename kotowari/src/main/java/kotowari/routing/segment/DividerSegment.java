@@ -2,11 +2,13 @@ package kotowari.routing.segment;
 
 import enkan.collection.OptionMap;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * @author kawasima
  */
 public class DividerSegment extends StaticSegment {
-    public DividerSegment(String value, OptionMap options) {
+    public DividerSegment(@Nullable String value, OptionMap options) {
         super(value, setDefault(options));
     }
 

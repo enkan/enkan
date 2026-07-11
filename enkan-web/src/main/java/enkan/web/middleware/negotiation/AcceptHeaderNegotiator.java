@@ -2,6 +2,8 @@ package enkan.web.middleware.negotiation;
 
 import enkan.web.util.CodecUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.ws.rs.core.MediaType;
 import java.io.Serializable;
 import java.nio.charset.Charset;
@@ -41,7 +43,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
         return Double.parseDouble(qstr);
     }
 
-    public AcceptFragment<MediaType> parseMediaTypeAcceptFragment(String accept) {
+    public @Nullable AcceptFragment<MediaType> parseMediaTypeAcceptFragment(String accept) {
         String[] tokens = ACCEPT_DELIMITER.split(accept);
         if (tokens.length > 0) {
             Optional<Double> q = Arrays.stream(tokens).skip(1)
@@ -56,7 +58,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
         return null;
     }
 
-    public AcceptFragment<String> parseStringAcceptFragment(String accept) {
+    public @Nullable AcceptFragment<String> parseStringAcceptFragment(String accept) {
         String[] tokens = ACCEPT_DELIMITER.split(accept);
         if (tokens.length > 0) {
             Optional<Double> q = Arrays.stream(tokens).skip(1)
@@ -95,7 +97,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
     }
 
     @Override
-    public MediaType bestAllowedContentType(String acceptsHeader, Set<String> allowedTypes) {
+    public @Nullable MediaType bestAllowedContentType(String acceptsHeader, Set<String> allowedTypes) {
         String cacheKey = stableCacheKey(acceptsHeader, allowedTypes);
         return contentTypeCache.computeIfAbsent(cacheKey, k -> {
             Function<AcceptFragment<MediaType>, AcceptFragment<MediaType>> serverWeightFunc = createServerWeightFunc(allowedTypes.stream()
@@ -112,7 +114,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
     }
 
     @Override
-    public String bestAllowedCharset(String acceptsHeader, Set<String> available) {
+    public @Nullable String bestAllowedCharset(String acceptsHeader, Set<String> available) {
         String cacheKey = stableCacheKey(acceptsHeader, available);
         return charsetCache.computeIfAbsent(cacheKey, k -> {
             // Lowercase accept keys for case-insensitive matching (RFC 9110 §12.5.3)
@@ -157,7 +159,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
     }
 
     @Override
-    public String bestAllowedEncoding(String acceptsHeader, Set<String> available) {
+    public @Nullable String bestAllowedEncoding(String acceptsHeader, Set<String> available) {
         Map<String, Double> accepts = Arrays
                 .stream(ACCEPTS_DELIMITER.split(acceptsHeader))
                 .map(this::parseStringAcceptFragment)
@@ -185,7 +187,7 @@ public class AcceptHeaderNegotiator implements ContentNegotiator {
     }
 
     @Override
-    public String bestAllowedLanguage(String acceptsHeader, Set<String> available) {
+    public @Nullable String bestAllowedLanguage(String acceptsHeader, Set<String> available) {
         String cacheKey = stableCacheKey(acceptsHeader, available);
         return languageCache.computeIfAbsent(cacheKey, k -> {
             Map<String, Double> accepts = Arrays

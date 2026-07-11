@@ -1,12 +1,14 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * @author kawasima
  */
 public interface UriAvailable {
-    String getUri();
-    void setUri(String uri);
+    @Nullable String getUri();
+    void setUri(@Nullable String uri);
 
-    String getRequestMethod();
-    void setRequestMethod(String method);
+    @Nullable String getRequestMethod();
+    void setRequestMethod(@Nullable String method);
 }

@@ -3,6 +3,8 @@ package enkan.web.middleware.multipart;
 import enkan.collection.Parameters;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.web.util.CodecUtils;
+
+import org.jspecify.annotations.Nullable;
 import enkan.util.SearchUtils;
 
 import java.io.EOFException;
@@ -54,7 +56,7 @@ public class MultipartParser {
     private static final Pattern DISPPARM = Pattern.compile(String.format(";\\s*(?:%s|%s)\\s*", REGULAR_PARAMETER.pattern(), EXTENDED_PARAMETER.pattern()));
     private static final Pattern RFC2183 = Pattern.compile(String.format("^%s(%s)+$", CONDISP.pattern(), DISPPARM.pattern()), Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-    private static final BiFunction<String, String, File> TEMPFILE_FACTORY = (filename, contentType) -> {
+    private static final BiFunction<String, @Nullable String, File> TEMPFILE_FACTORY = (filename, contentType) -> {
         int idx = filename.indexOf('.');
         String extName = (idx >= 0 && idx < filename.length() - 1) ? filename.substring(idx) : "";
         try {
@@ -113,7 +115,12 @@ public class MultipartParser {
     public Parameters result() {
         Parameters params = Parameters.empty();
         collector.stream()
-                .forEach(part -> params.putAll(part.getData()));
+                .forEach(part -> {
+                    Parameters data = part.getData();
+                    if (data != null) {
+                        params.putAll(data);
+                    }
+                });
         return params;
     }
 
@@ -128,7 +135,7 @@ public class MultipartParser {
      * @param contentType the value of the {@code Content-Type} header
      * @return the boundary string, or {@code null} if not found or {@code contentType} is {@code null}
      */
-    public static String parseBoundary(String contentType) {
+    public static @Nullable String parseBoundary(@Nullable String contentType) {
         if (contentType == null) return null;
         // Must start with multipart/ media type.
         if (!contentType.trim().toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) return null;
@@ -176,7 +183,7 @@ public class MultipartParser {
      * @return a {@link Parameters} map of all parsed multipart parts
      * @throws IOException if an I/O error occurs while reading the stream
      */
-    public static Parameters parse(InputStream in, Long contentLength, String contentType, int bufferSize) throws IOException {
+    public static Parameters parse(InputStream in, @Nullable Long contentLength, @Nullable String contentType, int bufferSize) throws IOException {
         return parse(in, contentLength, contentType, bufferSize, -1, -1);
     }
 
@@ -192,7 +199,7 @@ public class MultipartParser {
      * @return a {@link Parameters} map of all parsed multipart parts
      * @throws IOException if an I/O error occurs while reading the stream
      */
-    public static Parameters parse(InputStream in, Long contentLength, String contentType, int bufferSize,
+    public static Parameters parse(InputStream in, @Nullable Long contentLength, @Nullable String contentType, int bufferSize,
                                    long maxFileSize, long maxFormFieldSize) throws IOException {
         if (contentLength != null && contentLength == 0) return Parameters.empty();
         String boundary = parseBoundary(contentType);
@@ -369,7 +376,7 @@ public class MultipartParser {
         }
     }
 
-    private String getFilename(String head) {
+    private @Nullable String getFilename(String head) {
         String filename = null;
         Matcher rfc2183Matcher = RFC2183.matcher(head);
         Matcher brokenQuotedMatcher = BROKEN_QUOTED.matcher(head);

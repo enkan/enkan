@@ -5,6 +5,8 @@ import enkan.DecoratorMiddleware;
 import enkan.MiddlewareChain;
 import enkan.exception.ServiceUnavailableException;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * @author kawasima
  */
@@ -17,7 +19,7 @@ public class ServiceUnavailableMiddleware<REQ, RES> implements DecoratorMiddlewa
     }
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> next) {
         if (endpoint != null) {
             return endpoint.handle(req);
         }

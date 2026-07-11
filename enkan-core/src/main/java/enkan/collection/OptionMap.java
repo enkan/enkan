@@ -1,5 +1,7 @@
 package enkan.collection;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.*;
 
 /**
@@ -41,13 +43,13 @@ public class OptionMap extends HashMap<String, Object> {
      * @return a new option map
      * @throws enkan.exception.MisconfigurationException if the array length is odd
      */
-    public static OptionMap of(Object... init) {
+    public static OptionMap of(@Nullable Object... init) {
         if (init.length % 2 != 0) {
             throw new enkan.exception.MisconfigurationException("core.MISSING_KEY_VALUE_PAIR");
         }
         OptionMap m = empty();
         for(int i = 0; i < init.length; i += 2) {
-            m.put(init[i].toString(), init[i + 1]);
+            m.put(Objects.toString(init[i]), init[i + 1]);
         }
         return m;
     }
@@ -58,7 +60,7 @@ public class OptionMap extends HashMap<String, Object> {
      * @param key the key
      * @return the string value, or {@code null}
      */
-    public String getString(String key) {
+    public @Nullable String getString(String key) {
         return getString(key, null);
     }
 
@@ -69,7 +71,7 @@ public class OptionMap extends HashMap<String, Object> {
      * @param defaultValue the fallback value
      * @return the string value, or {@code defaultValue}
      */
-    public String getString(String key, String defaultValue) {
+    public @Nullable String getString(String key, @Nullable String defaultValue) {
         Object value = get(key);
         if (value == null) return defaultValue;
         return value.toString();

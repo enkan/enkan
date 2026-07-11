@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.web.data.ContentNegotiable;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.middleware.negotiation.AcceptHeaderNegotiator;
 import enkan.web.middleware.negotiation.ContentNegotiator;
 import enkan.web.collection.Headers;
@@ -27,8 +28,8 @@ public class ContentNegotiationMiddleware implements WebMiddleware {
     private ContentNegotiator negotiator;
     private Set<String> allowedTypes;
     private Set<String> allowedLanguages;
-    private Set<String> allowedCharsets;
-    private Set<String> allowedEncodings;
+    private @Nullable Set<String> allowedCharsets;
+    private @Nullable Set<String> allowedEncodings;
 
     public ContentNegotiationMiddleware() {
         negotiator = new AcceptHeaderNegotiator();
@@ -37,7 +38,7 @@ public class ContentNegotiationMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         Headers headers = request.getHeaders();
         String accept = headers != null ? Objects.toString(headers.getOrDefault("Accept", "*/*"), "*/*") : "*/*";
         MediaType mediaType = negotiator.bestAllowedContentType(accept, allowedTypes);

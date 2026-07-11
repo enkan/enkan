@@ -3,13 +3,15 @@ package kotowari.routing.segment;
 import enkan.collection.OptionMap;
 import enkan.web.util.CodecUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.regex.Matcher;
 
 /**
  * @author kawasima
  */
 public class OptionalFormatSegment extends DynamicSegment{
-    public OptionalFormatSegment(String key, OptionMap options) {
+    public OptionalFormatSegment(@Nullable String key, OptionMap options) {
         super("format", OptionMap.of("optional", true));
     }
 
@@ -38,7 +40,8 @@ public class OptionalFormatSegment extends DynamicSegment{
         if (m != null) {
             params.put(getKey(), CodecUtils.urlDecode(m.substring(1)));
         } else {
-            params.put(getKey(), CodecUtils.urlDecode(getDefault()));
+            String def = getDefault();
+            params.put(getKey(), def == null ? null : CodecUtils.urlDecode(def));
         }
     }
 }

@@ -6,6 +6,8 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.web.util.HttpResponseUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Map;
 
 /**
@@ -30,9 +32,9 @@ public class ReplConsoleEndpoint implements Endpoint<HttpRequest, HttpResponse> 
     );
 
     @Override
-    public HttpResponse handle(HttpRequest request) {
+    public @Nullable HttpResponse handle(HttpRequest request) {
         String uri = request.getUri();
-        if (!uri.startsWith(MOUNT_PATH)) {
+        if (uri == null || !uri.startsWith(MOUNT_PATH)) {
             return null;
         }
 

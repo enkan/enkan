@@ -1,6 +1,9 @@
 package enkan.web.collection;
 
 import enkan.collection.Parameters;
+
+import org.jspecify.annotations.Nullable;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -39,7 +42,7 @@ public class Headers extends Parameters {
         );
     }
 
-    private transient Set<String> cachedKeySet;
+    private transient @Nullable Set<String> cachedKeySet;
 
     protected Headers() {
         setCaseSensitive(false);
@@ -123,19 +126,19 @@ public class Headers extends Parameters {
     }
 
     @Override
-    public Object put(String key, Object value) {
+    public @Nullable Object put(String key, @Nullable Object value) {
         invalidateKeySetCache();
         return super.put(key, value);
     }
 
     @Override
-    public Object remove(Object key) {
+    public @Nullable Object remove(Object key) {
         invalidateKeySetCache();
         return super.remove(key);
     }
 
     @Override
-    public Object replace(String key, Object value) {
+    public @Nullable Object replace(String key, Object value) {
         invalidateKeySetCache();
         return super.replace(key, value);
     }

@@ -52,6 +52,10 @@ public class JettyAdapter {
             HttpRequest request = ServletUtils.buildRequest(servletRequest, application::createRequest);
             try {
                 HttpResponse response = application.handle(request);
+                if (response == null) {
+                    servletResponse.sendError(HttpServletResponse.SC_NOT_FOUND);
+                    return;
+                }
                 ServletUtils.updateServletResponse(servletResponse, response);
             } catch (Exception e) {
                 LOG.error("Unhandled exception", e);
@@ -86,7 +90,8 @@ public class JettyAdapter {
         }
         context.setTrustStorePassword(options.getString("truststorePassword"));
 
-        String clientAuth = options.getString("clientAuth", "none");
+        String clientAuthOpt = options.getString("clientAuth", "none");
+        String clientAuth = clientAuthOpt != null ? clientAuthOpt : "none";
         switch (clientAuth) {
             case "need" -> context.setNeedClientAuth(true);
             case "want" -> context.setWantClientAuth(true);

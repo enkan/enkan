@@ -22,6 +22,10 @@
     </repositories>
     <dependencies>
         <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
             <groupId>net.unit8.enkan</groupId>
             <artifactId>enkan-web</artifactId>
         </dependency>

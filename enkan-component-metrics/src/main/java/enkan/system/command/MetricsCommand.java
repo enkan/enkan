@@ -9,8 +9,10 @@ import enkan.system.EnkanSystem;
 import enkan.system.ReplResponse;
 import enkan.system.SystemCommand;
 import enkan.system.Transport;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -96,8 +98,8 @@ public class MetricsCommand implements SystemCommand {
     }
 
     @Override
-    public boolean execute(EnkanSystem system, Transport transport, String... args) {
-        Optional<MetricsComponent> found = findMetrics(system);
+    public boolean execute(@Nullable EnkanSystem system, Transport transport, String... args) {
+        Optional<MetricsComponent> found = findMetrics(Objects.requireNonNull(system));
         if (found.isEmpty()) {
             transport.send(ReplResponse.withOut("MetricsComponent is not registered in the system."));
             transport.sendOut("", ReplResponse.ResponseStatus.DONE);
@@ -112,9 +114,9 @@ public class MetricsCommand implements SystemCommand {
         transport.send(ReplResponse.withOut("-- Active Requests ----------------------------------"));
         printCounter(transport, metrics.getActiveRequests());
         transport.send(ReplResponse.withOut("-- Errors ------------------------------------"));
-        printMeter(transport, metrics.getErrors());
+        printMeter(transport, Objects.requireNonNull(metrics.getErrors()));
         transport.send(ReplResponse.withOut("-- Request Timer -----------------------------"));
-        printTimer(transport, metrics.getRequestTimer());
+        printTimer(transport, Objects.requireNonNull(metrics.getRequestTimer()));
         transport.sendOut("", ReplResponse.ResponseStatus.DONE);
         return true;
     }

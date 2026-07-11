@@ -1,5 +1,7 @@
 package enkan.exception;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when execution reaches a code path that the framework authors
  * considered impossible.
@@ -15,7 +17,7 @@ public final class UnreachableException extends UnrecoverableException {
         this(null);
     }
 
-    public UnreachableException(Throwable cause) {
+    public UnreachableException(@Nullable Throwable cause) {
         super("This exception has proved a framework bug.", cause);
     }
 }

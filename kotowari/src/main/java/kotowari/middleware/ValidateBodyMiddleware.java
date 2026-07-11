@@ -10,6 +10,8 @@ import enkan.util.ThreadingUtils;
 import kotowari.data.BodyDeserializable;
 import kotowari.data.Validatable;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -22,17 +24,20 @@ import java.util.Set;
  */
 @enkan.annotation.Middleware(name = "validateBody")
 public class ValidateBodyMiddleware<RES> implements Middleware<HttpRequest, RES, HttpRequest, RES> {
-    private volatile Validator validator;
+    private volatile @Nullable Validator validator;
 
     private Validator getValidator() {
-        if (validator == null) {
+        Validator v = validator;
+        if (v == null) {
             synchronized (this) {
-                if (validator == null) {
+                v = validator;
+                if (v == null) {
                     try {
                         ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
                         Runtime.getRuntime().addShutdownHook(new Thread(factory::close,
                                 "ValidateBodyMiddleware-ValidatorFactory-shutdown"));
-                        validator = factory.getValidator();
+                        v = factory.getValidator();
+                        validator = v;
                     } catch (Exception | NoClassDefFoundError e) {
                         throw new MisconfigurationException("core.MISSING_IMPLEMENTATION",
                                 "ValidateBodyMiddleware requires a Jakarta Validation provider "
@@ -41,10 +46,10 @@ public class ValidateBodyMiddleware<RES> implements Middleware<HttpRequest, RES,
                 }
             }
         }
-        return validator;
+        return v;
     }
 
-    protected Validatable getValidatable(HttpRequest request) {
+    protected @Nullable Validatable getValidatable(HttpRequest request) {
         if (request instanceof BodyDeserializable bd) {
             Object body = bd.getDeserializedBody();
             if (body instanceof Validatable v) {
@@ -55,7 +60,7 @@ public class ValidateBodyMiddleware<RES> implements Middleware<HttpRequest, RES,
     }
 
     @Override
-    public <NNREQ, NNRES> RES handle(HttpRequest request, MiddlewareChain<HttpRequest, RES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(HttpRequest request, MiddlewareChain<HttpRequest, RES, NNREQ, NNRES> chain) {
 
         Optional<Validatable> validatable = ThreadingUtils.some(getValidatable(request), form -> {
             Multimap<String, Object> errors = Multimap.empty();

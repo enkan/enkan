@@ -2,6 +2,8 @@ package kotowari.inject;
 
 import enkan.web.data.HttpRequest;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Inject object to a controller method.
  *
@@ -33,7 +35,7 @@ public interface ParameterInjector<T> {
      * Get a object for injecting.
      *
      * @param request the request object
-     * @return an object for injection
+     * @return an object for injection, or {@code null} if the request carries none
      */
-    T getInjectObject(HttpRequest request);
+    @Nullable T getInjectObject(HttpRequest request);
 }

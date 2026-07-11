@@ -27,6 +27,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
+
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -110,7 +112,7 @@ public class RenderTemplateMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
         if (response instanceof TemplatedHttpResponse tres) {
             if (exports.contains(REQUEST)) {
@@ -139,7 +141,7 @@ public class RenderTemplateMiddleware implements WebMiddleware {
             if (exports.contains(CONVERSATION)) {
                 Conversation conversation = request.getConversation();
                 if (conversation != null) {
-                    if (!request.getConversation().isTransient()) {
+                    if (!conversation.isTransient()) {
                         String token = conversation.getId() + "$"
                                 + hmacEncoder.encodeToHex(conversation.getId() + "$" + conversation.getTimeout())
                                 + "$" + conversation.getTimeout();

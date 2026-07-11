@@ -1,5 +1,7 @@
 package enkan;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Endpoint is a specialized middleware.
  * It doesn't have a next middleware.
@@ -13,7 +15,7 @@ public interface Endpoint<REQ, RES> extends Middleware<REQ, RES, REQ, RES> {
      * @param next  {@inheritDoc}
      * @return      {@inheritDoc}
      */
-    default <NREQ, NRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NREQ, NRES> next) {
+    default <NREQ, NRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NREQ, NRES> next) {
         return handle(req);
     }
 
@@ -23,5 +25,5 @@ public interface Endpoint<REQ, RES> extends Middleware<REQ, RES, REQ, RES> {
      * @param req  A request object
      * @return     A response object
      */
-    RES handle(REQ req);
+    @Nullable RES handle(REQ req);
 }

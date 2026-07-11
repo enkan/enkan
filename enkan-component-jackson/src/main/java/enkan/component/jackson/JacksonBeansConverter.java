@@ -4,24 +4,30 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import enkan.component.AbstractBeansConverter;
 import enkan.component.ComponentLifecycle;
 import enkan.exception.MisconfigurationException;
+
+import org.jspecify.annotations.Nullable;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Objects;
+
 /**
  * @author kawasima
  */
 public class JacksonBeansConverter extends AbstractBeansConverter<JacksonBeansConverter> {
-    private ObjectMapper mapper;
-    private ObjectMapper nonNullMapper;
+    private @Nullable ObjectMapper mapper;
+    private @Nullable ObjectMapper nonNullMapper;
 
     @Override
     public void copy(Object source, Object destination, CopyOption copyOption) {
+        ObjectMapper mapper = Objects.requireNonNull(this.mapper, "JacksonBeansConverter has not been started");
         try {
             switch (copyOption) {
                 case REPLACE_NON_NULL -> {
-                    byte[] buf = nonNullMapper.writeValueAsBytes(source);
+                    byte[] buf = Objects.requireNonNull(nonNullMapper).writeValueAsBytes(source);
                     mapper.readerForUpdating(destination).readValue(buf);
                 }
                 case REPLACE_ALL -> {
@@ -46,7 +52,8 @@ public class JacksonBeansConverter extends AbstractBeansConverter<JacksonBeansCo
                 || destinationClass.equals(String.class)) {
             throw new IllegalArgumentException("destinationClass cannot be mapped to JSON object class");
         }
-        return mapper.convertValue(source, destinationClass);
+        return Objects.requireNonNull(mapper, "JacksonBeansConverter has not been started")
+                .convertValue(source, destinationClass);
     }
 
     @Override

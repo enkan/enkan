@@ -4,6 +4,8 @@ import enkan.collection.OptionMap;
 import enkan.exception.UnreachableException;
 import enkan.web.util.CodecUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,6 +21,9 @@ public class PathSegment extends DynamicSegment {
     @Override
     public String interpolationChunk(OptionMap hash) {
         String value = hash.getString(getKey());
+        if (value == null) {
+            return "";
+        }
         try {
             value = CodecUtils.urlEncode(value);
             Matcher m = ENCODED_SLASH.matcher(value);
@@ -33,8 +38,8 @@ public class PathSegment extends DynamicSegment {
         return "";
     }
 
-    public void setDefault(String path) {
-        if (!path.isEmpty())
+    public void setDefault(@Nullable String path) {
+        if (path != null && !path.isEmpty())
             throw new UnreachableException();
     }
 

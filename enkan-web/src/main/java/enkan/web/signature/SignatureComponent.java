@@ -4,6 +4,8 @@ import enkan.web.http.fields.sf.SfItem;
 import enkan.web.http.fields.sf.SfParameters;
 import enkan.web.http.fields.sf.SfValue;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Locale;
 
 /**
@@ -55,13 +57,13 @@ public record SignatureComponent(String name, SfParameters parameters) {
     }
 
     /** Returns the value of the {@code ;key} parameter, or {@code null} if absent. */
-    public String keyParam() {
+    public @Nullable String keyParam() {
         SfValue v = parameters.get("key");
         return v instanceof SfValue.SfString s ? s.value() : null;
     }
 
     /** Returns the value of the {@code ;name} parameter, or {@code null} if absent. */
-    public String nameParam() {
+    public @Nullable String nameParam() {
         SfValue v = parameters.get("name");
         return v instanceof SfValue.SfString s ? s.value() : null;
     }

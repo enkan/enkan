@@ -4,6 +4,8 @@ import enkan.web.data.HttpRequest;
 import enkan.data.Session;
 import kotowari.inject.ParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 public class SessionInjector implements ParameterInjector<Session> {
     @Override
     public String getName() {
@@ -16,7 +18,7 @@ public class SessionInjector implements ParameterInjector<Session> {
     }
 
     @Override
-    public Session getInjectObject(HttpRequest request) {
+    public @Nullable Session getInjectObject(HttpRequest request) {
         return request.getSession();
     }
 }

@@ -1,5 +1,7 @@
 package enkan.exception;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -16,6 +18,7 @@ import java.util.*;
  * @author kawasima
  */
 public class MisconfigurationException extends UnrecoverableException {
+    private final String code;
     private final String problem;
     private final String solution;
 
@@ -106,11 +109,12 @@ public class MisconfigurationException extends UnrecoverableException {
         return super.getMessage() + ":" + problem;
     }
 
-    public MisconfigurationException(String code, Object... arguments) {
+    public MisconfigurationException(String code, @Nullable Object... arguments) {
         super(code, Arrays.stream(arguments)
                 .filter(arg -> arg instanceof Throwable)
                 .map(arg -> (Throwable) arg)
                 .findFirst().orElse(null));
+        this.code = code;
         String problemFmt = misconfigurationMessages.getProperty(code + ".problem", code + ".problem (message not found)");
         problem = new MessageFormat(problemFmt, Locale.getDefault()).format(arguments);
         String solutionFmt = misconfigurationMessages.getProperty(code + ".solution", code + ".solution (message not found)");
@@ -118,7 +122,7 @@ public class MisconfigurationException extends UnrecoverableException {
     }
 
     public String getCode() {
-        return super.getMessage();
+        return code;
     }
 
     public String getProblem() {

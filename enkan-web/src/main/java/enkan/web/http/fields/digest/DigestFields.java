@@ -2,6 +2,8 @@ package enkan.web.http.fields.digest;
 
 import enkan.web.http.fields.sf.*;
 
+import org.jspecify.annotations.Nullable;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
@@ -70,7 +72,7 @@ public final class DigestFields {
      * @param defaultAlgorithm the algorithm to use when the header is absent
      * @return the negotiated algorithm name, or {@code null} to omit the digest header
      */
-    public static String negotiateAlgorithm(String wantHeaderValue, String defaultAlgorithm) {
+    public static @Nullable String negotiateAlgorithm(@Nullable String wantHeaderValue, @Nullable String defaultAlgorithm) {
         if (wantHeaderValue == null) return defaultAlgorithm;
         SfDictionary dict;
         try {

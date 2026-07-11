@@ -3,6 +3,8 @@ package enkan.system.repl.websocket;
 import enkan.system.ReplResponse;
 import enkan.system.Transport;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -43,7 +45,7 @@ public class WebSocketServerTransport implements Transport {
     }
 
     @Override
-    public String recv(long timeout) {
+    public @Nullable String recv(long timeout) {
         try {
             if (timeout < 0) {
                 return incoming.take();

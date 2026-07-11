@@ -7,6 +7,8 @@ import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -42,7 +44,7 @@ public class CorsMiddleware implements WebMiddleware {
 
     /** {@inheritDoc} Applies CORS headers to the response based on the request Origin. */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         if (credentials && isAnyOriginAllowed() && misconfigurationWarned.compareAndSet(false, true)) {
             LOG.warning("CorsMiddleware: credentials=true with origins=[\"*\"] is invalid per CORS spec. " +
                     "Browsers will reject such responses. Set explicit allowed origins instead.");
@@ -85,7 +87,7 @@ public class CorsMiddleware implements WebMiddleware {
 
         HttpResponse response = castToHttpResponse(chain.next(request));
 
-        if (isCORSRequest(request)) {
+        if (response != null && isCORSRequest(request)) {
             String requestOrigin = some(request.getHeaders(), h -> h.get("origin")).orElse(null);
             if (isAnyOriginAllowed()) {
                 header(response, "Access-Control-Allow-Origin", "*");
@@ -103,8 +105,9 @@ public class CorsMiddleware implements WebMiddleware {
     }
 
     private HttpResponse invalidCors(HttpRequest request) {
+        String origin = some(request.getHeaders(), h -> h.get("origin")).orElse(null);
         return builder(HttpResponse.of("Invalid CORS request; Origin="
-                + request.getHeaders().get("origin")
+                + origin
                 + ", Method="
                 + request.getRequestMethod()))
                 .set(HttpResponse::setHeaders, Headers.of("Content-Type", "text/plain"))
@@ -129,12 +132,15 @@ public class CorsMiddleware implements WebMiddleware {
     }
 
     private boolean isPreflightRequest(HttpRequest httpRequest) {
-        return Objects.equals(httpRequest.getRequestMethod().toUpperCase(Locale.ENGLISH), "OPTIONS")
-                && httpRequest.getHeaders().containsKey("Access-Control-Request-Method");
+        String method = httpRequest.getRequestMethod();
+        Headers reqHeaders = httpRequest.getHeaders();
+        return method != null && Objects.equals(method.toUpperCase(Locale.ENGLISH), "OPTIONS")
+                && reqHeaders != null && reqHeaders.containsKey("Access-Control-Request-Method");
     }
 
     private boolean isCORSRequest(HttpRequest httpRequest) {
-        return Objects.nonNull(httpRequest.getHeaders().get("Origin"));
+        Headers reqHeaders = httpRequest.getHeaders();
+        return reqHeaders != null && Objects.nonNull(reqHeaders.get("Origin"));
     }
 
     /**

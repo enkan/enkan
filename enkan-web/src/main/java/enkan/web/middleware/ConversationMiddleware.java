@@ -8,6 +8,7 @@ import enkan.data.ConversationState;
 import enkan.web.data.DefaultConversation;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.middleware.session.KeyValueStore;
 import enkan.web.middleware.session.MemoryStore;
 
@@ -58,7 +59,7 @@ public class ConversationMiddleware implements WebMiddleware {
         return "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method) || "OPTIONS".equalsIgnoreCase(method);
     }
 
-    private ConversationToken parseToken(String token) {
+    private ConversationToken parseToken(@Nullable String token) {
         if (token == null) {
             return new ConversationToken(null, "invalid", "0");
         }
@@ -72,7 +73,7 @@ public class ConversationMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         ConversationToken token = parseToken(readTokenFunc.apply(request));
 
         if (!isGetRequest(request) && !token.isValid()) {
@@ -88,7 +89,9 @@ public class ConversationMiddleware implements WebMiddleware {
         } else {
             conversation = new DefaultConversation(token.id);
             ConversationState state = (ConversationState) store.read(token.id);
-            request.setConversationState(state);
+            if (state != null) {
+                request.setConversationState(state);
+            }
         }
         request.setConversation(conversation);
 
@@ -97,18 +100,18 @@ public class ConversationMiddleware implements WebMiddleware {
             if (conversation.getId() != null) {
                 store.delete(conversation.getId());
             }
-        } else if (response.getConversationState() != null) {
+        } else if (response != null && response.getConversationState() != null) {
             store.write(conversation.getId(), response.getConversationState());
         }
         return response;
     }
 
     private class ConversationToken {
-        private final String id;
+        private final @Nullable String id;
         private final String hash;
         private long expires;
 
-        ConversationToken(String id, String hash, String expires) {
+        ConversationToken(@Nullable String id, String hash, String expires) {
             this.id = id;
             this.hash = hash;
             try {

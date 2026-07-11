@@ -2,6 +2,8 @@ package enkan.collection;
 
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 import java.util.*;
 
@@ -127,7 +129,7 @@ public class Parameters implements Map<String, Object>, Serializable {
      * @return a new parameters map with the given entries
      * @throws MisconfigurationException if the array length is odd
      */
-    public static Parameters of(Object... init) {
+    public static Parameters of(@Nullable Object... init) {
         if (init.length % 2 != 0) {
             throw new MisconfigurationException("core.MISSING_KEY_VALUE_PAIR");
         }
@@ -185,7 +187,7 @@ public class Parameters implements Map<String, Object>, Serializable {
      * @return {@inheritDoc}
      */
     @Override
-    public String get(Object key) {
+    public @Nullable String get(Object key) {
         if (!caseSensitive && key instanceof String s) {
             key = asciiLowerCase(s);
         }
@@ -194,7 +196,7 @@ public class Parameters implements Map<String, Object>, Serializable {
         return val.toString();
     }
 
-    private Integer keyToInt(Object key) {
+    private @Nullable Integer keyToInt(Object key) {
         int i;
         if (key instanceof Number n) {
             i = n.intValue();
@@ -215,7 +217,7 @@ public class Parameters implements Map<String, Object>, Serializable {
      * @param keys rest keys
      * @return found object
      */
-    public Object getIn(Object key, Object... keys) {
+    public @Nullable Object getIn(Object key, Object... keys) {
         int idx = 0;
         Object current = getRawType(key);
 
@@ -244,7 +246,7 @@ public class Parameters implements Map<String, Object>, Serializable {
      * @param key the key to look up
      * @return the raw value, or {@code null} if not present
      */
-    public Object getRawType(Object key) {
+    public @Nullable Object getRawType(Object key) {
         if (!caseSensitive && key instanceof String s) {
             key = asciiLowerCase(s);
         }
@@ -283,7 +285,7 @@ public class Parameters implements Map<String, Object>, Serializable {
      * @param keys the remaining keys for nested lookup
      * @return the parsed long value, or {@code null} if not present or not parseable
      */
-    public Long getLong(Object key, Object... keys) {
+    public @Nullable Long getLong(Object key, Object... keys) {
         Object value = getIn(key, keys);
         if (value == null) {
             return null;
@@ -298,7 +300,7 @@ public class Parameters implements Map<String, Object>, Serializable {
 
     @SuppressWarnings("unchecked")
     @Override
-    public Object put(String key, Object value) {
+    public @Nullable Object put(String key, @Nullable Object value) {
         if (!caseSensitive) {
             key = asciiLowerCase(key);
         }
@@ -317,7 +319,7 @@ public class Parameters implements Map<String, Object>, Serializable {
     }
 
     @Override
-    public Object remove(Object key) {
+    public @Nullable Object remove(Object key) {
         if (!caseSensitive) {
             key = asciiLowerCase(key.toString());
         }
@@ -330,7 +332,7 @@ public class Parameters implements Map<String, Object>, Serializable {
     }
 
     @Override
-    public Object replace(String key, Object value) {
+    public @Nullable Object replace(String key, Object value) {
         if (!caseSensitive) {
             key = asciiLowerCase(key);
         }

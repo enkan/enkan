@@ -1,5 +1,7 @@
 package enkan.web.middleware.session;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Closeable;
 import java.io.Serializable;
 import java.util.UUID;
@@ -46,7 +48,7 @@ public class MemoryStore implements KeyValueStore, Closeable {
     }
 
     @Override
-    public Serializable read(String key) {
+    public @Nullable Serializable read(String key) {
         Entry entry = sessionMap.get(key);
         if (entry == null) return null;
         if (System.currentTimeMillis() > entry.expiresAt()) {
@@ -57,7 +59,7 @@ public class MemoryStore implements KeyValueStore, Closeable {
     }
 
     @Override
-    public String write(String key, Serializable value) {
+    public String write(@Nullable String key, Serializable value) {
         if (key == null) {
             key = UUID.randomUUID().toString();
         }
@@ -67,7 +69,7 @@ public class MemoryStore implements KeyValueStore, Closeable {
     }
 
     @Override
-    public String delete(String key) {
+    public @Nullable String delete(String key) {
         sessionMap.remove(key);
         return null;
     }

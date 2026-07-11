@@ -1,5 +1,7 @@
 package enkan.web.data;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +26,7 @@ import java.time.Duration;
  * @param retry the reconnection time hint (maps to the {@code retry:} field)
  * @author kawasima
  */
-public record SseEvent(String data, String event, String id, Duration retry) {
+public record SseEvent(@Nullable String data, @Nullable String event, @Nullable String id, @Nullable Duration retry) {
 
     /**
      * Validates fields according to the WHATWG SSE specification.
@@ -204,10 +206,10 @@ public record SseEvent(String data, String event, String id, Duration retry) {
     }
 
     public static class Builder {
-        private String data;
-        private String event;
-        private String id;
-        private Duration retry;
+        private @Nullable String data;
+        private @Nullable String event;
+        private @Nullable String id;
+        private @Nullable Duration retry;
 
         public Builder data(String data) {
             this.data = data;

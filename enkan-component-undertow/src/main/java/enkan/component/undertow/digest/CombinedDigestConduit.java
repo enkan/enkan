@@ -5,6 +5,7 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HttpString;
 import org.xnio.conduits.AbstractStreamSinkConduit;
 import org.xnio.conduits.StreamSinkConduit;
+import org.jspecify.annotations.Nullable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,8 +28,8 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
     private static final HttpString CONTENT_DIGEST = HttpString.tryFromString("Content-Digest");
 
     private final HttpServerExchange exchange;
-    private final String reprAlgorithm;
-    private final String contentAlgorithm;
+    private final @Nullable String reprAlgorithm;
+    private final @Nullable String contentAlgorithm;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream(4096);
 
     /**
@@ -38,7 +39,7 @@ public class CombinedDigestConduit extends AbstractStreamSinkConduit<StreamSinkC
      * @param contentAlgorithm algorithm for {@code Content-Digest}, or {@code null} to omit
      */
     public CombinedDigestConduit(StreamSinkConduit next, HttpServerExchange exchange,
-                                 String reprAlgorithm, String contentAlgorithm) {
+                                 @Nullable String reprAlgorithm, @Nullable String contentAlgorithm) {
         super(next);
         this.exchange = exchange;
         this.reprAlgorithm = reprAlgorithm;

@@ -8,6 +8,8 @@ import enkan.security.AuthBackend;
 import enkan.util.MixinUtils;
 import enkan.util.ThreadingUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.security.Principal;
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +31,7 @@ public class AuthenticationMiddleware<REQ, RES, T> implements DecoratorMiddlewar
     }
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> next) {
         final REQ request = MixinUtils.mixin(req, PrincipalAvailable.class);
         for (AuthBackend<REQ, T> backend : backends) {
             try {

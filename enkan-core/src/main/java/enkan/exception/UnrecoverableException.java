@@ -1,5 +1,7 @@
 package enkan.exception;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Base class for exceptions that represent a condition from which the
  * application cannot meaningfully recover at runtime.
@@ -18,7 +20,7 @@ package enkan.exception;
  * @author kawasima
  */
 public abstract class UnrecoverableException extends RuntimeException {
-    protected UnrecoverableException(String message, Throwable cause) {
+    protected UnrecoverableException(String message, @Nullable Throwable cause) {
         super(message, cause);
     }
 

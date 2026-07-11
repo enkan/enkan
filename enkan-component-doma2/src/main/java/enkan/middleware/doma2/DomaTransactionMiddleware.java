@@ -16,6 +16,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import javax.sql.DataSource;
 import jakarta.transaction.Transactional;
+import org.jspecify.annotations.Nullable;
 import java.lang.reflect.Method;
 
 /**
@@ -30,7 +31,7 @@ public class DomaTransactionMiddleware<REQ, RES> implements DecoratorMiddleware<
     @Inject
     private DomaProvider domaProvider;
 
-    private TransactionManager tm;
+    private @Nullable TransactionManager tm;
 
     /**
      * Retrieves the transaction type from the given method.
@@ -38,7 +39,7 @@ public class DomaTransactionMiddleware<REQ, RES> implements DecoratorMiddleware<
      * @param m the method to inspect
      * @return the transaction type, or null if not found
      */
-    private Transactional.TxType getTransactionType(Method m) {
+    private Transactional.@Nullable TxType getTransactionType(Method m) {
         Transactional transactional = m.getDeclaredAnnotation(Transactional.class);
         return transactional != null ? transactional.value() : null;
     }
@@ -46,6 +47,9 @@ public class DomaTransactionMiddleware<REQ, RES> implements DecoratorMiddleware<
     @PostConstruct
     private void init() {
         Config defaultConfig = domaProvider.getDefaultConfig();
+        if (defaultConfig == null) {
+            throw new MisconfigurationException("doma2.TX_MANAGER_NOT_AVAILABLE");
+        }
         DataSource ds = defaultConfig.getDataSource(); // returns LocalTransactionDataSource
         if (ds instanceof EnkanLocalTransactionDataSource ltds) {
             tm = new LocalTransactionManager(ltds.getLocalTransaction(ConfigSupport.defaultJdbcLogger));
@@ -55,10 +59,11 @@ public class DomaTransactionMiddleware<REQ, RES> implements DecoratorMiddleware<
     }
 
     @Override
-    public <NRES, NREQ> RES handle(REQ req, MiddlewareChain<REQ, RES, NRES, NREQ> chain) {
+    public <NRES, NREQ> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NRES, NREQ> chain) {
         if (req instanceof Routable routable) {
             Method m = routable.getControllerMethod();
-            Transactional.TxType type= getTransactionType(m);
+            if (m == null) return chain.next(req);
+            Transactional.TxType type = getTransactionType(m);
 
             if (type != null) {
                 if (tm == null) {

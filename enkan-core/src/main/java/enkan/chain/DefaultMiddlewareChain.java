@@ -3,6 +3,9 @@ package enkan.chain;
 import enkan.Middleware;
 import enkan.MiddlewareChain;
 import enkan.data.Traceable;
+import enkan.exception.MisconfigurationException;
+
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Predicate;
 
@@ -12,10 +15,43 @@ import java.util.function.Predicate;
  * @author kawasima
  */
 public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareChain<REQ, RES, NREQ, NRES> {
+    /**
+     * Sentinel installed as the {@code chain} of the last node in a stack.
+     * Reaching it means a request was dispatched past every middleware without
+     * any of them producing a response — always a chain-wiring mistake, so it
+     * fails loudly instead of returning {@code null}.
+     */
+    @SuppressWarnings("rawtypes")
+    private static final MiddlewareChain TERMINAL = new MiddlewareChain() {
+        @Override public MiddlewareChain setNext(MiddlewareChain next) {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public Middleware getMiddleware() {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public String getName() {
+            return "terminal";
+        }
+        @Override public Predicate getPredicate() {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public void setPredicate(Predicate predicate) {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public Object next(Object req) {
+            throw new MisconfigurationException("core.MIDDLEWARE_CHAIN_EXHAUSTED");
+        }
+    };
+
+    @SuppressWarnings("unchecked")
+    private static <A, B> MiddlewareChain<A, B, ?, ?> terminal() {
+        return (MiddlewareChain<A, B, ?, ?>) TERMINAL;
+    }
+
     private Predicate<? super REQ> predicate;
     private final Middleware<REQ, RES, NREQ, NRES> middleware;
     private final String middlewareName;
-    private MiddlewareChain<NREQ, NRES, ?, ?> chain;
+    private MiddlewareChain<NREQ, NRES, ?, ?> chain = terminal();
 
 
     /**
@@ -26,7 +62,7 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
      * @param middlewareName  a name of middleware
      * @param middleware      a middleware
      */
-    public DefaultMiddlewareChain(Predicate<? super REQ> predicate, String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware) {
+    public DefaultMiddlewareChain(Predicate<? super REQ> predicate, @Nullable String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware) {
         this.predicate = predicate;
         this.middleware = middleware;
         enkan.annotation.Middleware anno = middleware.getClass().getAnnotation(enkan.annotation.Middleware.class);
@@ -61,7 +97,7 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
         return middleware;
     }
 
-    protected void writeTraceLog(Object reqOrRes, String middlewareName) {
+    protected void writeTraceLog(@Nullable Object reqOrRes, String middlewareName) {
         if (reqOrRes instanceof Traceable t) {
             t.getTraceLog().write(middlewareName);
         }
@@ -78,19 +114,19 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
     // unchanged, so REQ == NREQ and RES == NRES at the call site.
     @SuppressWarnings("unchecked")
     @Override
-    public RES next(REQ req) {
+    public @Nullable RES next(REQ req) {
         writeTraceLog(req, middlewareName);
 
         if (predicate.test(req)) {
             RES res = middleware.handle(req, chain);
             writeTraceLog(res, middlewareName);
             return res;
-        } else if (chain != null) {
+        } else {
+            // chain is never null: the last node keeps the TERMINAL sentinel,
+            // whose next() throws rather than yielding a null response.
             NRES res = chain.next((NREQ) req);
             writeTraceLog(res, middlewareName);
             return (RES) res;
-        } else {
-            return null;
         }
     }
 

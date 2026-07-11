@@ -3,6 +3,8 @@ package enkan.web.middleware.idempotency;
 import enkan.web.collection.Headers;
 import enkan.web.data.HttpResponse;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,7 +18,7 @@ import static enkan.util.BeanBuilder.builder;
  *
  * @author kawasima
  */
-public record IdempotencyEntry(State state, int status, Map<String, List<String>> headers, String body)
+public record IdempotencyEntry(State state, int status, Map<String, List<String>> headers, @Nullable String body)
         implements Serializable {
 
     public IdempotencyEntry {
@@ -64,7 +66,7 @@ public record IdempotencyEntry(State state, int status, Map<String, List<String>
     public HttpResponse toResponse() {
         Headers responseHeaders = Headers.empty();
         headers.forEach((name, values) -> values.forEach(v -> responseHeaders.put(name, v)));
-        return builder(HttpResponse.of(body))
+        return builder(HttpResponse.of(body != null ? body : ""))
                 .set(HttpResponse::setStatus, status)
                 .set(HttpResponse::setHeaders, responseHeaders)
                 .build();

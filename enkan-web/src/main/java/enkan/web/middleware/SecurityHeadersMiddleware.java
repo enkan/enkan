@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
 
@@ -66,9 +67,9 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
     private String crossOriginResourcePolicy = "same-origin";
     private String crossOriginEmbedderPolicy = "require-corp";
     /** Disabled by default — no safe universal default exists. */
-    private String permissionsPolicy;
+    private @Nullable String permissionsPolicy;
     /** Disabled by default — endpoint URLs are deployment-specific. */
-    private String reportingEndpoints = null;
+    private @Nullable String reportingEndpoints = null;
 
     /**
      * Passes the request through the chain and applies all enabled security
@@ -79,7 +80,7 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
      * @return the HTTP response with security headers applied
      */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
         if (response == null) return null;
@@ -99,7 +100,7 @@ public class SecurityHeadersMiddleware implements WebMiddleware {
         return response;
     }
 
-    private void applyIfEnabled(HttpResponse response, String name, String value) {
+    private void applyIfEnabled(HttpResponse response, String name, @Nullable String value) {
         if (value == null) return;
         // Defense-in-depth: also checked in setters so misconfiguration is caught at startup.
         requireNoCrlf(name, value);

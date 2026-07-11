@@ -7,6 +7,7 @@ import enkan.data.FlashAvailable;
 import enkan.data.Session;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.data.PersistentMarkedSession;
 import enkan.util.MixinUtils;
 
@@ -27,7 +28,10 @@ public class FlashMiddleware implements WebMiddleware {
     protected void flashRequest(HttpRequest request) {
         Session session = request.getSession();
         if (session != null && session.containsKey(flashKey)) {
-            request.setFlash((Flash<?>) session.remove(flashKey));
+            Flash<?> flash = (Flash<?>) session.remove(flashKey);
+            if (flash != null) {
+                request.setFlash(flash);
+            }
         }
     }
 
@@ -59,13 +63,15 @@ public class FlashMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
         request = MixinUtils.mixin(request, FlashAvailable.class);
         flashRequest(request);
 
         HttpResponse response = castToHttpResponse(next.next(request));
 
-        flashResponse(response, request);
+        if (response != null) {
+            flashResponse(response, request);
+        }
 
         return response;
     }

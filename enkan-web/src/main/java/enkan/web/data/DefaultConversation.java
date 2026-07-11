@@ -1,6 +1,9 @@
 package enkan.web.data;
 
 import jakarta.enterprise.context.Conversation;
+
+import org.jspecify.annotations.Nullable;
+
 import java.util.Objects;
 import java.util.UUID;
 
@@ -8,7 +11,7 @@ import java.util.UUID;
  * @author kawasima
  */
 public class DefaultConversation implements Conversation {
-    private String id;
+    private @Nullable String id;
     private boolean isTransient = true;
     private long timeout = -1;
 
@@ -45,7 +48,7 @@ public class DefaultConversation implements Conversation {
     }
 
     @Override
-    public String getId() {
+    public @Nullable String getId() {
         return id;
     }
 

@@ -1,5 +1,7 @@
 package enkan.web.http.fields.sf;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,7 +27,7 @@ public record SfDictionary(Map<String, SfMember> members) {
      * @param <T>  the expected type
      * @return the member, or {@code null} if absent
      */
-    public <T extends SfMember> T get(String key, Class<T> type) {
+    public <T extends SfMember> @Nullable T get(String key, Class<T> type) {
         return type.cast(members.get(key));
     }
 

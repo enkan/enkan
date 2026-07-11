@@ -5,6 +5,8 @@ import enkan.component.LifecycleManager;
 import enkan.component.SystemComponent;
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import org.crac.Context;
 import org.crac.Core;
 import org.crac.Resource;
@@ -111,7 +113,7 @@ public class EnkanSystem {
      * @return component
      */
     @SuppressWarnings("unchecked")
-    public <T extends SystemComponent<T>> T getComponent(String name) {
+    public <T extends SystemComponent<T>> @Nullable T getComponent(String name) {
         return (T) components.get(name);
     }
 
@@ -124,7 +126,7 @@ public class EnkanSystem {
      * @param componentType the class of the expected component type
      * @return the component, or {@code null}
      */
-    public <T extends SystemComponent<T>> T getComponent(String name, Class<? extends T> componentType) {
+    public <T extends SystemComponent<T>> @Nullable T getComponent(String name, Class<? extends T> componentType) {
         return components.entrySet()
                 .stream()
                 .filter(e -> e.getKey().equals(name))
@@ -266,7 +268,7 @@ public class EnkanSystem {
     public String toString() {
         String out = componentsOrder.stream()
                 .map(name -> "  \"" + name + "\": " +
-                        Arrays.stream(components.get(name).toString().split("\n"))
+                        Arrays.stream(Objects.requireNonNull(components.get(name)).toString().split("\n"))
                                 .map(line -> "  " + line)
                                 .collect(Collectors.joining("\n")))
                 .collect(Collectors.joining(",\n"));

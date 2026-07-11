@@ -10,6 +10,8 @@ import java.util.Optional;
 import java.util.SequencedCollection;
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Represents the utility class for threading functions.
  *
@@ -23,7 +25,7 @@ public class ThreadingUtils {
                     UnsupportedCharsetException.class);
 
     @SuppressWarnings("unchecked")
-    private static <X, Y> Optional<Y> doSome(X start, ThreadingFunction<?,?>... functions) {
+    private static <X, Y> Optional<Y> doSome(@Nullable X start, ThreadingFunction<?,?>... functions) {
         if (functions == null || start == null) {
             return Optional.ofNullable((Y) start);
         }
@@ -59,7 +61,7 @@ public class ThreadingUtils {
      * @param <X> the type of the start value
      * @param <Y> the type of the result value
      */
-    public static <X, Y> Optional<Y> some(X start, ThreadingFunction<X, Y> f1) {
+    public static <X, Y> Optional<Y> some(@Nullable X start, ThreadingFunction<X, Y> f1) {
         return doSome(start, f1);
     }
 
@@ -74,7 +76,7 @@ public class ThreadingUtils {
      * @param <X1> the type of the intermediate value
      * @param <Y> the type of the result value
      */
-    public static <X0, X1, Y> Optional<Y> some(X0 start, ThreadingFunction<X0, X1> f1, ThreadingFunction<X1, Y> f2) {
+    public static <X0, X1, Y> Optional<Y> some(@Nullable X0 start, ThreadingFunction<X0, X1> f1, ThreadingFunction<X1, Y> f2) {
         return doSome(start, f1, f2);
     }
 
@@ -90,7 +92,7 @@ public class ThreadingUtils {
      * @param <X2> the type of the intermediate value
      * @param <Y> the type of the result value
      */
-    public static <X0, X1, X2, Y> Optional<Y> some(X0 start,
+    public static <X0, X1, X2, Y> Optional<Y> some(@Nullable X0 start,
                                          ThreadingFunction<X0, X1> f1,
                                          ThreadingFunction<X1, X2> f2,
                                          ThreadingFunction<X2, Y> f3) {
@@ -112,7 +114,7 @@ public class ThreadingUtils {
      * @param <Y> the type of the result value
      */
     public static <X0, X1, X2, X3, Y> Optional<Y> some(
-            X0 start,
+            @Nullable X0 start,
             ThreadingFunction<X0, X1> f1,
             ThreadingFunction<X1, X2> f2,
             ThreadingFunction<X2, X3> f3,

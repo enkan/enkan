@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.util.HttpResponseUtils;
 import enkan.util.MimeTypeUtils;
 
@@ -18,7 +19,7 @@ public class ContentTypeMiddleware implements WebMiddleware {
         if (HttpResponseUtils.getHeader(response, "Content-Type") == null) {
             String uri = request.getUri();
 
-            String type = MimeTypeUtils.extMimeType(uri);
+            String type = uri != null ? MimeTypeUtils.extMimeType(uri) : null;
             if (type == null) {
                 type = response.getBody() instanceof String ? "text/plain" : "application/octet-stream";
             }
@@ -27,7 +28,7 @@ public class ContentTypeMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
         if (response != null) {
             contentTypeResponse(response, request);

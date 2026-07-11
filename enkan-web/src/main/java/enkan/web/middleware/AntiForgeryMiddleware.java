@@ -7,6 +7,7 @@ import enkan.web.collection.Headers;
 import enkan.web.data.ForgeryDetectable;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.data.Session;
 import enkan.util.MixinUtils;
 import enkan.util.ThreadingUtils;
@@ -58,7 +59,7 @@ public class AntiForgeryMiddleware implements WebMiddleware {
         }
     }
 
-    private Map<String, ?> formParams(HttpRequest request) {
+    private @Nullable Map<String, ?> formParams(HttpRequest request) {
         return request.getParams();
     }
 
@@ -81,7 +82,7 @@ public class AntiForgeryMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
         String token = sessionToken(request).orElseGet(this::newToken);
         if (!isGetRequest(request) && !isValidRequest(request)) {
             return builder(HttpResponse.of("<h1>Invalid anti-forgery token</h1>"))
@@ -92,7 +93,9 @@ public class AntiForgeryMiddleware implements WebMiddleware {
             request = MixinUtils.mixin(request, ForgeryDetectable.class);
             ((ForgeryDetectable) request).setAntiForgeryToken(token);
             HttpResponse response = castToHttpResponse(next.next(request));
-            putSessionToken(response, request, token);
+            if (response != null) {
+                putSessionToken(response, request, token);
+            }
             return response;
         }
     }

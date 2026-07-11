@@ -7,6 +7,8 @@ import enkan.data.Routable;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.UnreachableException;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.inject.Inject;
 import jakarta.transaction.*;
 import java.lang.reflect.Method;
@@ -18,13 +20,13 @@ public class TransactionMiddleware<REQ, RES> implements DecoratorMiddleware<REQ,
     @Inject
     private TransactionComponent transactionComponent;
 
-    private Transactional.TxType getTransactionType(Method m) {
+    private Transactional.@Nullable TxType getTransactionType(Method m) {
         Transactional transactional = m.getDeclaredAnnotation(Transactional.class);
         return transactional != null ? transactional.value() : null;
     }
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
         RES res;
         if (req instanceof Routable routable) {
             Method m = routable.getControllerMethod();

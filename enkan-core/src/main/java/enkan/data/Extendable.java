@@ -1,5 +1,7 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Allows arbitrary named extensions to be attached to an object at runtime.
  *
@@ -26,7 +28,7 @@ public interface Extendable {
      * @param name the extension key
      * @return the extension value, or {@code null}
      */
-    <T> T getExtension(String name);
+    <T> @Nullable T getExtension(String name);
 
     /**
      * Binds {@code extension} to the key {@code name}, replacing any
@@ -36,5 +38,5 @@ public interface Extendable {
      * @param name      the extension key
      * @param extension the value to store
      */
-    <T> void setExtension(String name, T extension);
+    <T> void setExtension(String name, @Nullable T extension);
 }

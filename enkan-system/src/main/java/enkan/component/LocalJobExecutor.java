@@ -1,6 +1,7 @@
 package enkan.component;
 
 import enkan.exception.MisconfigurationException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,7 @@ public class LocalJobExecutor extends JobExecutor<LocalJobExecutor> implements H
     private String name = "enkan-job";
     private long shutdownTimeoutMs = 30_000;
 
-    private volatile ExecutorService executor;
+    private volatile @Nullable ExecutorService executor;
     private volatile boolean stopping = false;
 
     private final LongAdder submittedCount = new LongAdder();
@@ -110,20 +111,21 @@ public class LocalJobExecutor extends JobExecutor<LocalJobExecutor> implements H
 
             @Override
             public void stop(LocalJobExecutor component) {
-                if (component.executor != null) {
+                ExecutorService exec = component.executor;
+                if (exec != null) {
                     component.stopping = true;
                     try {
-                        component.executor.shutdown();
+                        exec.shutdown();
                         LOG.info("LocalJobExecutor shutting down (timeout={}ms)", component.shutdownTimeoutMs);
-                        if (!component.executor.awaitTermination(
+                        if (!exec.awaitTermination(
                                 component.shutdownTimeoutMs, TimeUnit.MILLISECONDS)) {
                             LOG.warn("Tasks did not complete within {}ms, forcing shutdown",
                                     component.shutdownTimeoutMs);
-                            component.executor.shutdownNow();
+                            exec.shutdownNow();
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
-                        component.executor.shutdownNow();
+                        exec.shutdownNow();
                     } finally {
                         component.executor = null;
                         component.stopping = false;

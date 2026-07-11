@@ -18,6 +18,8 @@ import enkan.web.middleware.session.MemoryStore;
 import enkan.util.MixinUtils;
 import net.unit8.moshas.MoshasEngine;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
@@ -41,27 +43,27 @@ public class TraceWebMiddleware implements WebMiddleware, Closeable {
     private int storeSize = 100;
 
     public static class ElapseTime {
-        private Long inbound;
-        private Long outbound;
+        private @Nullable Long inbound;
+        private @Nullable Long outbound;
         private final String middlewareName;
 
         public ElapseTime(String middlewareName) {
             this.middlewareName = middlewareName;
         }
 
-        public void setInboundElapse(Long elapse) {
+        public void setInboundElapse(@Nullable Long elapse) {
             this.inbound = elapse;
         }
 
-        public void setOutboundElapse(Long elapse) {
+        public void setOutboundElapse(@Nullable Long elapse) {
             this.outbound = elapse;
         }
 
-        public Long getInboundElapse() {
+        public @Nullable Long getInboundElapse() {
             return inbound;
         }
 
-        public Long getOutboundElapse() {
+        public @Nullable Long getOutboundElapse() {
             return outbound;
         }
 
@@ -89,7 +91,8 @@ public class TraceWebMiddleware implements WebMiddleware, Closeable {
             }
         });
         routing.add("/[a-z0-9\\-]+", (req, os) -> {
-            String id = req.getUri().substring(req.getUri().lastIndexOf("/") + 1);
+            String reqUri = Objects.requireNonNull(req.getUri());
+            String id = reqUri.substring(reqUri.lastIndexOf("/") + 1);
             RequestLog requestLog = (RequestLog) store.read(id);
             if (requestLog == null) {
                 throw new TraceRouting.RouteNotFoundException();
@@ -120,21 +123,29 @@ public class TraceWebMiddleware implements WebMiddleware, Closeable {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
-        if (request.getUri().startsWith(mountPath + "/")) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+        String uri = request.getUri();
+        if (uri != null && uri.startsWith(mountPath + "/")) {
             return traceRouting.handle(request);
         } else {
             request = MixinUtils.mixin(request, Traceable.class);
             HttpResponse response = castToHttpResponse(chain.next(request));
             Traceable requestTrace  = request;
             synchronized (this) {
-                if (idList.size() >= storeSize) {
-                    LogKey oldestLogKey = idList.removeLast();
-                    store.delete(oldestLogKey.getId());
+                // Only record completed requests (a middleware may pass null through).
+                if (response != null) {
+                    if (idList.size() >= storeSize) {
+                        LogKey oldestLogKey = idList.removeLast();
+                        store.delete(oldestLogKey.getId());
+                    }
+                    idList.addFirst(new LogKey(requestTrace.getId(),
+                            Objects.requireNonNull(request.getRequestMethod()),
+                            Objects.requireNonNull(request.getUri())));
+                    store.write(requestTrace.getId(), new RequestLog(
+                            Objects.requireNonNull(request.getHeaders()),
+                            Objects.requireNonNull(request.getParams()),
+                            requestTrace.getTraceLog(), response.getTraceLog()));
                 }
-                idList.addFirst(new LogKey(requestTrace.getId(), request.getRequestMethod(), request.getUri()));
-                store.write(requestTrace.getId(), new RequestLog(request.getHeaders(), request.getParams(),
-                        requestTrace.getTraceLog(), response.getTraceLog()));
             }
 
             return response;

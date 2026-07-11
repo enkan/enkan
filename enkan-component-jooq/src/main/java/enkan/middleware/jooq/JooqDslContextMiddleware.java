@@ -9,6 +9,7 @@ import enkan.data.Extendable;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Provides a non-transactional jOOQ {@link DSLContext} to downstream handlers.
@@ -29,7 +30,7 @@ public class JooqDslContextMiddleware<REQ, RES> implements DecoratorMiddleware<R
     @Inject
     private JooqProvider jooqProvider;
 
-    private DSLContext dsl;
+    private @Nullable DSLContext dsl;
 
     @PostConstruct
     void init() {
@@ -37,7 +38,7 @@ public class JooqDslContextMiddleware<REQ, RES> implements DecoratorMiddleware<R
     }
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
         if (req instanceof Extendable e) {
             e.setExtension("jooqDslContext", dsl);
         }

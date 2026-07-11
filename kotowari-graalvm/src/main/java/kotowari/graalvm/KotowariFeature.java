@@ -5,6 +5,7 @@ import kotowari.routing.Route;
 import kotowari.routing.Routes;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.lang.classfile.ClassFile;
@@ -151,7 +152,7 @@ public class KotowariFeature implements Feature {
         }
     }
 
-    private Routes resolveRoutes(BeforeAnalysisAccess access) {
+    private @Nullable Routes resolveRoutes(BeforeAnalysisAccess access) {
         Routes routes = RouteRegistry.get();
         if (routes != null) {
             return routes;

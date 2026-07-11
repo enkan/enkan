@@ -3,6 +3,8 @@ package enkan.middleware;
 import enkan.Middleware;
 import enkan.MiddlewareChain;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -19,7 +21,7 @@ import static enkan.util.ReflectionUtils.tryReflection;
  * @author kawasima
  */
 public class LazyLoadMiddleware<REQ, RES, NREQ, NRES> implements Middleware<REQ, RES, NREQ, NRES> {
-    private volatile Middleware<REQ, RES, NREQ, NRES> instance;
+    private volatile @Nullable Middleware<REQ, RES, NREQ, NRES> instance;
     private final Lock initializingLock = new ReentrantLock();
     private final String middlewareClassName;
 
@@ -32,22 +34,25 @@ public class LazyLoadMiddleware<REQ, RES, NREQ, NRES> implements Middleware<REQ,
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <NNREQ, NNRES> RES handle(REQ request, MiddlewareChain<NREQ, NRES, NNREQ, NNRES> chain) {
-        if (instance == null) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ request, MiddlewareChain<NREQ, NRES, NNREQ, NNRES> chain) {
+        Middleware<REQ, RES, NREQ, NRES> loaded = instance;
+        if (loaded == null) {
             initializingLock.lock();
             try {
                 // Re-check after acquiring the lock (double-checked locking).
                 // volatile guarantees the write in another thread is visible here.
-                if (instance == null) {
-                    instance = tryReflection(() -> {
+                loaded = instance;
+                if (loaded == null) {
+                    loaded = tryReflection(() -> {
                         Class<Middleware<REQ, RES, NREQ, NRES>> middlewareClass = (Class<Middleware<REQ, RES, NREQ, NRES>>) Class.forName(middlewareClassName);
                         return middlewareClass.getConstructor().newInstance();
                     });
+                    instance = loaded;
                 }
             } finally {
                 initializingLock.unlock();
             }
         }
-        return instance.handle(request, chain);
+        return loaded.handle(request, chain);
     }
 }

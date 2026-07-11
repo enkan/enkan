@@ -3,6 +3,7 @@ package enkan.component.jetty.digest;
 import enkan.web.http.fields.digest.DigestFields;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
+import org.jspecify.annotations.Nullable;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 
@@ -49,7 +50,7 @@ public class DigestFilter implements Filter {
      */
     public static final String PARAM_COMPRESSED = "compressed";
 
-    private String defaultAlgorithm;
+    private @Nullable String defaultAlgorithm;
     private boolean compressed;
 
     @Override
@@ -116,8 +117,8 @@ public class DigestFilter implements Filter {
     static final class BufferingResponseWrapper extends HttpServletResponseWrapper {
 
         private final ByteArrayOutputStream buffer = new ByteArrayOutputStream(4096);
-        private ServletOutputStream outputStream;
-        private PrintWriter writer;
+        private @Nullable ServletOutputStream outputStream;
+        private @Nullable PrintWriter writer;
 
         BufferingResponseWrapper(HttpServletResponse response) {
             super(response);

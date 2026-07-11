@@ -2,6 +2,8 @@ package kotowari.graalvm;
 
 import kotowari.routing.Routes;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -27,7 +29,7 @@ public final class RouteRegistry {
         INSTANCE.set(routes);
     }
 
-    public static Routes get() {
+    public static @Nullable Routes get() {
         return INSTANCE.get();
     }
 }

@@ -7,6 +7,7 @@ import enkan.web.data.Cookie;
 import enkan.web.data.HostCookie;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.data.SecureCookie;
 
 import java.util.HashMap;
@@ -49,7 +50,8 @@ public class CookiesMiddleware implements WebMiddleware {
      * @return a map of parsed cookies; empty if the header is absent
      */
     protected Map<String, Cookie> parseCookies(HttpRequest request) {
-        String cookieHeader = request.getHeaders().get("cookie");
+        var reqHeaders = request.getHeaders();
+        String cookieHeader = reqHeaders != null ? reqHeaders.get("cookie") : null;
         if (cookieHeader == null) {
             return Map.of();
         }
@@ -105,7 +107,7 @@ public class CookiesMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
         cookiesRequest(request);
         HttpResponse response = castToHttpResponse(next.next(request));
         if (response != null) {

@@ -20,6 +20,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.seasar.doma</groupId>
             <artifactId>doma-core</artifactId>
             <version>${doma.version}</version>

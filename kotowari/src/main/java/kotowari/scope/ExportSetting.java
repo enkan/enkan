@@ -1,5 +1,7 @@
 package kotowari.scope;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,7 +28,7 @@ public record ExportSetting(Map<ExportableScope, String> exports) {
         return new ExportSetting(Map.copyOf(map));
     }
 
-    public String getExportName(ExportableScope scope) {
+    public @Nullable String getExportName(ExportableScope scope) {
         return exports.get(scope);
     }
 

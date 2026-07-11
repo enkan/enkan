@@ -4,6 +4,8 @@ import enkan.component.SystemComponent;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.UnreachableException;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
@@ -150,7 +152,7 @@ public class ComponentInjector {
      * </ol>
      */
     @SuppressWarnings("unchecked")
-    private <T> Constructor<T> findInjectionConstructor(Class<T> clazz) {
+    private <T> @Nullable Constructor<T> findInjectionConstructor(Class<T> clazz) {
         Constructor<?>[] allConstructors = clazz.getDeclaredConstructors();
 
         Constructor<?>[] injectConstructors = Arrays.stream(allConstructors)
@@ -249,7 +251,7 @@ public class ComponentInjector {
         }
     }
 
-    private Class<?> findTypeInHierarchy(Class<?> type, String fqcn) {
+    private @Nullable Class<?> findTypeInHierarchy(@Nullable Class<?> type, String fqcn) {
         if (type == null || type == Object.class) {
             return null;
         }

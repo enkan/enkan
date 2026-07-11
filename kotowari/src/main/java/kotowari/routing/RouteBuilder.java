@@ -3,6 +3,8 @@ package kotowari.routing;
 import enkan.collection.OptionMap;
 import kotowari.routing.segment.*;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -58,6 +60,9 @@ public class RouteBuilder {
         } else if ((m = separatorRegexp.matcher(str)).find()) {
             segment = new DividerSegment(m.group(), OptionMap.of("optional", optionalSeparators.contains(m.group())));
         }
+        if (m == null || segment == null) {
+            throw new IllegalArgumentException("Cannot parse route path segment: " + sb);
+        }
         sb.delete(0, m.end());
         return segment;
     }
@@ -67,7 +72,7 @@ public class RouteBuilder {
         options.remove("namePrefix");
 
         if (options.containsKey("namespace")) {
-            String namespace = options.getString("namespace").replace("/$", "");
+            String namespace = Objects.requireNonNull(options.getString("namespace")).replace("/$", "");
             options.remove("namespace");
             options.put("controller", namespace.replace('/', '.') + "." + options.get("controller"));
         }
@@ -95,7 +100,7 @@ public class RouteBuilder {
         return new OptionMap[]{ defaults, requirements, conditions };
     }
 
-    private Segment findSegment(List<Segment> segments, String key) {
+    private @Nullable Segment findSegment(List<Segment> segments, String key) {
         for (Segment seg : segments) {
             if (seg.hasKey() && key.equals(seg.getKey())) {
                 return seg;

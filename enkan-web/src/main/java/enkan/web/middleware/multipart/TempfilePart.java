@@ -2,7 +2,10 @@ package enkan.web.middleware.multipart;
 
 import enkan.collection.Parameters;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.*;
+import java.util.Objects;
 
 /**
  * @author kawasima
@@ -14,12 +17,12 @@ public class TempfilePart extends MimePart {
         return new BufferedOutputStream(new FileOutputStream(file));
     }
 
-    public TempfilePart(File tempfile, String head, String filename, String contentType, String name) throws IOException {
+    public TempfilePart(File tempfile, String head, @Nullable String filename, @Nullable String contentType, @Nullable String name) throws IOException {
         super(getOutputStream(tempfile), head, filename, contentType, name);
         this.tempfile = tempfile;
     }
 
-    private String last(String[] strArray) {
+    private @Nullable String last(String @Nullable [] strArray) {
         if (strArray == null || strArray.length == 0) {
             return null;
         } else {
@@ -28,21 +31,22 @@ public class TempfilePart extends MimePart {
     }
 
     @Override
-    public Parameters getData() {
+    public @Nullable Parameters getData() {
+        String partName = Objects.requireNonNull(name);
         if (filename != null) {
-            String fn = last(filename.split("[/\\\\]"));
-            return Parameters.of(name,
+            String fn = Objects.requireNonNull(last(filename.split("[/\\\\]")));
+            return Parameters.of(partName,
                     Parameters.of(
                             "filename", fn,
-                            "name", name,
+                            "name", partName,
                             "tempfile", tempfile,
                             "type", contentType,
                             "head", head));
         } else if (contentType != null) {
-            return Parameters.of(name,
+            return Parameters.of(partName,
                     Parameters.of(
                             "type", contentType,
-                            "name", name,
+                            "name", partName,
                             "tempfile", tempfile,
                             "head", head));
         }

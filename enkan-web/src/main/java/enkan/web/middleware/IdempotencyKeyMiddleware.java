@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.web.collection.Headers;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.middleware.idempotency.IdempotencyEntry;
 import enkan.web.middleware.session.KeyValueStore;
 import enkan.web.http.fields.sf.SfItem;
@@ -58,7 +59,7 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
     private Set<String> methods = Set.of("POST", "PATCH");
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         if (store == null || !isTargetMethod(request)) {
             return castToHttpResponse(chain.next(request));
@@ -100,7 +101,7 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
         return conflictResponse();
     }
 
-    private <NNREQ, NNRES> HttpResponse executeRequest(String storeKey, HttpRequest request,
+    private <NNREQ, NNRES> @Nullable HttpResponse executeRequest(String storeKey, HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         try {
             HttpResponse response = castToHttpResponse(chain.next(request));
@@ -121,8 +122,9 @@ public class IdempotencyKeyMiddleware implements WebMiddleware {
         return method != null && methods.contains(method.toUpperCase(Locale.ENGLISH));
     }
 
-    private String extractKey(HttpRequest request) {
-        String raw = request.getHeaders().get("Idempotency-Key");
+    private @Nullable String extractKey(HttpRequest request) {
+        var reqHeaders = request.getHeaders();
+        String raw = reqHeaders != null ? reqHeaders.get("Idempotency-Key") : null;
         if (raw == null || raw.isEmpty()) {
             return null;
         }

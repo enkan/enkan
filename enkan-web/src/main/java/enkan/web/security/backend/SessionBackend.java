@@ -4,6 +4,8 @@ import enkan.web.data.HttpRequest;
 import enkan.security.AuthBackend;
 import enkan.util.ThreadingUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.security.Principal;
 import java.util.Optional;
 
@@ -12,7 +14,7 @@ import java.util.Optional;
  */
 public class SessionBackend implements AuthBackend<HttpRequest, Principal> {
     @Override
-    public Principal parse(HttpRequest request) {
+    public @Nullable Principal parse(HttpRequest request) {
         Optional<Principal> principal = ThreadingUtils.some(request,
                 HttpRequest::getSession,
                 s -> (Principal) s.get("principal"));

@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.util.ThreadingUtils;
 
 import java.net.MalformedURLException;
@@ -94,9 +95,9 @@ public class AbsoluteRedirectsMiddleware implements WebMiddleware {
      * {@inheritDoc}
      */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
-        if (isRedirectResponse(response)) {
+        if (response != null && isRedirectResponse(response)) {
             updateHeader(response, "location", request);
         }
         return response;

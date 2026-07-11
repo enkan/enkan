@@ -23,7 +23,10 @@ import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotNull;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -50,7 +53,7 @@ public class RoutingMiddleware implements WebMiddleware {
 
     /** {@inheritDoc} Recognizes the route, resolves the controller and action, and delegates to the next middleware. */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
         request = MixinUtils.mixin(request, Routable.class);
         Class<?> controllerClass = null;
 
@@ -83,7 +86,7 @@ public class RoutingMiddleware implements WebMiddleware {
                 return response;
             }
 
-            Parameters params = request.getParams();
+            Parameters params = Objects.requireNonNull(request.getParams(), "request params");
             routing.keySet()
                     .stream()
                     .filter(k -> !k.equals("controller") && !k.equals("action"))

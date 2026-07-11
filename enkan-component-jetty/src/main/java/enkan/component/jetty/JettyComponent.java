@@ -17,6 +17,7 @@ import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.jspecify.annotations.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,12 +29,12 @@ import java.util.function.BiFunction;
 public class JettyComponent extends WebServerComponent<JettyComponent> implements HealthCheckable {
     private static final Logger LOG = LoggerFactory.getLogger(JettyComponent.class);
 
-    private Server server;
-    private BiFunction<Server, OptionMap, Connector> serverConnectorFactory;
+    private @Nullable Server server;
+    private @Nullable BiFunction<Server, OptionMap, Connector> serverConnectorFactory;
     private boolean virtualThreads = true;
     private volatile boolean stopping = false;
     private final Map<String, WebSocketHandler> wsHandlers = new LinkedHashMap<>();
-    private String digestAlgorithm = null;
+    private @Nullable String digestAlgorithm = null;
 
     @Override
     protected ComponentLifecycle<JettyComponent> lifecycle() {

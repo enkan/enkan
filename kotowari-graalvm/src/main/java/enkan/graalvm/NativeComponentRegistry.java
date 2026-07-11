@@ -1,5 +1,7 @@
 package enkan.graalvm;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -22,7 +24,7 @@ public final class NativeComponentRegistry {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> ComponentBinder<T> get(Class<T> componentClass) {
+    public static <T> @Nullable ComponentBinder<T> get(Class<T> componentClass) {
         return (ComponentBinder<T>) BINDERS.get(componentClass);
     }
 

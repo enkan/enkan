@@ -7,6 +7,7 @@ import enkan.system.Transport;
 import enkan.system.devel.CompileResult;
 import enkan.system.devel.Compiler;
 import org.gradle.tooling.*;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,7 @@ public class GradleCompiler implements Compiler {
     private static final Logger LOG = LoggerFactory.getLogger(GradleCompiler.class);
 
     private String projectDirectory = ".";
-    private String gradleVersion = null;
+    private @Nullable String gradleVersion = null;
 
     @Override
     public CompileResult execute(Transport t) {

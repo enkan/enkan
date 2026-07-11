@@ -9,6 +9,8 @@ import enkan.component.HealthCheckable;
 import enkan.component.HealthStatus;
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -20,7 +22,7 @@ import java.sql.SQLException;
  */
 public class HikariCPComponent extends DataSourceComponent<HikariCPComponent> implements HealthCheckable {
     private HikariConfig config;
-    private HikariDataSource dataSource;
+    private @Nullable HikariDataSource dataSource;
 
     public HikariCPComponent() {
         config = new HikariConfig();
@@ -62,7 +64,7 @@ public class HikariCPComponent extends DataSourceComponent<HikariCPComponent> im
     }
 
     @Override
-    public DataSource getDataSource() {
+    public @Nullable DataSource getDataSource() {
         return dataSource;
     }
 

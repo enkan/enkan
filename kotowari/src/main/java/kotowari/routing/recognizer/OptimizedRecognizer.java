@@ -4,6 +4,8 @@ import enkan.collection.OptionMap;
 import enkan.web.data.HttpRequest;
 import kotowari.routing.*;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -13,8 +15,8 @@ import java.util.stream.Collectors;
  * @author kawasima
  */
 public class OptimizedRecognizer implements Recognizer {
-    private SegmentNode tree;
-    private List<Route> routes;
+    private @Nullable SegmentNode tree;
+    private List<Route> routes = new ArrayList<>();
 
     public String[] toPlainSegments(String str) {
         str = str.replaceAll("^/+", "").replaceAll("/+$", "");
@@ -66,9 +68,9 @@ public class OptimizedRecognizer implements Recognizer {
 
     @Override
     public OptionMap recognize(HttpRequest request) {
-        String[] segments = toPlainSegments(request.getUri());
+        String[] segments = toPlainSegments(Objects.requireNonNull(request.getUri(), "request URI"));
 
-        int index = calcIndex(segments, tree, 0);
+        int index = calcIndex(segments, Objects.requireNonNull(tree, "recognizer not optimized"), 0);
         while (index < routes.size()) {
             OptionMap result = routes.get(index).recognize(request);
             if (result != null) return result;
@@ -79,14 +81,14 @@ public class OptimizedRecognizer implements Recognizer {
 
     private static class SegmentNode {
         private final int index;
-        private final String label;
+        private final @Nullable String label;
         private final List<SegmentNode> childNodes;
 
         SegmentNode(int index) {
             this(null, index);
         }
 
-        SegmentNode(String label, int index) {
+        SegmentNode(@Nullable String label, int index) {
             this.index = index;
             this.label = label;
             childNodes = new ArrayList<>();
@@ -100,13 +102,13 @@ public class OptimizedRecognizer implements Recognizer {
             return childNodes.isEmpty();
         }
 
-        SegmentNode lastChild() {
+        @Nullable SegmentNode lastChild() {
             if (isEmpty())
                 return null;
             return childNodes.getLast();
         }
 
-        String getLabel() {
+        @Nullable String getLabel() {
             return label;
         }
 

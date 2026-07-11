@@ -3,6 +3,8 @@ package enkan.web.data;
 import enkan.web.util.HttpDateFormat;
 import enkan.web.util.ParsingUtils;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
@@ -32,15 +34,15 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
     // and rejects values containing DQUOTE (i.e., it does not accept the quoted form).
     private static final Pattern RE_COOKIE_VALUE = Pattern.compile("[\\x21\\x23-\\x2B\\x2D-\\x3A\\x3C-\\x5B\\x5D-\\x7E]*");
 
-    private String name;
-    private String value;
-    private String domain;
-    private Integer maxAge;
-    private String path;
-    private Date expires;
+    private String name = "";
+    private @Nullable String value;
+    private @Nullable String domain;
+    private @Nullable Integer maxAge;
+    private @Nullable String path;
+    private @Nullable Date expires;
     private boolean secure;
     private boolean httpOnly;
-    private String sameSite;
+    private @Nullable String sameSite;
 
     /**
      * @deprecated Use {@link #create(String, String)}, {@link HostCookie#create(String, String)},
@@ -83,46 +85,46 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
         this.name = name;
     }
 
-    public String getValue() {
+    public @Nullable String getValue() {
         return value;
     }
 
-    public void setValue(String value) {
+    public void setValue(@Nullable String value) {
         if (value != null && !RE_COOKIE_VALUE.matcher(value).matches()) {
             throw new IllegalArgumentException("Invalid cookie value");
         }
         this.value = value;
     }
 
-    public String getDomain() {
+    public @Nullable String getDomain() {
         return domain;
     }
 
-    public void setDomain(String domain) {
+    public void setDomain(@Nullable String domain) {
         this.domain = domain;
     }
 
-    public Integer getMaxAge() {
+    public @Nullable Integer getMaxAge() {
         return maxAge;
     }
 
-    public void setMaxAge(Integer maxAge) {
+    public void setMaxAge(@Nullable Integer maxAge) {
         this.maxAge = maxAge;
     }
 
-    public String getPath() {
+    public @Nullable String getPath() {
         return path;
     }
 
-    public void setPath(String path) {
+    public void setPath(@Nullable String path) {
         this.path = path;
     }
 
-    public Date getExpires() {
+    public @Nullable Date getExpires() {
         return expires;
     }
 
-    public void setExpires(Date expires) {
+    public void setExpires(@Nullable Date expires) {
         this.expires = expires;
     }
 
@@ -142,11 +144,11 @@ public sealed class Cookie implements Serializable permits HostCookie, SecureCoo
         this.httpOnly = httpOnly;
     }
 
-    public String getSameSite() {
+    public @Nullable String getSameSite() {
         return sameSite;
     }
 
-    public void setSameSite(String sameSite) {
+    public void setSameSite(@Nullable String sameSite) {
         this.sameSite = sameSite;
     }
 

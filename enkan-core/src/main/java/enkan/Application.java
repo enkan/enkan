@@ -3,6 +3,8 @@ package enkan;
 import enkan.exception.MisconfigurationException;
 import enkan.util.Predicates;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -55,15 +57,15 @@ public interface Application<AREQ, ARES> {
      * @param <NREQ> A type of the next request
      * @param <NRES> A type of the next response
      */
-    <REQ, RES, NREQ, NRES> void use(Predicate<? super REQ> predicate, String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware);
+    <REQ, RES, NREQ, NRES> void use(Predicate<? super REQ> predicate, @Nullable String middlewareName, Middleware<REQ, RES, NREQ, NRES> middleware);
 
     /**
      * Handle a request using middleware stack in this application.
      *
      * @param req   A request object
-     * @return      A response object
+     * @return      A response object, or {@code null} if the stack yields none
      */
-    ARES handle(AREQ req);
+    @Nullable ARES handle(AREQ req);
 
     /**
      * Validate a middleware stack.

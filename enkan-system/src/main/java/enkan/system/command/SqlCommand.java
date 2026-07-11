@@ -2,6 +2,9 @@ package enkan.system.command;
 
 import enkan.component.DataSourceComponent;
 import enkan.system.EnkanSystem;
+import org.jspecify.annotations.Nullable;
+
+import java.util.Objects;
 import enkan.system.ReplResponse;
 import enkan.system.SystemCommand;
 import enkan.system.Transport;
@@ -32,7 +35,8 @@ public class SqlCommand implements SystemCommand {
     }
 
     @Override
-    public boolean execute(EnkanSystem system, Transport transport, String... args) {
+    public boolean execute(@Nullable EnkanSystem system, Transport transport, String... args) {
+        Objects.requireNonNull(system);
         String sql = String.join(" ", args).trim();
         if (sql.isEmpty()) {
             transport.sendErr("/sql [SQL statement]");
@@ -95,7 +99,8 @@ public class SqlCommand implements SystemCommand {
                 }
             }
         } catch (SQLException e) {
-            transport.sendErr(e.getLocalizedMessage());
+            String message = e.getLocalizedMessage();
+            transport.sendErr(message != null ? message : e.toString());
         }
         return true;
     }

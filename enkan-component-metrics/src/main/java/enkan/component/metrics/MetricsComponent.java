@@ -8,7 +8,10 @@ import com.codahale.metrics.jmx.JmxReporter;
 import enkan.component.ComponentLifecycle;
 import enkan.component.SystemComponent;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Collections;
+import java.util.Objects;
 import java.util.SortedSet;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -24,12 +27,12 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class MetricsComponent extends SystemComponent<MetricsComponent> {
     private String metricName = "enkan";
 
-    private Meter timeoutsMeter;
-    private Meter errorsMeter;
-    private Counter activeRequests;
-    private Timer requestTimer;
+    private @Nullable Meter timeoutsMeter;
+    private @Nullable Meter errorsMeter;
+    private @Nullable Counter activeRequests;
+    private @Nullable Timer requestTimer;
 
-    private JmxReporter reporter;
+    private @Nullable JmxReporter reporter;
     private final MetricRegistry metricRegistry;
 
     public MetricsComponent() {
@@ -51,7 +54,7 @@ public class MetricsComponent extends SystemComponent<MetricsComponent> {
 
             @Override
             public void stop(MetricsComponent component) {
-                component.reporter.stop();
+                Objects.requireNonNull(component.reporter).stop();
                 component.reporter = null;
 
                 SortedSet<String> names = Collections.unmodifiableSortedSet(metricRegistry.getNames());
@@ -65,19 +68,19 @@ public class MetricsComponent extends SystemComponent<MetricsComponent> {
         };
     }
 
-    public Meter getTimeouts() {
+    public @Nullable Meter getTimeouts() {
         return timeoutsMeter;
     }
 
-    public Timer getRequestTimer() {
+    public @Nullable Timer getRequestTimer() {
         return requestTimer;
     }
 
-    public Meter getErrors() {
+    public @Nullable Meter getErrors() {
         return errorsMeter;
     }
 
-    public Counter getActiveRequests() {
+    public @Nullable Counter getActiveRequests() {
         return activeRequests;
     }
 

@@ -1,10 +1,12 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * @author kawasima
  */
 public interface FlashAvailable extends Extendable {
-    default Flash<?> getFlash() {
+    default @Nullable Flash<?> getFlash() {
         return getExtension("flash");
     }
 

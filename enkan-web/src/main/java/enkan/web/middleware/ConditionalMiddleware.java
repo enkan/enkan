@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.web.util.ETagUtils;
 import enkan.web.util.HttpDateFormat;
 
@@ -35,7 +36,7 @@ public class ConditionalMiddleware implements WebMiddleware {
             "etag", "date", "vary", "cache-control", "expires", "content-location");
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> next) {
         String method = request.getRequestMethod();
 
         // §13.2.1: Skip for CONNECT, OPTIONS, TRACE
@@ -44,6 +45,10 @@ public class ConditionalMiddleware implements WebMiddleware {
         }
 
         HttpResponse response = castToHttpResponse(next.next(request));
+        if (response == null) {
+            return null;
+        }
+        var reqHeaders = java.util.Objects.requireNonNull(request.getHeaders());
 
         // §13.2.1: Only evaluate for 2xx responses
         int status = response.getStatus();
@@ -62,7 +67,7 @@ public class ConditionalMiddleware implements WebMiddleware {
         }
 
         // §13.2.2 Step 1: If-Match (strong comparison)
-        String ifMatch = request.getHeaders().get("If-Match");
+        String ifMatch = reqHeaders.get("If-Match");
         if (ifMatch != null) {
             if (!ETagUtils.matchesHeader(ifMatch, etag, false)) {
                 return preconditionFailed();
@@ -72,14 +77,14 @@ public class ConditionalMiddleware implements WebMiddleware {
 
         // §13.2.2 Step 2: If-Unmodified-Since (only when no If-Match)
         if (ifMatch == null) {
-            String ifUnmodifiedSince = request.getHeaders().get("If-Unmodified-Since");
+            String ifUnmodifiedSince = reqHeaders.get("If-Unmodified-Since");
             if (isModifiedAfter(ifUnmodifiedSince, response)) {
                 return preconditionFailed();
             }
         }
 
         // §13.2.2 Step 3: If-None-Match (weak comparison)
-        String ifNoneMatch = request.getHeaders().get("If-None-Match");
+        String ifNoneMatch = reqHeaders.get("If-None-Match");
         if (ifNoneMatch != null) {
             if (ETagUtils.matchesHeader(ifNoneMatch, etag, true)) {
                 if ("GET".equals(method) || "HEAD".equals(method)) {
@@ -92,7 +97,7 @@ public class ConditionalMiddleware implements WebMiddleware {
 
         // §13.2.2 Step 4: If-Modified-Since (GET/HEAD only, no If-None-Match)
         if (ifNoneMatch == null && ("GET".equals(method) || "HEAD".equals(method))) {
-            String ifModifiedSince = request.getHeaders().get("If-Modified-Since");
+            String ifModifiedSince = reqHeaders.get("If-Modified-Since");
             if (isNotModifiedSince(ifModifiedSince, response)) {
                 return notModified(response);
             }
@@ -107,7 +112,7 @@ public class ConditionalMiddleware implements WebMiddleware {
      * Checks whether the response's Last-Modified date is after the given condition date.
      * Returns false if either date is null or unparseable.
      */
-    private boolean isModifiedAfter(String conditionDate, HttpResponse response) {
+    private boolean isModifiedAfter(@Nullable String conditionDate, HttpResponse response) {
         if (conditionDate == null) return false;
         Optional<Instant> condInstant = HttpDateFormat.parse(conditionDate);
         Optional<Instant> modInstant = parseLastModified(response);
@@ -119,7 +124,7 @@ public class ConditionalMiddleware implements WebMiddleware {
      * Checks whether the response has NOT been modified since the given condition date.
      * Returns false if either date is null or unparseable (condition is skipped per §13.1.3).
      */
-    private boolean isNotModifiedSince(String conditionDate, HttpResponse response) {
+    private boolean isNotModifiedSince(@Nullable String conditionDate, HttpResponse response) {
         if (conditionDate == null) return false;
         Optional<Instant> condInstant = HttpDateFormat.parse(conditionDate);
         Optional<Instant> modInstant = parseLastModified(response);
@@ -137,7 +142,10 @@ public class ConditionalMiddleware implements WebMiddleware {
         response.setStatus(304);
         original.getHeaders().keySet().forEach(name -> {
             if (NOT_MODIFIED_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
-                response.getHeaders().put(name, original.getHeaders().get(name));
+                Object value = original.getHeaders().get(name);
+                if (value != null) {
+                    response.getHeaders().put(name, value);
+                }
             }
         });
         response.setBody((String) null);

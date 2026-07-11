@@ -1,5 +1,7 @@
 package enkan.component;
 
+import org.jspecify.annotations.Nullable;
+
 import javax.sql.DataSource;
 
 /**
@@ -11,7 +13,7 @@ public abstract class DataSourceComponent<T extends DataSourceComponent<T>> exte
     /**
      * Gets the data source that it holds.
      *
-     * @return a DataSource
+     * @return a DataSource, or {@code null} before the component is started
      */
-    public abstract DataSource getDataSource();
+    public abstract @Nullable DataSource getDataSource();
 }

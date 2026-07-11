@@ -7,11 +7,12 @@ import enkan.exception.MisconfigurationException;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
+import org.jspecify.annotations.Nullable;
 
 import javax.sql.DataSource;
 
 public class JooqProvider extends SystemComponent<JooqProvider> {
-    private DSLContext dsl;
+    private @Nullable DSLContext dsl;
     private SQLDialect dialect = SQLDialect.DEFAULT;
 
     public DSLContext getDSLContext() {

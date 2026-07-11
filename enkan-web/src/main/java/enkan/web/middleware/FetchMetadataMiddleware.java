@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.web.collection.Headers;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Set;
 
@@ -70,7 +71,7 @@ public class FetchMetadataMiddleware implements WebMiddleware {
      * @return the HTTP response
      */
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         if (!isAllowed(request)) {
             return builder(HttpResponse.of("Forbidden"))

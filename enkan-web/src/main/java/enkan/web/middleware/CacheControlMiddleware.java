@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
 import java.util.regex.Pattern;
@@ -32,12 +33,12 @@ import static enkan.web.util.HttpResponseUtils.header;
  */
 @Middleware(name = "cacheControl")
 public class CacheControlMiddleware implements WebMiddleware {
-    private Pattern staticPattern;
+    private @Nullable Pattern staticPattern;
     private String staticDirective = "public, max-age=31536000, immutable";
     private String dynamicDirective = "no-cache";
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         HttpResponse response = castToHttpResponse(chain.next(request));
         if (response == null) return null;

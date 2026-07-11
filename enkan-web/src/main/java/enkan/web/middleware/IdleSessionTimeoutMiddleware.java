@@ -5,6 +5,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 import enkan.data.Session;
 import enkan.web.util.HttpResponseUtils;
 
@@ -37,7 +38,7 @@ public class IdleSessionTimeoutMiddleware implements WebMiddleware {
     }
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request, MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         Optional<Long> endTime = some(request.getSession(),
                 session -> session.get(SESSION_KEY),
                 obj -> {
@@ -49,11 +50,14 @@ public class IdleSessionTimeoutMiddleware implements WebMiddleware {
                 });
 
         if (endTime.isPresent() && endTime.get() < currentTime()) {
-            return builder(timeoutEndpoint.handle(request))
-                    .set(HttpResponse::setSession, null)
-                    .build();
+            HttpResponse timeoutResponse = timeoutEndpoint.handle(request);
+            if (timeoutResponse != null) {
+                timeoutResponse.setSession(null);
+            }
+            return timeoutResponse;
         } else {
             HttpResponse response = castToHttpResponse(chain.next(request));
+            if (response == null) return null;
             Long nextEndTime = currentTime() + timeout;
             Session session = Optional.ofNullable(response.getSession())
                     .orElse(request.getSession());

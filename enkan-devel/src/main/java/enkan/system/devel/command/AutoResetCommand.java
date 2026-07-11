@@ -7,6 +7,8 @@ import enkan.system.SystemCommand;
 import enkan.system.Transport;
 import enkan.system.devel.ClassWatcher;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -31,7 +33,7 @@ public class AutoResetCommand implements SystemCommand {
     }
 
     @Override
-    public boolean execute(EnkanSystem system, Transport transport, String... args) {
+    public boolean execute(@Nullable EnkanSystem system, Transport transport, String... args) {
         if (args.length > 0 && "stop".equalsIgnoreCase(args[0])) {
             Future<?> watcher = repl.getBackground("classWatcher");
             if (watcher == null) {

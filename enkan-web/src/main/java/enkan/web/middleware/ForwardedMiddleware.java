@@ -5,6 +5,7 @@ import enkan.annotation.Middleware;
 import enkan.web.collection.Headers;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
 import java.math.BigInteger;
 import java.net.InetAddress;
@@ -54,9 +55,10 @@ public class ForwardedMiddleware implements WebMiddleware {
     private volatile boolean preferStandard = true;
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
-        if (isTrustedProxy(request.getRemoteAddr())) {
+        String remoteAddr = request.getRemoteAddr();
+        if (remoteAddr != null && isTrustedProxy(remoteAddr)) {
             applyForwardedHeaders(request);
         }
         return castToHttpResponse(chain.next(request));
@@ -73,12 +75,11 @@ public class ForwardedMiddleware implements WebMiddleware {
         String xForwardedProto = joinHeader(headers, "x-forwarded-proto");
         String xForwardedHost = joinHeader(headers, "x-forwarded-host");
 
-        boolean hasStandard = forwarded != null;
         boolean hasLegacy = xForwardedFor != null || xForwardedProto != null || xForwardedHost != null;
 
         // When preferStandard=false but only Forwarded is present (no legacy headers),
         // fall back to RFC 7239 anyway rather than silently doing nothing.
-        if (hasStandard && (preferStandard || !hasLegacy)) {
+        if (forwarded != null && (preferStandard || !hasLegacy)) {
             applyRfc7239(request, forwarded);
         } else if (hasLegacy) {
             applyLegacy(request, xForwardedFor, xForwardedProto, xForwardedHost);
@@ -94,7 +95,7 @@ public class ForwardedMiddleware implements WebMiddleware {
      * (RFC 7230 §3.2.2), they are joined with {@code ", "} before parsing.
      */
     @SuppressWarnings("unchecked")
-    private static String joinHeader(Headers headers, String name) {
+    private static @Nullable String joinHeader(Headers headers, String name) {
         Object raw = headers.getRawType(name);
         if (raw == null) return null;
         if (raw instanceof List<?> list) return String.join(", ", (List<String>) list);
@@ -163,7 +164,7 @@ public class ForwardedMiddleware implements WebMiddleware {
         if (forValue != null && !forValue.isEmpty()) {
             request.setRemoteAddr(forValue);
         }
-        if ("http".equalsIgnoreCase(protoValue) || "https".equalsIgnoreCase(protoValue)) {
+        if (protoValue != null && ("http".equalsIgnoreCase(protoValue) || "https".equalsIgnoreCase(protoValue))) {
             request.setScheme(protoValue.toLowerCase(Locale.ROOT));
         }
         if (hostValue != null) {
@@ -195,7 +196,7 @@ public class ForwardedMiddleware implements WebMiddleware {
     /**
      * Applies legacy {@code X-Forwarded-*} headers to the request.
      */
-    private void applyLegacy(HttpRequest request, String xFor, String xProto, String xHost) {
+    private void applyLegacy(HttpRequest request, @Nullable String xFor, @Nullable String xProto, @Nullable String xHost) {
         if (xFor != null) {
             int commaIdx = xFor.indexOf(',');
             String firstIp = (commaIdx >= 0 ? xFor.substring(0, commaIdx) : xFor).trim();

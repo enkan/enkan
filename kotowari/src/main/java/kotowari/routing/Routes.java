@@ -7,6 +7,8 @@ import kotowari.routing.factory.RoutePatterns;
 import kotowari.routing.factory.RoutePatternsDescriptor;
 import kotowari.routing.recognizer.OptimizedRecognizer;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,7 +41,7 @@ public class Routes {
     public static RoutePatterns define(RoutePatternsDescriptor descriptor) {
         return define(null, descriptor);
     }
-    public static RoutePatterns define(String prefix, RoutePatternsDescriptor descriptor) {
+    public static RoutePatterns define(@Nullable String prefix, RoutePatternsDescriptor descriptor) {
         RoutePatterns patterns = new RoutePatterns(prefix, routeList -> {
             Routes routes = new Routes(routeList);
             routes.recognizer.setRoutes(routeList);

@@ -44,7 +44,7 @@ public class ControllerInvokerMiddleware<RES> implements Middleware<HttpRequest,
     private final Map<Method, MethodInvocation> methodCache = new ConcurrentHashMap<>();
     private final ComponentInjector componentInjector;
     private static final ParameterInjector<?> BODY_SERIALIZABLE_INJECTOR = new BodySerializableInjector<>();
-    private List<ParameterInjector<?>> parameterInjectors;
+    private List<ParameterInjector<?>> parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
 
     // Fixed-arity functional interfaces so LambdaMetafactory generates
     // direct invokevirtual/invokestatic bytecode (JIT-inlinable).
@@ -83,9 +83,8 @@ public class ControllerInvokerMiddleware<RES> implements Middleware<HttpRequest,
 
     @PostConstruct
     protected void setupParameterInjectors() {
-        if (parameterInjectors == null) {
-            parameterInjectors = ParameterUtils.getDefaultParameterInjectors();
-        }
+        // parameterInjectors is initialized to the defaults at construction; this
+        // remains as the CDI lifecycle hook (and is invoked directly by tests).
     }
 
     /**

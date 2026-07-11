@@ -6,6 +6,8 @@ import enkan.web.data.HttpResponse;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.UnreachableException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -128,7 +130,7 @@ public class HttpResponseUtils {
      * @return the header value
      */
     @SuppressWarnings("unchecked")
-    public static <T> T getHeader(HttpResponse response, String name) {
+    public static <T> @Nullable T getHeader(HttpResponse response, String name) {
         return (T) response.getHeaders().get(name);
     }
 
@@ -224,7 +226,7 @@ public class HttpResponseUtils {
      * @param len the length of response message
      * @return a HttpResponse contains content-length header
      */
-    public static HttpResponse contentLength(HttpResponse response, Long len) {
+    public static HttpResponse contentLength(HttpResponse response, @Nullable Long len) {
         if (len != null) {
             response.getHeaders().remove("Content-Length");
             response.getHeaders().put("Content-Length", len);
@@ -240,7 +242,7 @@ public class HttpResponseUtils {
      * @param lastModified the last-modified date
      * @return the same response object
      */
-    public static HttpResponse lastModified(HttpResponse response, Date lastModified) {
+    public static HttpResponse lastModified(HttpResponse response, @Nullable Date lastModified) {
         if (lastModified != null) {
             response.getHeaders().remove("Last-Modified");
             response.getHeaders().put("Last-Modified", HttpDateFormat.RFC1123.format(lastModified));
@@ -272,7 +274,7 @@ public class HttpResponseUtils {
      * @param conn a URL connection
      * @return content length in bytes, or {@code null}
      */
-    public static Long connectionContentLength(URLConnection conn) {
+    public static @Nullable Long connectionContentLength(URLConnection conn) {
         long len = conn.getContentLengthLong();
         return len <= 0 ? null : len;
     }
@@ -283,7 +285,7 @@ public class HttpResponseUtils {
      * @param conn a URL connection
      * @return last-modified date, or {@code null}
      */
-    public static Date connectionLastModified(URLConnection conn) {
+    public static @Nullable Date connectionLastModified(URLConnection conn) {
         long lastMod = conn.getLastModified();
         return lastMod > 0 ? new Date(lastMod) : null;
     }
@@ -295,7 +297,7 @@ public class HttpResponseUtils {
      * @param url the resource URL
      * @return content data, or {@code null}
      */
-    public static ContentData<?> resourceData(URL url) {
+    public static @Nullable ContentData<?> resourceData(URL url) {
         String protocol = url.getProtocol();
         if ("file".equals(protocol)) {
             try {
@@ -329,7 +331,7 @@ public class HttpResponseUtils {
      * @param url the resource URL
      * @return response, or {@code null} if the URL points to a directory
      */
-    public static HttpResponse urlResponse(URL url) {
+    public static @Nullable HttpResponse urlResponse(URL url) {
         ContentData<?> data = resourceData(url);
         if (data == null) return null;
 
@@ -349,7 +351,7 @@ public class HttpResponseUtils {
      * @param options options map accepting {@code root} (String) and {@code loader} (ClassLoader)
      * @return response, or {@code null} if the resource is not found
      */
-    public static HttpResponse resourceResponse(String path, OptionMap options) {
+    public static @Nullable HttpResponse resourceResponse(String path, OptionMap options) {
         String root = options.getString("root");
         path = (root != null ? root : "") + "/" + path;
         path = path.replace("//", "/").replaceAll("^/", "");
@@ -375,10 +377,10 @@ public class HttpResponseUtils {
 
     private static abstract class ContentData<T> implements Serializable {
         private final T content;
-        private final Long contentLength;
-        private final Date lastModifiedDate;
+        private final @Nullable Long contentLength;
+        private final @Nullable Date lastModifiedDate;
 
-        public ContentData(T content, Long contentLength, Date lastModifiedDate) {
+        public ContentData(T content, @Nullable Long contentLength, @Nullable Date lastModifiedDate) {
             this.content = content;
             this.contentLength = contentLength;
             this.lastModifiedDate = lastModifiedDate;
@@ -388,11 +390,11 @@ public class HttpResponseUtils {
             return content;
         }
 
-        public Long getContentLength() {
+        public @Nullable Long getContentLength() {
             return contentLength;
         }
 
-        public Date getLastModifiedDate() {
+        public @Nullable Date getLastModifiedDate() {
             return lastModifiedDate;
         }
 
@@ -400,7 +402,7 @@ public class HttpResponseUtils {
     }
 
     private static class FileContentData extends ContentData<File> {
-        public FileContentData(File content, Long contentLength, Date lastModifiedDate) {
+        public FileContentData(File content, @Nullable Long contentLength, @Nullable Date lastModifiedDate) {
             super(content, contentLength, lastModifiedDate);
         }
 
@@ -411,7 +413,7 @@ public class HttpResponseUtils {
     }
 
     private static class StreamContentData extends ContentData<InputStream> {
-        public StreamContentData(InputStream content, Long contentLength, Date lastModifiedDate) {
+        public StreamContentData(InputStream content, @Nullable Long contentLength, @Nullable Date lastModifiedDate) {
             super(content, contentLength, lastModifiedDate);
         }
 

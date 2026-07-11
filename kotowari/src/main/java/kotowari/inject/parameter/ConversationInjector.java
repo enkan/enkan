@@ -3,6 +3,8 @@ package kotowari.inject.parameter;
 import enkan.web.data.HttpRequest;
 import kotowari.inject.ParameterInjector;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.enterprise.context.Conversation;
 
 public class ConversationInjector implements ParameterInjector<Conversation> {
@@ -17,7 +19,7 @@ public class ConversationInjector implements ParameterInjector<Conversation> {
     }
 
     @Override
-    public Conversation getInjectObject(HttpRequest request) {
+    public @Nullable Conversation getInjectObject(HttpRequest request) {
         return request.getConversation();
     }
 }

@@ -16,6 +16,7 @@ module enkan.core {
     requires jakarta.validation;
     requires java.logging;
     requires org.slf4j;
+    requires transitive org.jspecify;
 
     // MixinUtils.lookupSpecial() uses privateLookupIn on interfaces in enkan.util.
     // org.hibernate.validator needs access for field-level constraint validation on

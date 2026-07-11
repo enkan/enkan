@@ -2,6 +2,8 @@ package enkan.util;
 
 import enkan.exception.MisconfigurationException;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -16,9 +18,9 @@ import java.util.stream.Collectors;
  * @author kawasima
  */
 public class BeanBuilder<X> {
-    private static final Validator DEFAULT_VALIDATOR = createValidator();
+    private static final @Nullable Validator DEFAULT_VALIDATOR = createValidator();
 
-    private static Validator createValidator() {
+    private static @Nullable Validator createValidator() {
         try {
             ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
             Runtime.getRuntime().addShutdownHook(new Thread(factory::close,

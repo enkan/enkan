@@ -7,6 +7,8 @@ import enkan.data.Traceable;
 import enkan.web.collection.Headers;
 import enkan.collection.Multimap;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.File;
 import java.io.InputStream;
 
@@ -107,7 +109,7 @@ public interface HttpResponse extends HasBody, HasStatus, HasHeaders,
      */
     InputStream getBodyAsStream();
 
-    void setBody(String body);
+    void setBody(@Nullable String body);
     void setBody(InputStream body);
     void setBody(File body);
     void setBody(StreamingBody body);

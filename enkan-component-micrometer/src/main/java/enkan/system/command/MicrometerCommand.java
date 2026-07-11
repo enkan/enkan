@@ -8,8 +8,10 @@ import enkan.system.Transport;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.distribution.HistogramSnapshot;
 import io.micrometer.core.instrument.distribution.ValueAtPercentile;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -57,8 +59,8 @@ public class MicrometerCommand implements SystemCommand {
     }
 
     @Override
-    public boolean execute(EnkanSystem system, Transport transport, String... args) {
-        Optional<MicrometerComponent> found = findMicrometer(system);
+    public boolean execute(@Nullable EnkanSystem system, Transport transport, String... args) {
+        Optional<MicrometerComponent> found = findMicrometer(Objects.requireNonNull(system));
         if (found.isEmpty()) {
             transport.send(ReplResponse.withOut("MicrometerComponent is not registered in the system."));
             transport.sendOut("", ReplResponse.ResponseStatus.DONE);

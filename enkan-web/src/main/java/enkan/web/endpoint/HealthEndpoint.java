@@ -90,7 +90,7 @@ public class HealthEndpoint implements Endpoint<HttpRequest, HttpResponse> {
         HealthStatus worst = HealthStatus.UP;
         for (HealthStatus s : componentStatuses.values()) {
             HealthStatus normalized = (s == null) ? HealthStatus.DOWN : s;
-            if (SEVERITY.get(normalized) > SEVERITY.get(worst)) {
+            if (SEVERITY.getOrDefault(normalized, 0) > SEVERITY.getOrDefault(worst, 0)) {
                 worst = normalized;
             }
         }

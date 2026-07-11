@@ -4,6 +4,7 @@ import enkan.MiddlewareChain;
 import enkan.annotation.Middleware;
 import enkan.web.data.HttpRequest;
 import enkan.web.data.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -69,7 +70,7 @@ public class CspNonceMiddleware implements WebMiddleware {
     private boolean strictDynamic = false;
 
     @Override
-    public <NNREQ, NNRES> HttpResponse handle(HttpRequest request,
+    public <NNREQ, NNRES> @Nullable HttpResponse handle(HttpRequest request,
             MiddlewareChain<HttpRequest, HttpResponse, NNREQ, NNRES> chain) {
         String nonce = generateNonce();
         request.setExtension(EXTENSION_KEY, nonce);

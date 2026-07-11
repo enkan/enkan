@@ -6,18 +6,20 @@ import enkan.exception.MisconfigurationException;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import org.jspecify.annotations.Nullable;
+
 import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
 
 public abstract class EntityManagerProvider<T extends SystemComponent<T>> extends SystemComponent<T> {
-    private String name;
+    private @Nullable String name;
 
-    private DataSourceComponent<?> dataSourceComponent;
+    private @Nullable DataSourceComponent<?> dataSourceComponent;
 
     private Map<String, Object> jpaProperties = new HashMap<>();
 
-    private EntityManagerFactory entityManagerFactory;
+    private @Nullable EntityManagerFactory entityManagerFactory;
 
     public EntityManager createEntityManager() {
         if (entityManagerFactory == null) {
@@ -34,7 +36,7 @@ public abstract class EntityManagerProvider<T extends SystemComponent<T>> extend
         this.jpaProperties = jpaProperties;
     }
 
-    protected String getName() {
+    protected @Nullable String getName() {
         return this.name;
     }
 
@@ -46,11 +48,11 @@ public abstract class EntityManagerProvider<T extends SystemComponent<T>> extend
         this.entityManagerFactory = entityManagerFactory;
     }
 
-    public EntityManagerFactory getEntityManagerFactory() {
+    public @Nullable EntityManagerFactory getEntityManagerFactory() {
         return entityManagerFactory;
     }
 
-    protected DataSource getDataSource() {
+    protected @Nullable DataSource getDataSource() {
         if (dataSourceComponent == null) {
             throw new MisconfigurationException("core.COMPONENT_NOT_FOUND", "DataSourceComponent", getClass().getSimpleName());
         }
