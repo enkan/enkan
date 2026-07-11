@@ -12,8 +12,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import org.jspecify.annotations.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -44,25 +46,25 @@ public class JooqTransactionMiddleware<REQ, RES> implements DecoratorMiddleware<
     @Inject
     private JooqProvider jooqProvider;
 
-    private DSLContext dsl;
+    private @Nullable DSLContext dsl;
 
     @PostConstruct
     void init() {
         dsl = jooqProvider.getDSLContext();
     }
 
-    private Transactional.TxType getTransactionType(Class<?> cls) {
+    private Transactional.@Nullable TxType getTransactionType(Class<?> cls) {
         Transactional tx = cls.getDeclaredAnnotation(Transactional.class);
         return tx != null ? tx.value() : null;
     }
 
-    private Transactional.TxType getTransactionType(Method m) {
+    private Transactional.@Nullable TxType getTransactionType(Method m) {
         Transactional tx = m.getDeclaredAnnotation(Transactional.class);
         return tx != null ? tx.value() : null;
     }
 
     @Override
-    public <NNREQ, NNRES> RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
+    public <NNREQ, NNRES> @Nullable RES handle(REQ req, MiddlewareChain<REQ, RES, NNREQ, NNRES> chain) {
         if (req instanceof Routable routable) {
             Transactional.TxType type = getTransactionType(routable.getControllerClass());
             Method m = routable.getControllerMethod();
@@ -71,7 +73,7 @@ public class JooqTransactionMiddleware<REQ, RES> implements DecoratorMiddleware<
             }
             if (type != null) {
                 return switch (type) {
-                    case REQUIRED -> dsl.transactionResult(ctx -> {
+                    case REQUIRED -> Objects.requireNonNull(dsl).transactionResult(ctx -> {
                         if (req instanceof Extendable e) e.setExtension("jooqDslContext", DSL.using(ctx));
                         return chain.next(req);
                     });
