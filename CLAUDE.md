@@ -7,7 +7,7 @@ All code, comments, commit messages, and documentation MUST be written in **Engl
 ## Overview
 
 Enkan is a middleware-chain-based web framework for Java 25.
-Maven multi-module project (`enkan-parent` version `0.15.1`).
+Maven multi-module project (`enkan-parent` version `0.15.2-SNAPSHOT`).
 
 ## Module Structure
 

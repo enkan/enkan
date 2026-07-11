@@ -29,7 +29,7 @@ implementations that automate the reflection configuration required for a native
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>kotowari-graalvm</artifactId>
-  <version>0.15.1</version>
+  <version>0.15.2-SNAPSHOT</version>
 </dependency>
 ```
 

@@ -152,12 +152,12 @@ server component to your `pom.xml`:
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>kotowari</artifactId>
-  <version>0.15.1</version>
+  <version>0.15.2-SNAPSHOT</version>
 </dependency>
 <dependency>
   <groupId>net.unit8.enkan</groupId>
   <artifactId>enkan-component-jetty</artifactId>
-  <version>0.15.1</version>
+  <version>0.15.2-SNAPSHOT</version>
 </dependency>
 ```
 
