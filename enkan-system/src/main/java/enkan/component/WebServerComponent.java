@@ -4,6 +4,8 @@ import enkan.collection.OptionMap;
 import enkan.exception.MisconfigurationException;
 import enkan.exception.UnreachableException;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import java.io.File;
@@ -31,18 +33,18 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
     private boolean isSsl = false;
     private int sslPort = 443;
 
-    private File keystoreFile;
-    private KeyStore keystore;
-    private String keystorePassword;
+    private @Nullable File keystoreFile;
+    private @Nullable KeyStore keystore;
+    private @Nullable String keystorePassword;
 
     // preStopDelay is used by Component.stop(), not passed to the Adapter via buildOptionMap().
     // stopTimeout is passed to the Adapter via buildOptionMap() to configure the server's drain timeout.
     private long preStopDelay = 0;
     private long stopTimeout = 30000;
 
-    private File truststoreFile;
-    private KeyStore truststore;
-    private String truststorePassword;
+    private @Nullable File truststoreFile;
+    private @Nullable KeyStore truststore;
+    private @Nullable String truststorePassword;
 
     public Integer getPort() {
         return port;
@@ -94,7 +96,7 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
         }
     }
 
-    public KeyStore getKeystore() {
+    public @Nullable KeyStore getKeystore() {
         if (keystore == null && keystoreFile != null) {
             try {
                 keystore = KeyStore.getInstance("JKS");
@@ -118,7 +120,7 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
         this.keystore = keystore;
     }
 
-    public String getKeystorePassword() {
+    public @Nullable String getKeystorePassword() {
         return keystorePassword;
     }
 
@@ -136,7 +138,7 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
         }
     }
 
-    public KeyStore getTruststore() {
+    public @Nullable KeyStore getTruststore() {
         if (truststore == null && truststoreFile != null) {
             try {
                 truststore = KeyStore.getInstance("JKS");
@@ -161,7 +163,7 @@ public abstract class WebServerComponent<T extends WebServerComponent<T>> extend
         this.truststore = truststore;
     }
 
-    public String getTruststorePassword() {
+    public @Nullable String getTruststorePassword() {
         return truststorePassword;
     }
 

@@ -8,6 +8,7 @@ module enkan.system {
     exports enkan.system.repl;
 
     requires transitive enkan.core;
+    requires transitive org.jspecify;
     requires transitive jakarta.inject;
     requires jakarta.annotation;
     requires jakarta.validation;

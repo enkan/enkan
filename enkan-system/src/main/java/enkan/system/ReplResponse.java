@@ -1,5 +1,7 @@
 package enkan.system;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 import java.util.EnumSet;
 import java.util.Set;
@@ -13,11 +15,11 @@ import static enkan.system.ReplResponse.ResponseStatus.*;
 public class ReplResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private String id;
+    private @Nullable String id;
     private final EnumSet<ResponseStatus> status;
-    private String value;
-    private String out;
-    private String err;
+    private @Nullable String value;
+    private @Nullable String out;
+    private @Nullable String err;
 
     public ReplResponse() {
         status = EnumSet.noneOf(ResponseStatus.class);
@@ -50,7 +52,7 @@ public class ReplResponse implements Serializable {
         SHUTDOWN, UNKNOWN_COMMAND, ERROR, DONE, NEED_INPUT
     }
 
-    public String getId() {
+    public @Nullable String getId() {
         return id;
     }
 
@@ -58,27 +60,27 @@ public class ReplResponse implements Serializable {
         return status;
     }
 
-    public String getValue() {
+    public @Nullable String getValue() {
         return value;
     }
 
-    public void setValue(String value) {
+    public void setValue(@Nullable String value) {
         this.value = value;
     }
 
-    public String getOut() {
+    public @Nullable String getOut() {
         return out;
     }
 
-    public void setOut(String out) {
+    public void setOut(@Nullable String out) {
         this.out = out;
     }
 
-    public String getErr() {
+    public @Nullable String getErr() {
         return err;
     }
 
-    public void setErr(String err) {
+    public void setErr(@Nullable String err) {
         this.err = err;
     }
 

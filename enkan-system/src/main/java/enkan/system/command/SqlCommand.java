@@ -95,7 +95,8 @@ public class SqlCommand implements SystemCommand {
                 }
             }
         } catch (SQLException e) {
-            transport.sendErr(e.getLocalizedMessage());
+            String message = e.getLocalizedMessage();
+            transport.sendErr(message != null ? message : e.toString());
         }
         return true;
     }

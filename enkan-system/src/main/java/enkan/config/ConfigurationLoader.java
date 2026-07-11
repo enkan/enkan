@@ -3,6 +3,8 @@ package enkan.config;
 import enkan.component.SystemComponent;
 import enkan.exception.UnreachableException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
@@ -146,7 +148,7 @@ public class ConfigurationLoader extends ClassLoader {
      * without defining the class. Returns {@code null} if the bytecode
      * cannot be read.
      */
-    private String readSuperClassName(String name) {
+    private @Nullable String readSuperClassName(String name) {
         String resource = name.replace('.', '/') + ".class";
         try (InputStream raw = getResourceAsStream(resource);
              DataInputStream in = raw != null ? new DataInputStream(raw) : null) {
@@ -193,7 +195,7 @@ public class ConfigurationLoader extends ClassLoader {
         }
     }
 
-    private Class<?> defineClass(String name, boolean resolve) {
+    private @Nullable Class<?> defineClass(String name, boolean resolve) {
         try (InputStream in = getResourceAsStream(name.replaceAll("\\.", "/") + ".class");
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             if (in == null) return null;
