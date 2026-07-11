@@ -14,6 +14,7 @@ import enkan.exception.MisconfigurationException;
 import enkan.exception.ServiceUnavailableException;
 import enkan.exception.UnreachableException;
 import io.undertow.Undertow;
+import org.jspecify.annotations.Nullable;
 import io.undertow.io.IoCallback;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
@@ -62,7 +63,7 @@ public class UndertowAdapter {
         }
     };
 
-    private static void setBody(HttpServerExchange exchange, Object body) throws IOException {
+    private static void setBody(HttpServerExchange exchange, @Nullable Object body) throws IOException {
         switch (body) {
             case null -> {
                 // Do nothing
@@ -186,6 +187,10 @@ public class UndertowAdapter {
 
                 try {
                     HttpResponse response = application.handle(request);
+                    if (response == null) {
+                        exchange.setStatusCode(404);
+                        return;
+                    }
                     exchange.setStatusCode(response.getStatus());
                     setResponseHeaders(response.getHeaders(), exchange);
 
@@ -241,7 +246,8 @@ public class UndertowAdapter {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             KeyStore keystore = (KeyStore) options.get("keystore");
             if (keystore != null) {
-                kmf.init(keystore, options.getString("keystorePassword", "").toCharArray());
+                String keystorePassword = options.getString("keystorePassword", "");
+                kmf.init(keystore, (keystorePassword != null ? keystorePassword : "").toCharArray());
                 keyManagers = kmf.getKeyManagers();
             }
 

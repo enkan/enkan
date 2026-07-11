@@ -11,6 +11,7 @@ import enkan.component.WebServerComponent;
 import enkan.exception.MisconfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.jspecify.annotations.Nullable;
 
 /**
  * @author kawasima
@@ -18,10 +19,10 @@ import org.slf4j.LoggerFactory;
 public class UndertowComponent extends WebServerComponent<UndertowComponent> implements HealthCheckable {
     private static final Logger LOG = LoggerFactory.getLogger(UndertowComponent.class);
 
-    private UndertowAdapter.UndertowServer server;
+    private UndertowAdapter.@Nullable UndertowServer server;
     private volatile boolean starting = false;
     private volatile boolean stopping = false;
-    private String digestAlgorithm = null;
+    private @Nullable String digestAlgorithm = null;
 
     @Override
     protected ComponentLifecycle<UndertowComponent> lifecycle() {
