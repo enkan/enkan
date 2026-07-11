@@ -13,6 +13,8 @@ import org.seasar.doma.jdbc.dialect.StandardDialect;
 import org.seasar.doma.jdbc.tx.EnkanLocalTransactionDataSource;
 import org.seasar.doma.jdbc.tx.LocalTransactionDataSource;
 
+import org.jspecify.annotations.Nullable;
+
 import javax.sql.DataSource;
 import java.lang.reflect.Constructor;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,10 +50,10 @@ import static enkan.util.ReflectionUtils.*;
  * @author kawasima
  */
 public class DomaProvider extends SystemComponent<DomaProvider> {
-    private DataSource dataSource;
+    private @Nullable DataSource dataSource;
     private final ConcurrentHashMap<String, Object> daoCache = new ConcurrentHashMap<>();
-    private Config defaultConfig;
-    private Dialect dialect;
+    private @Nullable Config defaultConfig;
+    private @Nullable Dialect dialect;
     private Naming naming = Naming.DEFAULT;
     private boolean useLocalTransaction = true;
     private int maxRows = 0;
@@ -100,6 +102,8 @@ public class DomaProvider extends SystemComponent<DomaProvider> {
                     component.dataSource = new EnkanLocalTransactionDataSource(component.dataSource);
                 }
                 if (component.dialect == null) component.dialect = new StandardDialect();
+                final DataSource cfgDataSource = java.util.Objects.requireNonNull(component.dataSource);
+                final Dialect cfgDialect = java.util.Objects.requireNonNull(component.dialect);
                 component.defaultConfig = new Config() {
                     @Override
                     public Naming getNaming() {
@@ -108,12 +112,12 @@ public class DomaProvider extends SystemComponent<DomaProvider> {
 
                     @Override
                     public DataSource getDataSource() {
-                        return component.dataSource;
+                        return cfgDataSource;
                     }
 
                     @Override
                     public Dialect getDialect() {
-                        return component.dialect;
+                        return cfgDialect;
                     }
 
                     @Override
@@ -152,7 +156,7 @@ public class DomaProvider extends SystemComponent<DomaProvider> {
         };
     }
 
-    public Config getDefaultConfig() {
+    public @Nullable Config getDefaultConfig() {
         return defaultConfig;
     }
 
