@@ -143,7 +143,6 @@ public class MixinUtils {
     }
 
     static Class<?>[] getAllInterfaces(final Class<?> clazz) {
-        if (clazz == null) return null;
         return allInterfacesCache.computeIfAbsent(clazz, c -> {
             final LinkedHashSet<Class<?>> interfacesFound = new LinkedHashSet<>();
             getAllInterfaces(c, interfacesFound);
@@ -161,15 +160,13 @@ public class MixinUtils {
      * returned unchanged without creating a proxy.
      *
      * @param <T>        the type of the target object
-     * @param target     the object to augment; {@code null} is returned as-is
+     * @param target     the object to augment
      * @param interfaces one or more interfaces to add to the proxy
      * @return a proxy implementing all original interfaces plus the requested
      *         ones, or {@code target} itself if no new interfaces are needed
      */
     @SuppressWarnings("unchecked")
     public static <T> T mixin(T target, Class<?>... interfaces) {
-        if (target == null) return null;
-
         final Class<?> targetClass = target.getClass();
         boolean allPresent = true;
         for (Class<?> iface : interfaces) {

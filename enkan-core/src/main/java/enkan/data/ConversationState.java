@@ -1,5 +1,7 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
@@ -61,7 +63,7 @@ public class ConversationState implements Map<String, Object>, Serializable {
      * {@inheritDoc}
      */
     @Override
-    public Object get(Object key) {
+    public @Nullable Object get(Object key) {
         return attrs.get(key);
     }
 
@@ -69,7 +71,7 @@ public class ConversationState implements Map<String, Object>, Serializable {
      * {@inheritDoc}
      */
     @Override
-    public Object put(String key, Object value) {
+    public @Nullable Object put(String key, Object value) {
         return attrs.put(key, value);
     }
 
@@ -77,7 +79,7 @@ public class ConversationState implements Map<String, Object>, Serializable {
      * {@inheritDoc}
      */
     @Override
-    public Object remove(Object key) {
+    public @Nullable Object remove(Object key) {
         return attrs.remove(key);
     }
 

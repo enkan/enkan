@@ -1,5 +1,7 @@
 package enkan.security.crypto;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Converts ECDSA signatures between DER encoding (used by JCA) and
  * IEEE P1363 / raw R||S format (used by JWS RFC 7518 §3.4 and other protocols).
@@ -31,7 +33,7 @@ public final class EcdsaUtils {
      * @param keyBits the EC key size in bits (e.g. 256, 384, 521)
      * @return the raw R||S signature, or {@code null} if the input is malformed
      */
-    public static byte[] derToP1363(byte[] der, int keyBits) {
+    public static byte @Nullable [] derToP1363(byte[] der, int keyBits) {
         int componentLen = (keyBits + 7) / 8;
         if (der == null || der.length < 8) return null;
         if (der[0] != 0x30) return null; // must be SEQUENCE tag
@@ -106,7 +108,7 @@ public final class EcdsaUtils {
      * @param p1363 the raw R||S signature (must have even length)
      * @return the DER-encoded signature, or {@code null} if the input is malformed
      */
-    public static byte[] p1363ToDer(byte[] p1363) {
+    public static byte @Nullable [] p1363ToDer(byte[] p1363) {
         if (p1363 == null || p1363.length == 0 || (p1363.length % 2) != 0) {
             return null;
         }

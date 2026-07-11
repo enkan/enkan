@@ -1,5 +1,7 @@
 package enkan.collection;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -80,7 +82,7 @@ public class Multimap<K, V> implements Map<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public V get(Object key) {
+    public @Nullable V get(Object key) {
         List<V> values = hashMap.get(key);
         if (values == null || values.isEmpty())
             return null;
@@ -128,7 +130,7 @@ public class Multimap<K, V> implements Map<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public V remove(Object key) {
+    public @Nullable V remove(Object key) {
         List<V> old = hashMap.remove(key);
         if (old != null && !old.isEmpty()) {
             return old.getFirst();
@@ -186,7 +188,7 @@ public class Multimap<K, V> implements Map<K, V> {
                     }
 
                     @Override
-                    public V getValue() {
+                    public @Nullable V getValue() {
                         List<V> values = e.getValue();
                         return (values != null && !values.isEmpty()) ? values.getFirst() : null;
                     }

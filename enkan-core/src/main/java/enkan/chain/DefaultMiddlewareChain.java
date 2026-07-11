@@ -3,6 +3,7 @@ package enkan.chain;
 import enkan.Middleware;
 import enkan.MiddlewareChain;
 import enkan.data.Traceable;
+import enkan.exception.MisconfigurationException;
 
 import java.util.function.Predicate;
 
@@ -12,10 +13,43 @@ import java.util.function.Predicate;
  * @author kawasima
  */
 public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareChain<REQ, RES, NREQ, NRES> {
+    /**
+     * Sentinel installed as the {@code chain} of the last node in a stack.
+     * Reaching it means a request was dispatched past every middleware without
+     * any of them producing a response — always a chain-wiring mistake, so it
+     * fails loudly instead of returning {@code null}.
+     */
+    @SuppressWarnings("rawtypes")
+    private static final MiddlewareChain TERMINAL = new MiddlewareChain() {
+        @Override public MiddlewareChain setNext(MiddlewareChain next) {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public Middleware getMiddleware() {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public String getName() {
+            return "terminal";
+        }
+        @Override public Predicate getPredicate() {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public void setPredicate(Predicate predicate) {
+            throw new UnsupportedOperationException("terminal chain");
+        }
+        @Override public Object next(Object req) {
+            throw new MisconfigurationException("core.MIDDLEWARE_CHAIN_EXHAUSTED");
+        }
+    };
+
+    @SuppressWarnings("unchecked")
+    private static <A, B> MiddlewareChain<A, B, ?, ?> terminal() {
+        return (MiddlewareChain<A, B, ?, ?>) TERMINAL;
+    }
+
     private Predicate<? super REQ> predicate;
     private final Middleware<REQ, RES, NREQ, NRES> middleware;
     private final String middlewareName;
-    private MiddlewareChain<NREQ, NRES, ?, ?> chain;
+    private MiddlewareChain<NREQ, NRES, ?, ?> chain = terminal();
 
 
     /**
@@ -85,12 +119,12 @@ public class DefaultMiddlewareChain<REQ, RES, NREQ, NRES> implements MiddlewareC
             RES res = middleware.handle(req, chain);
             writeTraceLog(res, middlewareName);
             return res;
-        } else if (chain != null) {
+        } else {
+            // chain is never null: the last node keeps the TERMINAL sentinel,
+            // whose next() throws rather than yielding a null response.
             NRES res = chain.next((NREQ) req);
             writeTraceLog(res, middlewareName);
             return (RES) res;
-        } else {
-            return null;
         }
     }
 

@@ -2,6 +2,8 @@ package enkan;
 
 import enkan.exception.FalteringEnvironmentException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -74,7 +76,7 @@ public class Env {
      * @param name variable name
      * @return value, or {@code null} if the variable is not set
      */
-    public static String get(String name) {
+    public static @Nullable String get(String name) {
         return getString(name, null);
     }
 
@@ -85,7 +87,7 @@ public class Env {
      * @param defaultValue default value
      * @return value
      */
-    public static String getString(String name, String defaultValue) {
+    public static @Nullable String getString(String name, @Nullable String defaultValue) {
         String value = envMap.get(normalizeKey(name));
         return value != null ? value : defaultValue;
     }

@@ -1,5 +1,7 @@
 package enkan.util;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -97,7 +99,7 @@ public class MimeTypeUtils {
         put("zip", "application/zip");
     }};
 
-    private static String filenameExt(String filename) {
+    private static @Nullable String filenameExt(String filename) {
         int idx = filename.lastIndexOf('.');
         if (idx == -1 || idx == filename.length() - 1) {
             return null;
@@ -107,7 +109,7 @@ public class MimeTypeUtils {
 
     }
 
-    public static String extMimeType(String filename) {
+    public static @Nullable String extMimeType(String filename) {
         String ext = filenameExt(filename);
         return ext != null ? DEFAULT_MIME_TYPES.get(ext) : null;
     }

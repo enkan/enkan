@@ -94,8 +94,8 @@ public class FormMiddlewareTest {
         request = MixinUtils.mixin(request, Routable.class);
         Method method = tryReflection(() -> TestController.class.getMethod("index", NestedForm.class));
         ((Routable) request).setControllerMethod(method);
-        formMiddleware.handle(request, new DefaultMiddlewareChain<>(Predicates.none(), "dummy",
-                (Endpoint<HttpRequest, HttpResponse>) r -> null));
+        formMiddleware.handle(request, new DefaultMiddlewareChain<>(Predicates.any(), "dummy",
+                (Endpoint<HttpRequest, HttpResponse>) r -> HttpResponse.of("")));
 
         NestedForm form = ((BodyDeserializable) request).getDeserializedBody();
         assertThat(form.getIntVal()).isEqualTo(123);

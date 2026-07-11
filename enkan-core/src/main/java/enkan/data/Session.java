@@ -1,5 +1,7 @@
 package enkan.data;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
@@ -88,7 +90,7 @@ public class Session implements Map<String, Serializable>, Serializable {
      * {@inheritDoc}
      */
     @Override
-    public Serializable get(Object key) {
+    public @Nullable Serializable get(Object key) {
         return attrs.get(key);
     }
 
@@ -96,7 +98,7 @@ public class Session implements Map<String, Serializable>, Serializable {
      * {@inheritDoc}
      */
     @Override
-    public Serializable put(String key, Serializable value) {
+    public @Nullable Serializable put(String key, Serializable value) {
         return attrs.put(key, value);
     }
 
@@ -104,7 +106,7 @@ public class Session implements Map<String, Serializable>, Serializable {
      * {@inheritDoc}
      */
     @Override
-    public Serializable remove(Object key) {
+    public @Nullable Serializable remove(Object key) {
         return attrs.remove(key);
     }
 

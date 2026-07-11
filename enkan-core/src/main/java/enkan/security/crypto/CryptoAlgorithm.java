@@ -1,5 +1,7 @@
 package enkan.security.crypto;
 
+import org.jspecify.annotations.Nullable;
+
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PSSParameterSpec;
@@ -66,7 +68,7 @@ public enum CryptoAlgorithm {
      * <p>RSA-PSS variants require a {@link PSSParameterSpec} to select the
      * correct hash and MGF1 configuration.
      */
-    public AlgorithmParameterSpec parameterSpec() {
+    public @Nullable AlgorithmParameterSpec parameterSpec() {
         return switch (this) {
             case RSA_PSS_SHA256 -> new PSSParameterSpec("SHA-256", "MGF1",
                     MGF1ParameterSpec.SHA256, 32, 1);
