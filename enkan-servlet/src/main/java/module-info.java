@@ -3,4 +3,5 @@ module enkan.servlet {
 
     requires transitive enkan.web;
     requires transitive jakarta.servlet;
+    requires transitive org.jspecify;
 }

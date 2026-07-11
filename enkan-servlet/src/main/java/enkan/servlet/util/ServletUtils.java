@@ -8,6 +8,8 @@ import enkan.web.data.StreamingBody;
 import enkan.exception.FalteringEnvironmentException;
 import enkan.exception.UnreachableException;
 
+import org.jspecify.annotations.Nullable;
+
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,7 +34,7 @@ public class ServletUtils {
         return headers;
     }
 
-    private static Long getContentLength(HttpServletRequest servletRequest) {
+    private static @Nullable Long getContentLength(HttpServletRequest servletRequest) {
         long length = servletRequest.getContentLengthLong();
         return length >= 0 ? length : null;
     }
@@ -76,7 +78,7 @@ public class ServletUtils {
         });
     }
 
-    private static void setBody(HttpServletResponse servletResponse, Object body) throws IOException {
+    private static void setBody(HttpServletResponse servletResponse, @Nullable Object body) throws IOException {
         switch (body) {
             case null -> {
                 // Do nothing
