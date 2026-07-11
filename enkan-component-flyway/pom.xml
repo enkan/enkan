@@ -20,6 +20,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
             <version>${flyway.version}</version>

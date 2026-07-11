@@ -9,12 +9,15 @@ import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jspecify.annotations.Nullable;
+
 import javax.sql.DataSource;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -25,14 +28,14 @@ import java.util.Optional;
 public class FlywayMigration extends SystemComponent<FlywayMigration> {
     private static final Logger LOG = LoggerFactory.getLogger(FlywayMigration.class);
 
-    private String[] locations;
+    private String @Nullable [] locations;
     private boolean cleanBeforeMigration = false;
     /** The table name for Flyway's schema history. Defaults to "schema_version" (Flyway default: "flyway_schema_history"). */
     private String table = "schema_version";
-    private Flyway flyway;
+    private @Nullable Flyway flyway;
 
     private boolean isMigrationAvailable() {
-        return Arrays.stream(flyway.getConfiguration().getLocations())
+        return Arrays.stream(Objects.requireNonNull(flyway).getConfiguration().getLocations())
                 .anyMatch(l -> {
                     if (CoreLocationPrefix.isClassPath(l)) {
                         return Thread.currentThread().getContextClassLoader().getResource(l.getRootPath()) != null;
@@ -50,7 +53,8 @@ public class FlywayMigration extends SystemComponent<FlywayMigration> {
             @Override
             public void start(FlywayMigration component) {
                 DataSourceComponent<?> dataSourceComponent = getDependency(DataSourceComponent.class);
-                DataSource dataSource = dataSourceComponent.getDataSource();
+                DataSource dataSource = Objects.requireNonNull(dataSourceComponent.getDataSource(),
+                        "DataSourceComponent has not been started");
                 FluentConfiguration configuration = Flyway.configure(Thread.currentThread().getContextClassLoader())
                         .table(table)
                         .baselineOnMigrate(true)
