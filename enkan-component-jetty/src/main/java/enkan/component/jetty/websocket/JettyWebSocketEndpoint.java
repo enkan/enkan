@@ -3,6 +3,7 @@ package enkan.component.jetty.websocket;
 import enkan.web.websocket.WebSocketHandler;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 
@@ -20,7 +21,7 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
 
     private final String id;
     private final WebSocketHandler handler;
-    private volatile JettyWebSocketSession session;
+    private volatile @Nullable JettyWebSocketSession session;
 
     JettyWebSocketEndpoint(String id, WebSocketHandler handler) {
         this.id = id;
@@ -40,40 +41,52 @@ class JettyWebSocketEndpoint extends Session.Listener.AbstractAutoDemanding {
 
     @Override
     public void onWebSocketText(String message) {
+        JettyWebSocketSession s = session;
+        if (s == null) return;
         try {
-            handler.onMessage(session, message);
+            handler.onMessage(s, message);
         } catch (Throwable cause) {
-            handler.onError(session, cause);
+            handler.onError(s, cause);
         }
     }
 
     @Override
     public void onWebSocketBinary(ByteBuffer payload, Callback callback) {
+        JettyWebSocketSession s = session;
+        if (s == null) {
+            callback.succeed();
+            return;
+        }
         // Copy the payload before completing the callback — Jetty may recycle
         // the underlying buffer once the callback completes.
         ByteBuffer copy = ByteBuffer.allocate(payload.remaining());
         copy.put(payload);
         copy.flip();
         try {
-            handler.onBinary(session, copy);
+            handler.onBinary(s, copy);
             callback.succeed();
         } catch (Throwable cause) {
-            handler.onError(session, cause);
+            handler.onError(s, cause);
             callback.fail(cause);
         }
     }
 
     @Override
     public void onWebSocketClose(int statusCode, String reason) {
+        JettyWebSocketSession s = session;
+        if (s == null) return;
         try {
-            handler.onClose(session, statusCode, reason);
+            handler.onClose(s, statusCode, reason);
         } catch (Throwable cause) {
-            handler.onError(session, cause);
+            handler.onError(s, cause);
         }
     }
 
     @Override
     public void onWebSocketError(Throwable cause) {
-        handler.onError(session, cause);
+        JettyWebSocketSession s = session;
+        if (s != null) {
+            handler.onError(s, cause);
+        }
     }
 }
