@@ -195,7 +195,7 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     @Override
-    public <T> void setExtension(String name, T extension) {
+    public <T> void setExtension(String name, @Nullable T extension) {
         extensions.put(name, extension);
     }
 }

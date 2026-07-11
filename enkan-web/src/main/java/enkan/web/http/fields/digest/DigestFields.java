@@ -72,7 +72,7 @@ public final class DigestFields {
      * @param defaultAlgorithm the algorithm to use when the header is absent
      * @return the negotiated algorithm name, or {@code null} to omit the digest header
      */
-    public static @Nullable String negotiateAlgorithm(@Nullable String wantHeaderValue, String defaultAlgorithm) {
+    public static @Nullable String negotiateAlgorithm(@Nullable String wantHeaderValue, @Nullable String defaultAlgorithm) {
         if (wantHeaderValue == null) return defaultAlgorithm;
         SfDictionary dict;
         try {
