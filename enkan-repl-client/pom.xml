@@ -16,7 +16,7 @@
     <description>REPL CLI client for Enkan</description>
 
     <properties>
-        <jline.version>3.30.9</jline.version>
+        <jline.version>3.30.15</jline.version>
         <jansi.version>2.4.3</jansi.version>
     </properties>
 
